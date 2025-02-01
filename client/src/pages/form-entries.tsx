@@ -25,6 +25,13 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Download } from "lucide-react";
 
 export default function FormEntries() {
   const { id } = useParams();
@@ -109,14 +116,14 @@ export default function FormEntries() {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
     const values: Record<string, any> = {};
-    
+
     form?.variables?.forEach((variable: any) => {
       const value = formData.get(variable.name);
-      values[variable.name] = variable.type === "number" 
-        ? Number(value) 
+      values[variable.name] = variable.type === "number"
+        ? Number(value)
         : value;
     });
-    
+
     createEntryMutation.mutate(values);
   };
 
@@ -140,7 +147,7 @@ export default function FormEntries() {
                   <Input
                     id={variable.name}
                     name={variable.name}
-                    type={variable.type === "date" ? "date" : 
+                    type={variable.type === "date" ? "date" :
                           variable.type === "number" ? "number" : "text"}
                     required
                   />
@@ -158,39 +165,60 @@ export default function FormEntries() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Entries</CardTitle>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button>
-                    <FileText className="mr-2 h-4 w-4" />
-                    New Document Template
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create Document Template</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label>Template Name</Label>
-                      <Input
-                        value={documentName}
-                        onChange={(e) => setDocumentName(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label>Template Content (use {{variableName}})</Label>
-                      <Textarea
-                        value={documentTemplate}
-                        onChange={(e) => setDocumentTemplate(e.target.value)}
-                        className="h-40"
-                      />
-                    </div>
-                    <Button onClick={() => createDocumentMutation.mutate()}>
-                      Create Template
+              <div className="flex gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      <Download className="mr-2 h-4 w-4" />
+                      Exportar Datos
                     </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => window.location.href = `/api/forms/${id}/entries/export?format=csv`}>
+                      Exportar como CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => window.location.href = `/api/forms/${id}/entries/export?format=excel`}>
+                      Exportar como Excel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => window.location.href = `/api/forms/${id}/entries/export?format=json`}>
+                      Exportar como JSON
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <FileText className="mr-2 h-4 w-4" />
+                      New Document Template
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create Document Template</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Template Name</Label>
+                        <Input
+                          value={documentName}
+                          onChange={(e) => setDocumentName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label>Template Content (use {{variableName}})</Label>
+                        <Textarea
+                          value={documentTemplate}
+                          onChange={(e) => setDocumentTemplate(e.target.value)}
+                          className="h-40"
+                        />
+                      </div>
+                      <Button onClick={() => createDocumentMutation.mutate()}>
+                        Create Template
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

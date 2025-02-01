@@ -4,6 +4,8 @@ import { setupAuth } from "./auth";
 import { db } from "@db";
 import { forms, variables, entries, documents } from "@db/schema";
 import { eq, and } from "drizzle-orm";
+import { Parser } from 'json2csv';
+import * as XLSX from 'xlsx';
 
 function ensureAuth(req: Request) {
   if (!req.isAuthenticated()) {
@@ -180,6 +182,99 @@ export function registerRoutes(app: Express): Server {
     }
 
     res.json({ result });
+  });
+
+  // Export entries endpoints
+  app.get("/api/forms/:formId/entries/export", async (req, res) => {
+    const user = ensureAuth(req);
+    const formId = parseInt(req.params.formId);
+    const format = req.query.format as string;
+
+    // Verify ownership
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+
+    // Get form entries with their variables
+    const formData = await db.query.forms.findFirst({
+      where: eq(forms.id, formId),
+      with: {
+        variables: true,
+        entries: true,
+      },
+    });
+
+    if (!formData) {
+      return res.status(404).send("Form data not found");
+    }
+
+    const entries = formData.entries;
+    const variables = formData.variables;
+
+    switch (format) {
+      case 'csv': {
+        const fields = variables.map(v => ({
+          label: v.label,
+          value: (row: any) => row.values[v.name]
+        }));
+        fields.push({
+          label: 'Fecha de Creación',
+          value: 'createdAt'
+        });
+
+        const parser = new Parser({ fields });
+        const csv = parser.parse(entries);
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=${form.name}-entries.csv`);
+        return res.send(csv);
+      }
+
+      case 'excel': {
+        const data = entries.map(entry => {
+          const row: any = {
+            'Fecha de Creación': entry.createdAt
+          };
+          variables.forEach(v => {
+            row[v.label] = entry.values[v.name];
+          });
+          return row;
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Entries');
+
+        const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=${form.name}-entries.xlsx`);
+        return res.send(Buffer.from(excelBuffer));
+      }
+
+      case 'json': {
+        const data = entries.map(entry => {
+          const row: any = {
+            createdAt: entry.createdAt
+          };
+          variables.forEach(v => {
+            row[v.name] = entry.values[v.name];
+          });
+          return row;
+        });
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename=${form.name}-entries.json`);
+        return res.json(data);
+      }
+
+      default:
+        return res.status(400).send("Formato no soportado");
+    }
   });
 
   const httpServer = createServer(app);
