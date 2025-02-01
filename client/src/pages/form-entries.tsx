@@ -398,12 +398,43 @@ export default function FormEntries() {
                                                 entryId: selectedEntry,
                                               },
                                               {
-                                                onSuccess: () => {
-                                                  // Una vez que el merge es exitoso, iniciamos la descarga
-                                                  const downloadUrl = `/api/forms/${id}/documents/${selectedTemplate.id}/merge?download=true&entryId=${selectedEntry}`;
-                                                  const link = document.createElement('a');
-                                                  link.href = downloadUrl;
-                                                  link.click();
+                                                onSuccess: async () => {
+                                                  try {
+                                                    // Realizar la descarga usando fetch
+                                                    const response = await fetch(
+                                                      `api/forms/${id}/documents/${selectedTemplate.id}/merge`,
+                                                      {
+                                                        method: 'POST',
+                                                        headers: {
+                                                          'Content-Type': 'application/json',
+                                                        },
+                                                        body: JSON.stringify({
+                                                          entryId: selectedEntry,
+                                                          download: true
+                                                        })
+                                                      }
+                                                    );
+
+                                                    if (!response.ok) {
+                                                      throw new Error('Error al descargar el documento');
+                                                    }
+
+                                                    const blob = await response.blob();
+                                                    const url = window.URL.createObjectURL(blob);
+                                                    const a = document.createElement('a');
+                                                    a.href = url;
+                                                    a.download = `${selectedTemplate.name}`;
+                                                    document.body.appendChild(a);
+                                                    a.click();
+                                                    window.URL.revokeObjectURL(url);
+                                                    document.body.removeChild(a);
+                                                  } catch (error) {
+                                                    toast({
+                                                      title: "Error",
+                                                      description: "No se pudo descargar el documento",
+                                                      variant: "destructive"
+                                                    });
+                                                  }
                                                 },
                                               }
                                             );

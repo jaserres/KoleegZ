@@ -295,6 +295,7 @@ export function registerRoutes(app: Express): Server {
     const formId = parseInt(req.params.formId);
     const documentId = parseInt(req.params.documentId);
     const entryId = parseInt(req.body.entryId);
+    const isDownload = req.body.download === true;
 
     // Verify ownership
     const [form] = await db.select()
@@ -333,9 +334,6 @@ export function registerRoutes(app: Express): Server {
     for (const [key, value] of Object.entries(entry.values as Record<string, string>)) {
       result = result.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
     }
-
-    // Determine if it's a preview or download request
-    const isDownload = req.query.download === 'true';
 
     if (isDownload) {
       // Check if the original template was a DOCX
