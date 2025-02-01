@@ -42,14 +42,16 @@ export default function FormBuilder() {
 
   // Efecto para cargar plantilla seleccionada
   useEffect(() => {
-    const templateFromStorage = sessionStorage.getItem("selectedTemplate");
-    if (templateFromStorage && !id) {
-      const template = formTemplates.find(t => t.name === templateFromStorage);
-      if (template) {
+    const templateData = sessionStorage.getItem("selectedTemplate");
+    if (templateData && !id) {
+      try {
+        const template = JSON.parse(templateData);
         setFormName(template.name);
         setVariables(template.variables);
         setShowEditor(true);
         sessionStorage.removeItem("selectedTemplate");
+      } catch (error) {
+        console.error("Error parsing template data:", error);
       }
     }
   }, [id]);

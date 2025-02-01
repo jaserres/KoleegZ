@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, FileText, Trash2, Wand2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -43,6 +43,7 @@ export default function FormEntries() {
   const [mergedResult, setMergedResult] = useState("");
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [detectedVariables, setDetectedVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
 
   const { data: form } = useQuery({
     queryKey: [`/api/forms/${id}`],
@@ -156,6 +157,63 @@ export default function FormEntries() {
     },
   });
 
+
+    // Función para extraer variables del template
+    const extractVariables = (template: string) => {
+      const variableRegex = /{{([^}]+)}}/g;
+      const matches = template.match(variableRegex) || [];
+      const uniqueVariables = new Set(matches.map(match => match.slice(2, -2)));
+
+      return Array.from(uniqueVariables).map(varName => ({
+        name: varName,
+        label: varName.split(/(?=[A-Z])/).join(' '), // Convert camelCase to spaces
+        type: 'text' // Default type
+      }));
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        // Verificar que sea un archivo .txt
+        if (!file.name.toLowerCase().endsWith('.txt')) {
+          toast({
+            title: "Error al cargar archivo",
+            description: "Solo se permiten archivos .txt",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        try {
+          // Read file as text
+          const text = await file.text();
+
+          // Sanitize text: remove null bytes and invalid UTF-8
+          const sanitizedText = text
+            .replace(/\0/g, '') // Remove null bytes
+            .replace(/[^\x20-\x7E\x0A\x0D]/g, ''); // Keep only printable ASCII, newlines and carriage returns
+
+          setDocumentTemplate(sanitizedText);
+
+          // Extract variables from template
+          const variables = extractVariables(sanitizedText);
+          setDetectedVariables(variables);
+
+          // Use filename as template name if not already set
+          if (!documentName) {
+            setDocumentName(file.name.split('.')[0]);
+          }
+        } catch (error) {
+          toast({
+            title: "Error al cargar archivo",
+            description: "El archivo debe ser un documento de texto válido",
+            variant: "destructive"
+          });
+        }
+      }
+    };
+
+
   const handleCreateDocument = async () => {
     if (!documentName || !documentTemplate) {
       toast({
@@ -184,43 +242,27 @@ export default function FormEntries() {
     createEntryMutation.mutate(values);
   };
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        // Verificar que sea un archivo .txt
-        if (!file.name.toLowerCase().endsWith('.txt')) {
-          toast({
-            title: "Error al cargar archivo",
-            description: "Solo se permiten archivos .txt",
-            variant: "destructive"
-          });
-          return;
-        }
+  const handleCreateFormFromTemplate = () => {
+    if (detectedVariables.length === 0) {
+      toast({
+        title: "Error",
+        description: "No se detectaron variables en la plantilla",
+        variant: "destructive"
+      });
+      return;
+    }
 
-        try {
-          // Read file as text
-          const text = await file.text();
+    // Store template data in sessionStorage
+    sessionStorage.setItem("selectedTemplate", JSON.stringify({
+      name: documentName,
+      variables: detectedVariables,
+      template: documentTemplate
+    }));
 
-          // Sanitize text: remove null bytes and invalid UTF-8
-          const sanitizedText = text
-            .replace(/\0/g, '') // Remove null bytes
-            .replace(/[^\x20-\x7E\x0A\x0D]/g, ''); // Keep only printable ASCII, newlines and carriage returns
+    // Redirect to form creation page
+    setLocation("/forms/new");
+  };
 
-          setDocumentTemplate(sanitizedText);
-
-          // Use filename as template name if not already set
-          if (!documentName) {
-            setDocumentName(file.name.split('.')[0]);
-          }
-        } catch (error) {
-          toast({
-            title: "Error al cargar archivo",
-            description: "El archivo debe ser un documento de texto válido",
-            variant: "destructive"
-          });
-        }
-      }
-    };
 
   return (
     <div className="container mx-auto py-8">
@@ -303,7 +345,7 @@ export default function FormEntries() {
                       </div>
                       <div>
                         <Label>Contenido de la Plantilla</Label>
-                        <div className="text-sm text-muted-foreground mb-2">
+                         <div className="text-sm text-muted-foreground mb-2">
                           Usa {'{'}{'{'}<span className="font-mono">nombre_variable</span>{'}'}{'}'}  para insertar variables
                         </div>
                         <div className="space-y-4">
@@ -345,6 +387,29 @@ export default function FormEntries() {
                       >
                         {createDocumentMutation.isPending ? "Creando..." : "Crear Plantilla"}
                       </Button>
+                    {detectedVariables.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Label>Variables Detectadas</Label>
+                          <Button
+                            variant="outline"
+                            onClick={handleCreateFormFromTemplate}
+                          >
+                            <Wand2 className="mr-2 h-4 w-4" />
+                            Crear Formulario
+                          </Button>
+                        </div>
+                        <div className="bg-muted p-4 rounded-md">
+                          <ul className="list-disc list-inside space-y-1">
+                            {detectedVariables.map((variable, index) => (
+                              <li key={index} className="text-sm">
+                                {variable.label} ({variable.name})
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                     </div>
                   </DialogContent>
                 </Dialog>
