@@ -145,6 +145,26 @@ export function registerRoutes(app: Express): Server {
     res.status(201).json(doc);
   });
 
+  app.get("/api/forms/:formId/documents", async (req, res) => {
+    const user = ensureAuth(req);
+    const formId = parseInt(req.params.formId);
+  
+    // Verify ownership
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+  
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+  
+    const docs = await db.select()
+      .from(documents)
+      .where(eq(documents.formId, formId));
+  
+    res.json(docs);
+  });
+
   // Mail merge endpoint
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     const user = ensureAuth(req);

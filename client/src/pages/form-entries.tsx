@@ -52,7 +52,7 @@ export default function FormEntries() {
     enabled: !!id,
   });
 
-  const { data: documents } = useQuery({
+  const { data: documents = [] } = useQuery({
     queryKey: [`/api/forms/${id}/documents`],
     enabled: !!id,
   });
@@ -112,6 +112,19 @@ export default function FormEntries() {
     },
   });
 
+  const handleCreateDocument = async () => {
+    if (!documentName || !documentTemplate) {
+      toast({
+        title: "Error",
+        description: "Por favor complete todos los campos",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    await createDocumentMutation.mutateAsync();
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
@@ -164,7 +177,7 @@ export default function FormEntries() {
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
-              <CardTitle>Entries</CardTitle>
+              <CardTitle>Entradas y Documentos</CardTitle>
               <div className="flex gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -189,31 +202,41 @@ export default function FormEntries() {
                   <DialogTrigger asChild>
                     <Button>
                       <FileText className="mr-2 h-4 w-4" />
-                      New Document Template
+                      Nueva Plantilla
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="sm:max-w-[600px]">
                     <DialogHeader>
-                      <DialogTitle>Create Document Template</DialogTitle>
+                      <DialogTitle>Crear Nueva Plantilla</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
-                        <Label>Template Name</Label>
+                        <Label>Nombre de la Plantilla</Label>
                         <Input
                           value={documentName}
                           onChange={(e) => setDocumentName(e.target.value)}
+                          placeholder="Ej: Carta de Presentación"
+                          required
                         />
                       </div>
                       <div>
-                        <Label>Template Content (use "{'{'}{'{'}variable_name{'}'}{'}'}" for variables)</Label>
+                        <Label>Contenido de la Plantilla</Label>
+                        <div className="text-sm text-muted-foreground mb-2">
+                          Usa {'{'}{'{'}<span className="font-mono">nombre_variable</span>{'}'}{'}'}  para insertar variables
+                        </div>
                         <Textarea
                           value={documentTemplate}
                           onChange={(e) => setDocumentTemplate(e.target.value)}
                           className="h-40"
+                          placeholder="Ej: Estimado {{nombre}}, ..."
+                          required
                         />
                       </div>
-                      <Button onClick={() => createDocumentMutation.mutate()}>
-                        Create Template
+                      <Button 
+                        onClick={handleCreateDocument}
+                        disabled={createDocumentMutation.isPending}
+                      >
+                        {createDocumentMutation.isPending ? "Creando..." : "Crear Plantilla"}
                       </Button>
                     </div>
                   </DialogContent>
@@ -298,6 +321,42 @@ export default function FormEntries() {
                 ))}
               </TableBody>
             </Table>
+            <div className="mt-4">
+              <h3 className="text-lg font-medium mb-2">Plantillas Disponibles</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                {documents.length === 0 ? (
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-muted-foreground text-center">
+                        No hay plantillas disponibles. Crea una nueva plantilla para comenzar.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  documents.map((doc) => (
+                    <Card key={doc.id}>
+                      <CardHeader>
+                        <CardTitle>{doc.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-sm text-muted-foreground mb-4">
+                          Creada el {format(new Date(doc.createdAt), "PPp")}
+                        </div>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedEntry(null);
+                            setMergedResult("");
+                          }}
+                        >
+                          Ver Plantilla
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
