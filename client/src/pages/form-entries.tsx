@@ -205,7 +205,7 @@ export default function FormEntries() {
                         />
                       </div>
                       <div>
-                        <Label>Template Content (use {{variableName}})</Label>
+                        <Label>Template Content (use "{'{'}{'{'}variable_name{'}'}{'}'}" for variables)</Label>
                         <Textarea
                           value={documentTemplate}
                           onChange={(e) => setDocumentTemplate(e.target.value)}
