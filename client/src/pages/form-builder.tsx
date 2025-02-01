@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Save, ArrowLeft } from "lucide-react";
+import { Plus, Save, ArrowLeft, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formTemplates } from "@/lib/form-templates";
 import type { SelectVariable } from "@db/schema";
@@ -23,6 +23,7 @@ export default function FormBuilder() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [showEditor, setShowEditor] = useState(false);
+  const [templateContent, setTemplateContent] = useState("");
 
   const { data: form } = useQuery({
     queryKey: [`/api/forms/${id}`],
@@ -48,6 +49,7 @@ export default function FormBuilder() {
         const template = JSON.parse(templateData);
         setFormName(template.name);
         setVariables(template.variables);
+        setTemplateContent(template.template || "");
         setShowEditor(true);
         sessionStorage.removeItem("selectedTemplate");
       } catch (error) {
@@ -103,6 +105,67 @@ export default function FormBuilder() {
       setLocation("/");
     },
   });
+
+  const extractVariables = (template: string) => {
+    const variableRegex = /{{([^}]+)}}/g;
+    const matches = template.match(variableRegex) || [];
+    const uniqueVariables = new Set(matches.map(match => match.slice(2, -2)));
+
+    return Array.from(uniqueVariables).map(varName => ({
+      name: varName,
+      label: varName.split(/(?=[A-Z])/).join(' '), // Convert camelCase to spaces
+      type: 'text' // Default type
+    }));
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Verificar que sea un archivo .txt
+      if (!file.name.toLowerCase().endsWith('.txt')) {
+        toast({
+          title: "Error al cargar archivo",
+          description: "Solo se permiten archivos .txt",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      try {
+        const text = await file.text();
+        const sanitizedText = text
+          .replace(/\0/g, '')
+          .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
+
+        setTemplateContent(sanitizedText);
+        const detectedVariables = extractVariables(sanitizedText);
+
+        if (detectedVariables.length === 0) {
+          toast({
+            title: "No se encontraron variables",
+            description: "La plantilla no contiene variables en formato {{nombreVariable}}",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        setFormName(file.name.split('.')[0]);
+        setVariables(detectedVariables);
+        setShowEditor(true);
+
+        toast({
+          title: "Plantilla cargada",
+          description: `Se detectaron ${detectedVariables.length} variables en la plantilla`,
+        });
+      } catch (error) {
+        toast({
+          title: "Error al cargar archivo",
+          description: "El archivo debe ser un documento de texto válido",
+          variant: "destructive"
+        });
+      }
+    }
+  };
 
   const renderFormEditor = () => (
     <Card>
@@ -272,6 +335,31 @@ export default function FormBuilder() {
                     <Plus className="h-8 w-8 text-muted-foreground" />
                   </CardContent>
                 </Card>
+                <Card className="cursor-pointer hover:bg-accent transition-colors">
+                  <CardHeader>
+                    <CardTitle>Cargar Plantilla</CardTitle>
+                    <CardDescription>Crear formulario desde una plantilla de texto</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <Input
+                        type="file"
+                        accept=".txt"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="template-upload"
+                      />
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => document.getElementById('template-upload')?.click()}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Subir Plantilla (.txt)
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </>
           ) : (
@@ -286,6 +374,7 @@ export default function FormBuilder() {
                     setShowEditor(false);
                     setFormName("");
                     setVariables([]);
+                    setTemplateContent("");
                   }}
                 >
                   Cambiar Plantilla
