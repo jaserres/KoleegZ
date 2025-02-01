@@ -31,7 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 
 export default function FormEntries() {
   const { id } = useParams();
@@ -40,7 +40,7 @@ export default function FormEntries() {
   const [selectedEntry, setSelectedEntry] = useState<number | null>(null);
   const [documentName, setDocumentName] = useState("");
   const [documentTemplate, setDocumentTemplate] = useState("");
-    const [mergedResult, setMergedResult] = useState("");
+  const [mergedResult, setMergedResult] = useState("");
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
 
@@ -246,13 +246,48 @@ export default function FormEntries() {
                         <div className="text-sm text-muted-foreground mb-2">
                           Usa {'{'}{'{'}<span className="font-mono">nombre_variable</span>{'}'}{'}'}  para insertar variables
                         </div>
-                        <Textarea
-                          value={documentTemplate}
-                          onChange={(e) => setDocumentTemplate(e.target.value)}
-                          className="h-40"
-                          placeholder="Ej: Estimado {{nombre}}, ..."
-                          required
-                        />
+                        <div className="space-y-4">
+                          <Textarea
+                            value={documentTemplate}
+                            onChange={(e) => setDocumentTemplate(e.target.value)}
+                            className="h-40"
+                            placeholder="Ej: Estimado {{nombre}}, ..."
+                            required
+                          />
+                          <div className="flex items-center space-x-2">
+                            <Label htmlFor="file-upload" className="sr-only">
+                              Subir documento
+                            </Label>
+                            <Input
+                              id="file-upload"
+                              type="file"
+                              accept=".txt,.doc,.docx"
+                              className="max-w-xs"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const text = await file.text();
+                                  setDocumentTemplate(text);
+                                  // Use filename as template name if not already set
+                                  if (!documentName) {
+                                    setDocumentName(file.name.split('.')[0]);
+                                  }
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+                                fileInput?.click();
+                              }}
+                            >
+                              <Upload className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                       <Button 
                         onClick={handleCreateDocument}
