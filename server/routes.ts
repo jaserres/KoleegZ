@@ -294,8 +294,17 @@ export function registerRoutes(app: Express): Server {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
     const documentId = parseInt(req.params.documentId);
+    const entryId = parseInt(req.query.entryId as string) || req.body.entryId;
 
-    // Verify ownership
+    // Verify ownership and existence of the document
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+
     const [doc] = await db.select()
       .from(documents)
       .where(and(
@@ -307,7 +316,7 @@ export function registerRoutes(app: Express): Server {
       return res.status(404).send("Document not found");
     }
 
-    const entryId = req.body.entryId;
+    // Verify entry exists and belongs to the form
     const [entry] = await db.select()
       .from(entries)
       .where(and(
@@ -333,8 +342,7 @@ export function registerRoutes(app: Express): Server {
       const isDocx = doc.name.toLowerCase().endsWith('.docx');
 
       if (isDocx) {
-        // Convert the merged text to DOCX using XLSX (which can also create Word docs)
-        const XLSX = require('xlsx');
+        // Convert the merged text to DOCX using XLSX
         const workbook = XLSX.utils.book_new();
         const worksheet = XLSX.utils.aoa_to_sheet([[result]]);
         XLSX.utils.book_append_sheet(workbook, worksheet, "Document");

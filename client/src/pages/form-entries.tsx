@@ -390,7 +390,8 @@ export default function FormEntries() {
                                         size="sm"
                                         onClick={() => {
                                           if (selectedTemplate && selectedEntry) {
-                                            window.location.href = `/api/forms/${id}/documents/${selectedTemplate.id}/merge?download=true&entryId=${selectedEntry}`;
+                                            const url = `/api/forms/${id}/documents/${selectedTemplate.id}/merge?download=true&entryId=${selectedEntry}`;
+                                            window.location.href = url;
                                           }
                                         }}
                                       >
