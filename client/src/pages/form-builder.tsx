@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Plus, Save, ArrowLeft } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formTemplates } from "@/lib/form-templates";
+import type { SelectVariable } from "@db/schema";
 
 export default function FormBuilder() {
   const { id } = useParams();
@@ -28,12 +29,16 @@ export default function FormBuilder() {
     enabled: !!id,
   });
 
-  const [formName, setFormName] = useState(form?.name || "");
-  const [variables, setVariables] = useState<Array<{
-    name: string;
-    label: string;
-    type: string;
-  }>>(form?.variables || []);
+  const [formName, setFormName] = useState("");
+  const [variables, setVariables] = useState<Array<Partial<SelectVariable>>>([]);
+
+  // Efecto para cargar datos del formulario cuando se obtienen
+  useEffect(() => {
+    if (form) {
+      setFormName(form.name);
+      setVariables(form.variables || []);
+    }
+  }, [form]);
 
   // Efecto para cargar plantilla seleccionada
   useEffect(() => {
@@ -133,7 +138,7 @@ export default function FormBuilder() {
 
           <div className="space-y-4">
             {variables.map((variable, index) => (
-              <Card key={index}>
+              <Card key={variable.id || index}>
                 <CardContent className="pt-6 grid gap-4 md:grid-cols-3">
                   <div>
                     <Label>Nombre Interno (camelCase)</Label>
