@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText } from "lucide-react";
+import { ArrowLeft, Plus, FileText, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -111,6 +111,26 @@ export default function FormEntries() {
     },
     onSuccess: (data) => {
       setMergedResult(data.result);
+    },
+  });
+
+  const deleteEntryMutation = useMutation({
+    mutationFn: async (entryId: number) => {
+      await apiRequest("DELETE", `/api/forms/${id}/entries/${entryId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
+      toast({
+        title: "Éxito",
+        description: "Entrada eliminada correctamente",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la entrada",
+        variant: "destructive",
+      });
     },
   });
 
@@ -269,55 +289,69 @@ export default function FormEntries() {
                       {format(new Date(entry.createdAt), "PPp")}
                     </TableCell>
                     <TableCell>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            onClick={() => setSelectedEntry(entry.id)}
-                          >
-                            <FileText className="mr-2 h-4 w-4" />
-                            Merge
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>Mail Merge</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="grid gap-4 grid-cols-2">
-                              {documents?.map((doc: any) => (
-                                <Card key={doc.id}>
-                                  <CardHeader>
-                                    <CardTitle>{doc.name}</CardTitle>
-                                  </CardHeader>
-                                  <CardContent>
-                                    <Button
-                                      onClick={() =>
-                                        mergeMutation.mutate({
-                                          documentId: doc.id,
-                                          entryId: selectedEntry!,
-                                        })
-                                      }
-                                    >
-                                      Merge with this template
-                                    </Button>
-                                  </CardContent>
-                                </Card>
-                              ))}
-                            </div>
-                            {mergedResult && (
-                              <div>
-                                <Label>Result</Label>
-                                <Textarea
-                                  value={mergedResult}
-                                  readOnly
-                                  className="h-40"
-                                />
+                      <div className="flex gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              onClick={() => setSelectedEntry(entry.id)}
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              Merge
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                              <DialogTitle>Mail Merge</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div className="grid gap-4 grid-cols-2">
+                                {documents?.map((doc: any) => (
+                                  <Card key={doc.id}>
+                                    <CardHeader>
+                                      <CardTitle>{doc.name}</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <Button
+                                        onClick={() =>
+                                          mergeMutation.mutate({
+                                            documentId: doc.id,
+                                            entryId: selectedEntry!,
+                                          })
+                                        }
+                                      >
+                                        Merge with this template
+                                      </Button>
+                                    </CardContent>
+                                  </Card>
+                                ))}
                               </div>
-                            )}
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                              {mergedResult && (
+                                <div>
+                                  <Label>Result</Label>
+                                  <Textarea
+                                    value={mergedResult}
+                                    readOnly
+                                    className="h-40"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                        <Button
+                          variant="outline"
+                          className="text-red-500 hover:text-red-700"
+                          onClick={() => {
+                            if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
+                              deleteEntryMutation.mutate(entry.id);
+                            }
+                          }}
+                          disabled={deleteEntryMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

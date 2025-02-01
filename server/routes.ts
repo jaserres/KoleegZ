@@ -158,6 +158,35 @@ export function registerRoutes(app: Express): Server {
 
     res.status(201).json(entry);
   });
+  
+    app.delete("/api/forms/:formId/entries/:entryId", async (req, res) => {
+    const user = ensureAuth(req);
+    const formId = parseInt(req.params.formId);
+    const entryId = parseInt(req.params.entryId);
+
+    // Verify ownership
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+
+    // Verify entry exists and belongs to the form
+    const [entry] = await db.select()
+      .from(entries)
+      .where(and(eq(entries.id, entryId), eq(entries.formId, formId)));
+
+    if (!entry) {
+      return res.status(404).send("Entry not found");
+    }
+
+    await db.delete(entries)
+      .where(and(eq(entries.id, entryId), eq(entries.formId, formId)));
+
+    res.sendStatus(200);
+  });
 
   // Documents endpoints
   app.post("/api/forms/:formId/documents", async (req, res) => {
