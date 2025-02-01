@@ -41,11 +41,27 @@ export const documents = pgTable("documents", {
 });
 
 // Relations
+export const usersRelations = relations(users, ({ many }) => ({
+  forms: many(forms),
+}));
+
 export const formsRelations = relations(forms, ({ one, many }) => ({
   user: one(users, { fields: [forms.userId], references: [users.id] }),
   variables: many(variables),
   entries: many(entries),
   documents: many(documents),
+}));
+
+export const variablesRelations = relations(variables, ({ one }) => ({
+  form: one(forms, { fields: [variables.formId], references: [forms.id] }),
+}));
+
+export const entriesRelations = relations(entries, ({ one }) => ({
+  form: one(forms, { fields: [entries.formId], references: [forms.id] }),
+}));
+
+export const documentsRelations = relations(documents, ({ one }) => ({
+  form: one(forms, { fields: [documents.formId], references: [forms.id] }),
 }));
 
 // Schemas
