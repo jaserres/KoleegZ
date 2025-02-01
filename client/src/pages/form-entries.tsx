@@ -40,7 +40,7 @@ export default function FormEntries() {
   const [selectedEntry, setSelectedEntry] = useState<number | null>(null);
   const [documentName, setDocumentName] = useState("");
   const [documentTemplate, setDocumentTemplate] = useState("");
-  const [mergedResult, setMergedResult] = useState("");
+    const [mergedResult, setMergedResult] = useState("");
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
 
