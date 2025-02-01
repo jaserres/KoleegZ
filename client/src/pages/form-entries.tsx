@@ -162,6 +162,34 @@ export default function FormEntries() {
     createEntryMutation.mutate(values);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        // Read file as text
+        const text = await file.text();
+
+        // Sanitize text: remove null bytes and invalid UTF-8
+        const sanitizedText = text
+          .replace(/\0/g, '') // Remove null bytes
+          .replace(/[^\x20-\x7E\x0A\x0D]/g, ''); // Keep only printable ASCII, newlines and carriage returns
+
+        setDocumentTemplate(sanitizedText);
+
+        // Use filename as template name if not already set
+        if (!documentName) {
+          setDocumentName(file.name.split('.')[0]);
+        }
+      } catch (error) {
+        toast({
+          title: "Error al cargar archivo",
+          description: "El archivo debe ser un documento de texto válido",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
   return (
     <div className="container mx-auto py-8">
       <Button variant="ghost" className="mb-8" onClick={() => setLocation("/")}>
@@ -263,17 +291,7 @@ export default function FormEntries() {
                               type="file"
                               accept=".txt,.doc,.docx"
                               className="max-w-xs"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const text = await file.text();
-                                  setDocumentTemplate(text);
-                                  // Use filename as template name if not already set
-                                  if (!documentName) {
-                                    setDocumentName(file.name.split('.')[0]);
-                                  }
-                                }
-                              }}
+                              onChange={handleFileUpload}
                             />
                             <Button
                               type="button"
