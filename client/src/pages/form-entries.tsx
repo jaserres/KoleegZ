@@ -410,18 +410,25 @@ export default function FormEntries() {
                         <CardTitle>{doc.name}</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-sm text-muted-foreground mb-4">
-                          Creada el {format(new Date(doc.createdAt), "PPp")}
+                        <div className="space-y-4">
+                          <div className="bg-muted p-4 rounded-md">
+                            <pre className="text-xs font-mono whitespace-pre-wrap line-clamp-3">
+                              {doc.preview || doc.template.slice(0, 200)}
+                            </pre>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Creada el {format(new Date(doc.createdAt), "PPp")}
+                          </div>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedTemplate(doc);
+                              setShowTemplateDialog(true);
+                            }}
+                          >
+                            Ver Plantilla
+                          </Button>
                         </div>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedTemplate(doc);
-                            setShowTemplateDialog(true);
-                          }}
-                        >
-                          Ver Plantilla
-                        </Button>
                       </CardContent>
                     </Card>
                   ))

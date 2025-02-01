@@ -14,6 +14,11 @@ function ensureAuth(req: Request) {
   return req.user!;
 }
 
+function generatePreview(template: string, maxLength: number = 200): string {
+  // Take first few lines, up to maxLength characters
+  return template.slice(0, maxLength) + (template.length > maxLength ? '...' : '');
+}
+
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
@@ -202,11 +207,14 @@ export function registerRoutes(app: Express): Server {
       return res.status(404).send("Form not found");
     }
 
+    const preview = generatePreview(req.body.template);
+
     const [doc] = await db.insert(documents)
       .values({
         formId,
         name: req.body.name,
         template: req.body.template,
+        preview,
       })
       .returning();
 
@@ -255,7 +263,7 @@ export function registerRoutes(app: Express): Server {
 
     res.sendStatus(200);
   });
-
+  
   app.patch("/api/forms/:formId/variables/:variableId", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -280,7 +288,6 @@ export function registerRoutes(app: Express): Server {
 
     res.sendStatus(200);
   });
-
 
   // Mail merge endpoint
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {

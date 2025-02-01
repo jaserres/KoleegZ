@@ -37,6 +37,7 @@ export const documents = pgTable("documents", {
   formId: integer("form_id").references(() => forms.id).notNull(),
   name: text("name").notNull(),
   template: text("template").notNull(), // Contains {{variable}} placeholders
+  preview: text("preview"), // First few lines of the document for preview
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
