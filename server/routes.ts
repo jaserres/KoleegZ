@@ -29,6 +29,24 @@ export function registerRoutes(app: Express): Server {
     res.json(userForms);
   });
 
+  app.get("/api/forms/:id", async (req, res) => {
+    const user = ensureAuth(req);
+    const formId = parseInt(req.params.id);
+
+    const form = await db.query.forms.findFirst({
+      where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
+      with: {
+        variables: true,
+      },
+    });
+
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+
+    res.json(form);
+  });
+
   app.post("/api/forms", async (req, res) => {
     const user = ensureAuth(req);
     
