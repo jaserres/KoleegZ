@@ -296,7 +296,7 @@ export function registerRoutes(app: Express): Server {
     const documentId = parseInt(req.params.documentId);
     const entryId = parseInt(req.query.entryId as string) || req.body.entryId;
 
-    // Verify ownership and existence of the document
+    // Verify ownership
     const [form] = await db.select()
       .from(forms)
       .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
@@ -346,11 +346,11 @@ export function registerRoutes(app: Express): Server {
         const workbook = XLSX.utils.book_new();
         const worksheet = XLSX.utils.aoa_to_sheet([[result]]);
         XLSX.utils.book_append_sheet(workbook, worksheet, "Document");
-        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'docx' });
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
-        return res.send(buffer);
+        return res.send(Buffer.from(buffer));
       } else {
         // Plain text download
         res.setHeader('Content-Type', 'text/plain');

@@ -109,8 +109,10 @@ export default function FormEntries() {
       );
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data, { documentId }) => {
       setMergedResult(data.result);
+      const template = documents?.find((doc: any) => doc.id === documentId);
+      setSelectedTemplate(template);
     },
   });
 
@@ -367,7 +369,6 @@ export default function FormEntries() {
                                     <CardContent>
                                       <Button
                                         onClick={() => {
-                                          setSelectedTemplate(doc);
                                           mergeMutation.mutate({
                                             documentId: doc.id,
                                             entryId: selectedEntry!,
@@ -390,8 +391,7 @@ export default function FormEntries() {
                                         size="sm"
                                         onClick={() => {
                                           if (selectedTemplate && selectedEntry) {
-                                            const url = `/api/forms/${id}/documents/${selectedTemplate.id}/merge?download=true&entryId=${selectedEntry}`;
-                                            window.location.href = url;
+                                            window.location.href = `/api/forms/${id}/documents/${selectedTemplate.id}/merge?download=true&entryId=${selectedEntry}`;
                                           }
                                         }}
                                       >
