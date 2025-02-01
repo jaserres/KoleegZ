@@ -366,12 +366,13 @@ export default function FormEntries() {
                                     </CardHeader>
                                     <CardContent>
                                       <Button
-                                        onClick={() =>
+                                        onClick={() => {
+                                          setSelectedTemplate(doc);
                                           mergeMutation.mutate({
                                             documentId: doc.id,
                                             entryId: selectedEntry!,
-                                          })
-                                        }
+                                          });
+                                        }}
                                       >
                                         Merge with this template
                                       </Button>
@@ -383,20 +384,20 @@ export default function FormEntries() {
                                 <div className="space-y-4">
                                   <div className="flex justify-between items-center">
                                     <Label>Preview</Label>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        // Use the current document's ID for the download
-                                        const doc = documents?.find(d => d.id === selectedTemplate?.id);
-                                        if (doc && selectedEntry) {
-                                          window.location.href = `/api/forms/${id}/documents/${doc.id}/merge?download=true&entryId=${selectedEntry}`;
-                                        }
-                                      }}
-                                    >
-                                      <FileDown className="mr-2 h-4 w-4" />
-                                      Download
-                                    </Button>
+                                    {selectedTemplate && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          if (selectedTemplate && selectedEntry) {
+                                            window.location.href = `/api/forms/${id}/documents/${selectedTemplate.id}/merge?download=true&entryId=${selectedEntry}`;
+                                          }
+                                        }}
+                                      >
+                                        <FileDown className="mr-2 h-4 w-4" />
+                                        Download
+                                      </Button>
+                                    )}
                                   </div>
                                   <Textarea
                                     value={mergedResult}
