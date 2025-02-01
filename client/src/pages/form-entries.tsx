@@ -31,7 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download, Upload } from "lucide-react";
+import { Download, Upload, FileDown } from "lucide-react";
 
 export default function FormEntries() {
   const { id } = useParams();
@@ -353,7 +353,7 @@ export default function FormEntries() {
                               Merge
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-2xl">
+                            <DialogContent className="max-w-2xl">
                             <DialogHeader>
                               <DialogTitle>Mail Merge</DialogTitle>
                             </DialogHeader>
@@ -380,8 +380,24 @@ export default function FormEntries() {
                                 ))}
                               </div>
                               {mergedResult && (
-                                <div>
-                                  <Label>Result</Label>
+                                <div className="space-y-4">
+                                  <div className="flex justify-between items-center">
+                                    <Label>Preview</Label>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        // Use the current document's ID for the download
+                                        const doc = documents?.find(d => d.id === selectedTemplate?.id);
+                                        if (doc && selectedEntry) {
+                                          window.location.href = `/api/forms/${id}/documents/${doc.id}/merge?download=true&entryId=${selectedEntry}`;
+                                        }
+                                      }}
+                                    >
+                                      <FileDown className="mr-2 h-4 w-4" />
+                                      Download
+                                    </Button>
+                                  </div>
                                   <Textarea
                                     value={mergedResult}
                                     readOnly

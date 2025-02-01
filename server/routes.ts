@@ -321,10 +321,37 @@ export function registerRoutes(app: Express): Server {
 
     // Perform mail merge
     let result = doc.template;
-    for (const [key, value] of Object.entries(entry.values)) {
+    for (const [key, value] of Object.entries(entry.values as Record<string, string>)) {
       result = result.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
     }
 
+    // Determine if it's a preview or download request
+    const isDownload = req.query.download === 'true';
+
+    if (isDownload) {
+      // Check if the original template was a DOCX
+      const isDocx = doc.name.toLowerCase().endsWith('.docx');
+
+      if (isDocx) {
+        // Convert the merged text to DOCX using XLSX (which can also create Word docs)
+        const XLSX = require('xlsx');
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.aoa_to_sheet([[result]]);
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Document");
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'docx' });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+        return res.send(buffer);
+      } else {
+        // Plain text download
+        res.setHeader('Content-Type', 'text/plain');
+        res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+        return res.send(result);
+      }
+    }
+
+    // Default: return preview as JSON
     res.json({ result });
   });
 
