@@ -423,7 +423,9 @@ export default function FormEntries() {
                                                     const url = window.URL.createObjectURL(blob);
                                                     const a = document.createElement('a');
                                                     a.href = url;
-                                                    a.download = `${selectedTemplate.name}`;
+                                                    // Mantener la extensión original del archivo
+                                                    const extension = selectedTemplate.name.split('.').pop() || 'txt';
+                                                    a.download = `${selectedTemplate.name.split('.')[0]}.${extension}`;
                                                     document.body.appendChild(a);
                                                     a.click();
                                                     window.URL.revokeObjectURL(url);

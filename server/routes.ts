@@ -336,24 +336,28 @@ export function registerRoutes(app: Express): Server {
     }
 
     if (isDownload) {
-      // Check if the original template was a DOCX
-      const isDocx = doc.name.toLowerCase().endsWith('.docx');
+      // Determinar el tipo de archivo y los headers correctos
+      const fileExtension = doc.name.split('.').pop()?.toLowerCase() || 'txt';
+      let contentType = 'text/plain';
 
-      if (isDocx) {
-        // Convert the merged text to DOCX using XLSX
-        const workbook = XLSX.utils.book_new();
-        const worksheet = XLSX.utils.aoa_to_sheet([[result]]);
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Document");
-        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+      switch (fileExtension) {
+        case 'docx':
+          contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          // Convertir el texto a formato DOCX
+          const workbook = XLSX.utils.book_new();
+          const worksheet = XLSX.utils.aoa_to_sheet([[result]]);
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Document");
+          const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+          res.setHeader('Content-Type', contentType);
+          res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+          return res.send(Buffer.from(buffer));
 
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
-        return res.send(Buffer.from(buffer));
-      } else {
-        // Plain text download
-        res.setHeader('Content-Type', 'text/plain');
-        res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
-        return res.send(result);
+        case 'txt':
+        default:
+          contentType = 'text/plain';
+          res.setHeader('Content-Type', contentType);
+          res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+          return res.send(result);
       }
     }
 
