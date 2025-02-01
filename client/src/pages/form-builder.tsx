@@ -21,6 +21,7 @@ export default function FormBuilder() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [showEditor, setShowEditor] = useState(false);
 
   const { data: form } = useQuery({
     queryKey: [`/api/forms/${id}`],
@@ -42,6 +43,7 @@ export default function FormBuilder() {
       if (template) {
         setFormName(template.name);
         setVariables(template.variables);
+        setShowEditor(true);
         sessionStorage.removeItem("selectedTemplate");
       }
     }
@@ -108,6 +110,8 @@ export default function FormBuilder() {
             value={formName}
             onChange={(e) => setFormName(e.target.value)}
             className="max-w-md"
+            placeholder="Ingrese el nombre del formulario"
+            required
           />
         </div>
 
@@ -144,6 +148,8 @@ export default function FormBuilder() {
                           )
                         )
                       }
+                      placeholder="nombreVariable"
+                      required
                     />
                   </div>
                   <div>
@@ -159,6 +165,8 @@ export default function FormBuilder() {
                           )
                         )
                       }
+                      placeholder="Nombre de la Variable"
+                      required
                     />
                   </div>
                   <div>
@@ -194,7 +202,7 @@ export default function FormBuilder() {
         <Button
           size="lg"
           onClick={() => id ? updateFormMutation.mutate() : createFormMutation.mutate()}
-          disabled={createFormMutation.isPending || updateFormMutation.isPending}
+          disabled={createFormMutation.isPending || updateFormMutation.isPending || !formName}
         >
           <Save className="mr-2 h-4 w-4" />
           {id ? "Actualizar Formulario" : "Guardar Formulario"}
@@ -216,51 +224,70 @@ export default function FormBuilder() {
         </Button>
 
         <div className="space-y-8">
-          <h1 className="text-3xl font-bold">Crear Nuevo Formulario</h1>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {formTemplates.map((template) => (
-              <Card 
-                key={template.name} 
-                className="cursor-pointer hover:bg-accent transition-colors"
-                onClick={() => {
-                  setFormName(template.name);
-                  setVariables(template.variables);
-                }}
-              >
-                <CardHeader>
-                  <CardTitle>{template.name}</CardTitle>
-                  <CardDescription>{template.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    {template.variables.length} variables predefinidas
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-            <Card 
-              className="cursor-pointer hover:bg-accent transition-colors"
-              onClick={() => {
-                setFormName("");
-                setVariables([]);
-              }}
-            >
-              <CardHeader>
-                <CardTitle>Formulario en Blanco</CardTitle>
-                <CardDescription>Crear un formulario desde cero</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Plus className="h-8 w-8 text-muted-foreground" />
-              </CardContent>
-            </Card>
-          </div>
+          {!showEditor ? (
+            <>
+              <h1 className="text-3xl font-bold">Crear Nuevo Formulario</h1>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {formTemplates.map((template) => (
+                  <Card 
+                    key={template.name} 
+                    className="cursor-pointer hover:bg-accent transition-colors"
+                    onClick={() => {
+                      setFormName(template.name);
+                      setVariables(template.variables);
+                      setShowEditor(true);
+                    }}
+                  >
+                    <CardHeader>
+                      <CardTitle>{template.name}</CardTitle>
+                      <CardDescription>{template.description}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        {template.variables.length} variables predefinidas
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+                <Card 
+                  className="cursor-pointer hover:bg-accent transition-colors"
+                  onClick={() => {
+                    setFormName("");
+                    setVariables([]);
+                    setShowEditor(true);
+                  }}
+                >
+                  <CardHeader>
+                    <CardTitle>Formulario en Blanco</CardTitle>
+                    <CardDescription>Crear un formulario desde cero</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Plus className="h-8 w-8 text-muted-foreground" />
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-bold">
+                  {formName || "Nuevo Formulario"}
+                </h1>
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setShowEditor(false);
+                    setFormName("");
+                    setVariables([]);
+                  }}
+                >
+                  Cambiar Plantilla
+                </Button>
+              </div>
+              {renderFormEditor()}
+            </>
+          )}
         </div>
-
-        {(formName !== "" || variables.length > 0) && (
-          <div className="mt-8 space-y-8">
-            {renderFormEditor()}
-          </div>
-        )}
       </div>
     );
   }
