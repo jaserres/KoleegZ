@@ -135,6 +135,26 @@ export default function FormEntries() {
       });
     },
   });
+  
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (documentId: number) => {
+      await apiRequest("DELETE", `/api/forms/${id}/documents/${documentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/documents`] });
+      toast({
+        title: "Éxito",
+        description: "Plantilla eliminada correctamente",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la plantilla",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleCreateDocument = async () => {
     if (!documentName || !documentTemplate) {
@@ -491,7 +511,22 @@ export default function FormEntries() {
                   documents.map((doc) => (
                     <Card key={doc.id}>
                       <CardHeader>
-                        <CardTitle>{doc.name}</CardTitle>
+                        <div className="flex justify-between items-center">
+                          <CardTitle>{doc.name}</CardTitle>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="text-red-500 hover:text-red-700"
+                            onClick={() => {
+                              if (window.confirm("¿Estás seguro de que quieres eliminar esta plantilla?")) {
+                                deleteDocumentMutation.mutate(doc.id);
+                              }
+                            }}
+                            disabled={deleteDocumentMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">
