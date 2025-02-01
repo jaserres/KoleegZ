@@ -183,6 +183,55 @@ export function registerRoutes(app: Express): Server {
     res.json(docs);
   });
 
+    app.patch("/api/forms/:id", async (req, res) => {
+    const user = ensureAuth(req);
+    const formId = parseInt(req.params.id);
+
+    // Verify ownership
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+
+    await db.update(forms)
+      .set({ 
+        name: req.body.name,
+        updatedAt: new Date()
+      })
+      .where(eq(forms.id, formId));
+
+    res.sendStatus(200);
+  });
+
+  app.patch("/api/forms/:formId/variables/:variableId", async (req, res) => {
+    const user = ensureAuth(req);
+    const formId = parseInt(req.params.formId);
+    const variableId = parseInt(req.params.variableId);
+
+    // Verify ownership
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+
+    await db.update(variables)
+      .set({ 
+        name: req.body.name,
+        label: req.body.label,
+        type: req.body.type
+      })
+      .where(eq(variables.id, variableId));
+
+    res.sendStatus(200);
+  });
+
+
   // Mail merge endpoint
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     const user = ensureAuth(req);
