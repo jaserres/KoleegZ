@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
 import { forms, variables, entries, documents } from "@db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
 
@@ -105,6 +105,27 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Entries endpoints
+  app.get("/api/forms/:formId/entries", async (req, res) => {
+    const user = ensureAuth(req);
+    const formId = parseInt(req.params.formId);
+
+    // Verify ownership
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+
+    const formEntries = await db.select()
+      .from(entries)
+      .where(eq(entries.formId, formId))
+      .orderBy(desc(entries.createdAt));
+
+    res.json(formEntries);
+  });
+
   app.post("/api/forms/:formId/entries", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
