@@ -41,6 +41,8 @@ export default function FormEntries() {
   const [documentName, setDocumentName] = useState("");
   const [documentTemplate, setDocumentTemplate] = useState("");
   const [mergedResult, setMergedResult] = useState("");
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
 
   const { data: form } = useQuery({
     queryKey: [`/api/forms/${id}`],
@@ -345,8 +347,8 @@ export default function FormEntries() {
                         <Button
                           variant="outline"
                           onClick={() => {
-                            setSelectedEntry(null);
-                            setMergedResult("");
+                            setSelectedTemplate(doc);
+                            setShowTemplateDialog(true);
                           }}
                         >
                           Ver Plantilla
@@ -360,6 +362,26 @@ export default function FormEntries() {
           </CardContent>
         </Card>
       </div>
+        <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>{selectedTemplate?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Contenido de la Plantilla</Label>
+              <Textarea
+                value={selectedTemplate?.template || ""}
+                readOnly
+                className="h-40 font-mono"
+              />
+            </div>
+            <Button variant="outline" onClick={() => setShowTemplateDialog(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
