@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -12,15 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Plus, Save, ArrowLeft } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { formTemplates } from "@/lib/form-templates";
 
 export default function FormBuilder() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
+
   const { data: form } = useQuery({
     queryKey: [`/api/forms/${id}`],
     enabled: !!id,
@@ -33,28 +34,203 @@ export default function FormBuilder() {
     type: string;
   }>>(form?.variables || []);
 
+  // Efecto para cargar plantilla seleccionada
+  useEffect(() => {
+    const templateFromStorage = sessionStorage.getItem("selectedTemplate");
+    if (templateFromStorage && !id) {
+      const template = formTemplates.find(t => t.name === templateFromStorage);
+      if (template) {
+        setFormName(template.name);
+        setVariables(template.variables);
+        sessionStorage.removeItem("selectedTemplate");
+      }
+    }
+  }, [id]);
+
   const createFormMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/forms", { name: formName });
       const form = await res.json();
-      
+
       // Create variables
       for (const variable of variables) {
         await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
       }
-      
+
       return form;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/forms"] });
       toast({
-        title: "Success",
-        description: "Form created successfully",
+        title: "Éxito",
+        description: "Formulario creado exitosamente",
       });
       setLocation("/");
     },
   });
 
+  if (!id) {
+    return (
+      <div className="container mx-auto py-8">
+        <Button
+          variant="ghost"
+          className="mb-8"
+          onClick={() => setLocation("/")}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Volver a Formularios
+        </Button>
+
+        <div className="space-y-8">
+          <h1 className="text-3xl font-bold">Crear Nuevo Formulario</h1>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {formTemplates.map((template) => (
+              <Card key={template.name} className="cursor-pointer hover:bg-accent"
+                onClick={() => {
+                  setFormName(template.name);
+                  setVariables(template.variables);
+                }}>
+                <CardHeader>
+                  <CardTitle>{template.name}</CardTitle>
+                  <CardDescription>{template.description}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    {template.variables.length} variables predefinidas
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+            <Card className="cursor-pointer hover:bg-accent"
+              onClick={() => {
+                setFormName("");
+                setVariables([]);
+              }}>
+              <CardHeader>
+                <CardTitle>Formulario en Blanco</CardTitle>
+                <CardDescription>Crear un formulario desde cero</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Plus className="h-8 w-8 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {(formName || variables.length > 0) && (
+          <div className="mt-8 space-y-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>Configurar Formulario</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                <div>
+                  <Label htmlFor="formName">Nombre del Formulario</Label>
+                  <Input
+                    id="formName"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    className="max-w-md"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-semibold">Variables</h2>
+                    <Button
+                      onClick={() =>
+                        setVariables([
+                          ...variables,
+                          { name: "", label: "", type: "text" },
+                        ])
+                      }
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Agregar Variable
+                    </Button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {variables.map((variable, index) => (
+                      <Card key={index}>
+                        <CardContent className="pt-6 grid gap-4 md:grid-cols-3">
+                          <div>
+                            <Label>Nombre Interno (camelCase)</Label>
+                            <Input
+                              value={variable.name}
+                              onChange={(e) =>
+                                setVariables(
+                                  variables.map((v, i) =>
+                                    i === index
+                                      ? { ...v, name: e.target.value }
+                                      : v
+                                  )
+                                )
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label>Etiqueta</Label>
+                            <Input
+                              value={variable.label}
+                              onChange={(e) =>
+                                setVariables(
+                                  variables.map((v, i) =>
+                                    i === index
+                                      ? { ...v, label: e.target.value }
+                                      : v
+                                  )
+                                )
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label>Tipo</Label>
+                            <Select
+                              value={variable.type}
+                              onValueChange={(value) =>
+                                setVariables(
+                                  variables.map((v, i) =>
+                                    i === index
+                                      ? { ...v, type: value }
+                                      : v
+                                  )
+                                )
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="text">Texto</SelectItem>
+                                <SelectItem value="number">Número</SelectItem>
+                                <SelectItem value="date">Fecha</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  size="lg"
+                  onClick={() => createFormMutation.mutate()}
+                  disabled={createFormMutation.isPending}
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  Guardar Formulario
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Resto del componente para edición de formularios existentes...
   return (
     <div className="container mx-auto py-8">
       <Button
@@ -63,12 +239,12 @@ export default function FormBuilder() {
         onClick={() => setLocation("/")}
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
-        Back to Forms
+        Volver a Formularios
       </Button>
 
       <div className="space-y-8">
         <div>
-          <Label htmlFor="formName">Form Name</Label>
+          <Label htmlFor="formName">Nombre del Formulario</Label>
           <Input
             id="formName"
             value={formName}
@@ -89,7 +265,7 @@ export default function FormBuilder() {
               }
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add Variable
+              Agregar Variable
             </Button>
           </div>
 
@@ -98,7 +274,7 @@ export default function FormBuilder() {
               <Card key={index}>
                 <CardContent className="pt-6 grid gap-4 md:grid-cols-3">
                   <div>
-                    <Label>Internal Name (camelCase)</Label>
+                    <Label>Nombre Interno (camelCase)</Label>
                     <Input
                       value={variable.name}
                       onChange={(e) =>
@@ -113,7 +289,7 @@ export default function FormBuilder() {
                     />
                   </div>
                   <div>
-                    <Label>Display Label</Label>
+                    <Label>Etiqueta</Label>
                     <Input
                       value={variable.label}
                       onChange={(e) =>
@@ -128,7 +304,7 @@ export default function FormBuilder() {
                     />
                   </div>
                   <div>
-                    <Label>Type</Label>
+                    <Label>Tipo</Label>
                     <Select
                       value={variable.type}
                       onValueChange={(value) =>
@@ -145,9 +321,9 @@ export default function FormBuilder() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="text">Text</SelectItem>
-                        <SelectItem value="number">Number</SelectItem>
-                        <SelectItem value="date">Date</SelectItem>
+                        <SelectItem value="text">Texto</SelectItem>
+                        <SelectItem value="number">Número</SelectItem>
+                        <SelectItem value="date">Fecha</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -163,7 +339,7 @@ export default function FormBuilder() {
           disabled={createFormMutation.isPending}
         >
           <Save className="mr-2 h-4 w-4" />
-          Save Form
+          Guardar Formulario
         </Button>
       </div>
     </div>
