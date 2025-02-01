@@ -17,6 +17,7 @@ import { Plus, Save, ArrowLeft, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formTemplates } from "@/lib/form-templates";
 import type { SelectVariable } from "@db/schema";
+import { ThemeSelector } from "@/components/theme-selector";
 
 export default function FormBuilder() {
   const { id } = useParams();
@@ -24,6 +25,10 @@ export default function FormBuilder() {
   const { toast } = useToast();
   const [showEditor, setShowEditor] = useState(false);
   const [templateContent, setTemplateContent] = useState("");
+  const [formTheme, setFormTheme] = useState<{ primary: string; variant: string }>({
+    primary: "#64748b",
+    variant: "default",
+  });
 
   const { data: form } = useQuery({
     queryKey: [`/api/forms/${id}`],
@@ -60,7 +65,10 @@ export default function FormBuilder() {
 
   const createFormMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/forms", { name: formName });
+      const res = await apiRequest("POST", "/api/forms", { 
+        name: formName,
+        theme: formTheme
+      });
       const form = await res.json();
 
       // Create variables
@@ -84,8 +92,11 @@ export default function FormBuilder() {
     mutationFn: async () => {
       if (!id) return;
 
-      // Update form name
-      await apiRequest("PATCH", `/api/forms/${id}`, { name: formName });
+      // Update form name and theme
+      await apiRequest("PATCH", `/api/forms/${id}`, { 
+        name: formName,
+        theme: formTheme 
+      });
 
       // Update variables
       for (const variable of variables) {
@@ -184,7 +195,18 @@ export default function FormBuilder() {
             required
           />
         </div>
-
+        <div className="space-y-4">
+          <Label>Tema del Formulario</Label>
+          <Card>
+            <CardContent className="pt-6">
+              <ThemeSelector
+                onThemeChange={setFormTheme}
+                defaultColor={form?.theme?.primary}
+                defaultVariant={form?.theme?.variant}
+              />
+            </CardContent>
+          </Card>
+        </div>
         <div>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Variables</h2>

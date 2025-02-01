@@ -54,11 +54,11 @@ export function registerRoutes(app: Express): Server {
 
   app.post("/api/forms", async (req, res) => {
     const user = ensureAuth(req);
-    
+
     // Check limits
     const formCount = await db.select().from(forms).where(eq(forms.userId, user.id));
     const limit = user.isPremium ? 10 : 1;
-    
+
     if (formCount.length >= limit) {
       return res.status(403).send(`Free users can only create ${limit} forms`);
     }
@@ -67,6 +67,7 @@ export function registerRoutes(app: Express): Server {
       .values({
         userId: user.id,
         name: req.body.name,
+        theme: req.body.theme || { primary: "#64748b", variant: "default" }
       })
       .returning();
 
@@ -270,7 +271,7 @@ export function registerRoutes(app: Express): Server {
     res.sendStatus(200);
   });
 
-    app.patch("/api/forms/:id", async (req, res) => {
+  app.patch("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
 
@@ -286,6 +287,7 @@ export function registerRoutes(app: Express): Server {
     await db.update(forms)
       .set({ 
         name: req.body.name,
+        theme: req.body.theme || form.theme,
         updatedAt: new Date()
       })
       .where(eq(forms.id, formId));

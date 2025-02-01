@@ -13,6 +13,7 @@ export const forms = pgTable("forms", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id).notNull(),
   name: text("name").notNull(),
+  theme: jsonb("theme").default({ primary: "#64748b", variant: "default" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -20,15 +21,15 @@ export const forms = pgTable("forms", {
 export const variables = pgTable("variables", {
   id: serial("id").primaryKey(),
   formId: integer("form_id").references(() => forms.id).notNull(),
-  name: text("name").notNull(), // camelCase internal name
-  label: text("label").notNull(), // Display label
-  type: text("type").notNull(), // text, number, date
+  name: text("name").notNull(),
+  label: text("label").notNull(),
+  type: text("type").notNull(),
 });
 
 export const entries = pgTable("entries", {
   id: serial("id").primaryKey(),
   formId: integer("form_id").references(() => forms.id).notNull(),
-  values: jsonb("values").notNull(), // {variableName: value}
+  values: jsonb("values").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -36,12 +37,11 @@ export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
   formId: integer("form_id").references(() => forms.id).notNull(),
   name: text("name").notNull(),
-  template: text("template").notNull(), // Contains {{variable}} placeholders
-  preview: text("preview"), // First few lines of the document for preview
+  template: text("template").notNull(),
+  preview: text("preview"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Relations
 export const usersRelations = relations(users, ({ many }) => ({
   forms: many(forms),
 }));
@@ -65,7 +65,6 @@ export const documentsRelations = relations(documents, ({ one }) => ({
   form: one(forms, { fields: [documents.formId], references: [forms.id] }),
 }));
 
-// Schemas
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export type InsertUser = typeof users.$inferInsert;
