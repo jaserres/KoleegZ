@@ -294,7 +294,7 @@ export function registerRoutes(app: Express): Server {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
     const documentId = parseInt(req.params.documentId);
-    const entryId = parseInt(req.query.entryId as string) || req.body.entryId;
+    const entryId = parseInt(req.body.entryId);
 
     // Verify ownership
     const [form] = await db.select()

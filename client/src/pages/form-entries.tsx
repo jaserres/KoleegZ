@@ -391,7 +391,22 @@ export default function FormEntries() {
                                         size="sm"
                                         onClick={() => {
                                           if (selectedTemplate && selectedEntry) {
-                                            window.location.href = `/api/forms/${id}/documents/${selectedTemplate.id}/merge?download=true&entryId=${selectedEntry}`;
+                                            // Primero realizar el merge para asegurarnos que todo está correcto
+                                            mergeMutation.mutate(
+                                              {
+                                                documentId: selectedTemplate.id,
+                                                entryId: selectedEntry,
+                                              },
+                                              {
+                                                onSuccess: () => {
+                                                  // Una vez que el merge es exitoso, iniciamos la descarga
+                                                  const downloadUrl = `/api/forms/${id}/documents/${selectedTemplate.id}/merge?download=true&entryId=${selectedEntry}`;
+                                                  const link = document.createElement('a');
+                                                  link.href = downloadUrl;
+                                                  link.click();
+                                                },
+                                              }
+                                            );
                                           }
                                         }}
                                       >
