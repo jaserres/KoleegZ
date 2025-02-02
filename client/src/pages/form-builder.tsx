@@ -100,11 +100,23 @@ export default function FormBuilder() {
         throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
       }
 
-      const res = await apiRequest("POST", "/api/forms", {
+      // Validar que todas las variables tengan nombre y etiqueta
+      const invalidVariables = variables.filter(v => !v.name || !v.label);
+      if (invalidVariables.length > 0) {
+        throw new Error('Todas las variables deben tener nombre y etiqueta');
+      }
+
+      const formData = {
         name: formName,
         theme: formTheme,
-        variables: variables // Enviamos las variables junto con el formulario
-      });
+        variables: variables.map(v => ({
+          name: v.name,
+          label: v.label,
+          type: v.type || 'text'
+        }))
+      };
+
+      const res = await apiRequest("POST", "/api/forms", formData);
 
       if (!res.ok) {
         const error = await res.text();

@@ -60,16 +60,16 @@ export function registerRoutes(app: Express): Server {
         req.user.isPremium = updatedUser.isPremium;
       }
 
-      return res.json({ 
-        success: true, 
-        isPremium: updatedUser.isPremium 
+      return res.json({
+        success: true,
+        isPremium: updatedUser.isPremium
       });
 
     } catch (error: any) {
       console.error('Error toggling premium status:', error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: "Error updating premium status",
-        details: error.message 
+        details: error.message
       });
     }
   });
@@ -336,6 +336,55 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
+
+  // Actualizar la ruta de creación de formularios
+  app.post("/api/forms", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      const { name, theme, variables } = req.body;
+
+      // Validar datos requeridos
+      if (!name) {
+        return res.status(400).json({ error: "El nombre del formulario es requerido" });
+      }
+
+      // Crear el formulario con sus variables en una transacción
+      const result = await db.transaction(async (tx) => {
+        // Crear el formulario
+        const [form] = await tx.insert(forms)
+          .values({
+            userId: user.id,
+            name,
+            theme,
+          })
+          .returning();
+
+        // Crear las variables si existen
+        if (variables && Array.isArray(variables)) {
+          for (const variable of variables) {
+            await tx.insert(variables)
+              .values({
+                formId: form.id,
+                name: variable.name,
+                label: variable.label,
+                type: variable.type || 'text',
+              });
+          }
+        }
+
+        return form;
+      });
+
+      return res.json(result);
+    } catch (error: any) {
+      console.error('Error creating form:', error);
+      return res.status(500).json({
+        error: "Error al crear el formulario",
+        details: error.message
+      });
+    }
+  });
+
 
   const httpServer = createServer(app);
   return httpServer;
