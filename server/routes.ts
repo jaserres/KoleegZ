@@ -2,7 +2,7 @@ import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
-import { forms, variables, entries, documents } from "@db/schema";
+import { forms, variables, entries, documents, users } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
@@ -21,6 +21,19 @@ function generatePreview(template: string, maxLength: number = 200): string {
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
+
+  // Add new toggle premium route
+  app.post("/api/toggle-premium", async (req, res) => {
+    const user = ensureAuth(req);
+
+    const [updatedUser] = await db.update(users)
+      .set({ isPremium: !user.isPremium })
+      .where(eq(users.id, user.id))
+      .returning();
+
+    req.user = updatedUser;
+    res.json(updatedUser);
+  });
 
   // Form endpoints
   app.get("/api/forms", async (req, res) => {

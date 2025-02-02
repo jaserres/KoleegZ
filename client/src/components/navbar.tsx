@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
+import { PremiumToggle } from "./premium-toggle";
 
 export function Navbar() {
   const { user, logoutMutation } = useAuth();
@@ -24,9 +25,7 @@ export function Navbar() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-muted-foreground">
-              {user?.isPremium ? "Premium" : "Free"}
-            </span>
+            <PremiumToggle />
             <Button 
               variant="outline" 
               onClick={() => logoutMutation.mutate()}
