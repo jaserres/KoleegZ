@@ -40,6 +40,29 @@ function ensureAuth(req: Request) {
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
+  // Agregar la ruta GET /api/forms al inicio
+  app.get("/api/forms", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+
+      const userForms = await db.query.forms.findMany({
+        where: eq(forms.userId, user.id),
+        with: {
+          variables: true
+        },
+        orderBy: desc(forms.id)
+      });
+
+      return res.json(userForms);
+    } catch (error: any) {
+      console.error('Error fetching forms:', error);
+      return res.status(500).json({
+        error: "Error al obtener los formularios",
+        details: error.message
+      });
+    }
+  });
+
   // Add toggle premium route at the top level
   app.post("/api/toggle-premium", async (req, res) => {
     try {
