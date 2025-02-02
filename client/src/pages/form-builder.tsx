@@ -503,30 +503,30 @@ export default function FormBuilder() {
                   </CardContent>
                 </Card>
                 <Card className="cursor-pointer hover:bg-accent transition-colors">
-                  <CardHeader>
-                    <CardTitle>Cargar Plantilla</CardTitle>
-                    <CardDescription>Crear formulario desde una plantilla de texto</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <Input
-                        type="file"
-                        accept=".txt,.doc,.docx"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                        id="template-upload"
-                      />
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => document.getElementById('template-upload')?.click()}
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        Subir Plantilla (.txt)
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    <CardHeader>
+                      <CardTitle>Cargar Plantilla</CardTitle>
+                      <CardDescription>Crear formulario desde una plantilla de texto</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <Input
+                          type="file"
+                          accept=".txt,.doc,.docx"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                          id="template-upload"
+                        />
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => document.getElementById('template-upload')?.click()}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          Subir Plantilla (.txt, .doc, .docx)
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
               </div>
             </>
           ) : (
