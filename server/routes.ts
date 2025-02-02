@@ -299,7 +299,8 @@ export function registerRoutes(app: Express): Server {
           name: file.originalname.replace(/\.[^/.]+$/, ""),
           template: textResult.value,
           preview: htmlResult.value,
-          originalDocument: Buffer.from(file.buffer) // Ensure we're saving a copy of the buffer
+          // Guardar el buffer directamente como BYTEA
+          originalDocument: file.buffer
         };
 
         // Log before saving
@@ -311,6 +312,7 @@ export function registerRoutes(app: Express): Server {
           isOriginalBuffer: Buffer.isBuffer(docData.originalDocument)
         });
 
+        // Insert document into database
         const [doc] = await db.insert(documents)
           .values(docData)
           .returning();
@@ -320,7 +322,7 @@ export function registerRoutes(app: Express): Server {
           id: doc.id,
           name: doc.name,
           hasOriginal: !!doc.originalDocument,
-          originalLength: doc.originalDocument ? doc.originalDocument.length : 0,
+          originalLength: doc.originalDocument ? Buffer.from(doc.originalDocument).length : 0,
           isOriginalBuffer: Buffer.isBuffer(doc.originalDocument)
         });
 
@@ -334,7 +336,7 @@ export function registerRoutes(app: Express): Server {
       res.status(500).send(`Error al subir el documento: ${error.message}`);
     }
 });
-
+  
   app.post("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -521,7 +523,7 @@ export function registerRoutes(app: Express): Server {
         console.log('Processing document merge in DOCX format');
 
         // Asegurar que tenemos un Buffer válido
-        const originalDocBuffer = Buffer.isBuffer(doc.originalDocument) 
+        const originalDocBuffer = Buffer.isBuffer(doc.originalDocument)
           ? doc.originalDocument
           : Buffer.from(doc.originalDocument);
 
