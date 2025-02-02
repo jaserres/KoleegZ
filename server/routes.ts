@@ -593,14 +593,19 @@ export function registerRoutes(app: Express): Server {
 
       // Realizar el merge con manejo de errores más detallado
       try {
+        // Sanitizar el template para evitar interpretación incorrecta de comandos
         const mergedBuffer = await createReport({
           template: documentBuffer,
           data: mergeData,
-          cmdDelimiter: ['{{', '}}'],
+          cmdDelimiter: ['{%', '%}'], // Cambiar delimitadores para evitar conflictos
           failFast: false,
           rejectNullish: false,
           fixSmartQuotes: true,
-          processLineBreaks: true
+          processLineBreaks: true,
+          errorHandler: (error, cmdStr) => {
+            console.error('Error en comando:', { error, cmdStr });
+            return ''; // Retornar string vacío en caso de error
+          }
         });
 
         console.log('Merge completado exitosamente');
@@ -620,10 +625,13 @@ export function registerRoutes(app: Express): Server {
         }
       } catch (mergeError: any) {
         console.error('Error específico en el merge:', mergeError);
+        // Agregar más información de diagnóstico en la respuesta
         return res.status(500).json({
           error: `Error en el proceso de merge: ${mergeError.message}`,
           details: mergeError.stack,
-          data: mergeData
+          data: mergeData,
+          template: doc.template ? doc.template.substring(0, 200) + '...' : 'No template', // Mostrar primeros 200 caracteres del template
+          delimiters: ['{%', '%}']
         });
       }
     } catch (error: any) {
