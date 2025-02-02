@@ -2,7 +2,7 @@ import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
-import { forms, variables, entries, documents, users } from "@db/schema";
+import { forms, variables, entries, documents } from "@db/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
@@ -15,7 +15,10 @@ import mammoth from 'mammoth';
 const upload = multer({ 
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
+    const allowedTypes = [
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword'
+    ];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -238,7 +241,6 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).send("No se ha proporcionado ningún archivo");
       }
 
-      // Solo verificar propiedad del formulario si no es una carga temporal
       if (formId !== null) {
         const [form] = await db.select()
           .from(forms)
@@ -250,12 +252,23 @@ export function registerRoutes(app: Express): Server {
       }
 
       try {
-        // Guardar el buffer original como base64
-        const originalDocBase64 = file.buffer.toString('base64');
-
-        // Procesar el archivo .docx usando mammoth para obtener HTML para preview
+        // Convertir el documento a HTML para preview manteniendo el formato
         const [htmlResult, textResult] = await Promise.all([
-          mammoth.convertToHtml({ buffer: file.buffer }),
+          mammoth.convertToHtml({ 
+            buffer: file.buffer,
+            options: {
+              styleMap: [
+                "p[style-name='Heading 1'] => h1:fresh",
+                "p[style-name='Heading 2'] => h2:fresh",
+                "p[style-name='Heading 3'] => h3:fresh",
+                "r[style-name='Strong'] => strong",
+                "r[style-name='Emphasis'] => em",
+                "table => table",
+                "p => p",
+                "br => br"
+              ]
+            }
+          }),
           mammoth.extractRawText({ buffer: file.buffer })
         ]);
 
@@ -268,23 +281,23 @@ export function registerRoutes(app: Express): Server {
           });
         }
 
-        // Guardar en la base de datos
+        // Guardar en la base de datos manteniendo el documento original como buffer binario
         const [doc] = await db.insert(documents)
           .values({
             formId,
             name: file.originalname.replace(/\.[^/.]+$/, ""),
-            template: textResult.value, // Guardar texto plano para búsqueda de variables
-            preview: htmlResult.value, // Guardar HTML para preview
-            originalDocument: originalDocBase64 // Guardar documento original completo
+            template: textResult.value,
+            preview: htmlResult.value,
+            originalDocument: file.buffer.toString('binary') // Guardar como binario directamente
           })
           .returning();
 
         res.status(201).json(doc);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error processing document:', error);
         return res.status(400).send(`Error al procesar el documento: ${error.message}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in document upload:', error);
       res.status(500).send(`Error al subir el documento: ${error.message}`);
     }
@@ -424,7 +437,7 @@ export function registerRoutes(app: Express): Server {
     const isDownload = req.body.download === true;
 
     try {
-      // Verify ownership
+      // Verificaciones de seguridad y existencia (sin cambios)
       const [form] = await db.select()
         .from(forms)
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
@@ -444,7 +457,6 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Document not found");
       }
 
-      // Verify entry exists and belongs to the form
       const [entry] = await db.select()
         .from(entries)
         .where(and(
@@ -456,21 +468,18 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Entry not found");
       }
 
-      // Para preview o descarga, primero verificar si tenemos el documento original
+      // Si no hay documento original, usar el template de texto plano
       if (!doc.originalDocument) {
         console.log('No original document found, using plain text template');
-        // Si no hay documento original, usar el template de texto plano
         const mergedText = doc.template.replace(/{{(\w+)}}/g, (match, variable) => {
           return entry.values[variable] || match;
         });
 
         if (isDownload) {
-          // Para descarga, enviar como archivo de texto
           res.setHeader('Content-Type', 'text/plain');
           res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.txt"`);
           return res.send(mergedText);
         } else {
-          // Para preview, enviar el texto con formato HTML básico
           const htmlContent = `<div style="white-space: pre-wrap; font-family: monospace;">${
             mergedText.split('\n').map(line => `<p>${line}</p>`).join('')
           }</div>`;
@@ -478,52 +487,30 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      console.log('Original document found, proceeding with formatted merge');
+      console.log('Original document found, proceeding with merge');
 
       try {
-        // Asegurarse de que el documento original es válido
-        if (!Buffer.isBuffer(Buffer.from(doc.originalDocument, 'base64'))) {
-          throw new Error('Invalid original document format');
-        }
-
-        // Crear una copia del buffer original para no modificarlo
-        const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
+        // Convertir el documento original de binario a buffer
+        const originalDocBuffer = Buffer.from(doc.originalDocument, 'binary');
 
         if (isDownload) {
-          console.log('Generating formatted document for download');
-
-          // Crear el reporte con configuración más específica
+          console.log('Generating merged document for download');
           const buffer = await createReport({
             template: originalDocBuffer,
             data: entry.values || {},
             cmdDelimiter: ['{{', '}}'],
-            failFast: false, // Cambiar a false para evitar errores por variables faltantes
-            rejectNullish: false, // No rechazar valores nulos/undefined
-            fixSmartQuotes: true, // Arreglar comillas inteligentes
-            processLineBreaks: true, // Procesar saltos de línea
-            parser: {
-              delimiters: {
-                start: '{{',
-                end: '}}',
-              },
-            },
-            additionalJsContext: {
-              // Funciones auxiliares para procesamiento de texto
-              emptyIfNull: (value) => value || '',
-              formatDate: (value) => value ? new Date(value).toLocaleDateString() : '',
-            },
+            failFast: false,
+            rejectNullish: false,
+            fixSmartQuotes: true,
+            processLineBreaks: true
           });
-
-          // Verificar que el buffer resultante es válido
-          if (!Buffer.isBuffer(buffer)) {
-            throw new Error('Invalid generated document format');
-          }
 
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
           res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
           return res.send(buffer);
         } else {
           console.log('Generating preview with formatting');
+          // Para preview, primero hacer el merge y luego convertir a HTML
           const mergedBuffer = await createReport({
             template: originalDocBuffer,
             data: entry.values || {},
@@ -531,38 +518,34 @@ export function registerRoutes(app: Express): Server {
             failFast: false,
             rejectNullish: false,
             fixSmartQuotes: true,
-            processLineBreaks: true,
-            parser: {
-              delimiters: {
-                start: '{{',
-                end: '}}',
-              },
-            },
+            processLineBreaks: true
           });
 
-          const options = {
-            styleMap: [
-              "p[style-name='Heading 1'] => h1:fresh",
-              "p[style-name='Heading 2'] => h2:fresh",
-              "p[style-name='Heading 3'] => h3:fresh",
-              "r[style-name='Strong'] => strong",
-              "r[style-name='Emphasis'] => em",
-              "table => table",
-              "p => p",
-              "br => br"
-            ]
-          };
+          const result = await mammoth.convertToHtml({
+            buffer: mergedBuffer,
+            options: {
+              styleMap: [
+                "p[style-name='Heading 1'] => h1:fresh",
+                "p[style-name='Heading 2'] => h2:fresh",
+                "p[style-name='Heading 3'] => h3:fresh",
+                "r[style-name='Strong'] => strong",
+                "r[style-name='Emphasis'] => em",
+                "table => table",
+                "p => p",
+                "br => br"
+              ]
+            }
+          });
 
-          const result = await mammoth.convertToHtml({ buffer: mergedBuffer }, options);
           return res.json({ 
             result: `<div class="document-preview">${result.value}</div>` 
           });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error in document processing:', error);
         return res.status(500).send(`Error procesando el documento: ${error.message}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in merge operation:', error);
       res.status(500).send("Error al procesar la solicitud de merge");
     }
