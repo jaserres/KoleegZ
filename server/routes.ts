@@ -437,7 +437,7 @@ export function registerRoutes(app: Express): Server {
     const isDownload = req.body.download === true;
 
     try {
-      // Verificaciones de seguridad y existencia (sin cambios)
+      // Verificaciones de seguridad y existencia
       const [form] = await db.select()
         .from(forms)
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
@@ -468,59 +468,34 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Entry not found");
       }
 
-      // Si no hay documento original, usar el template de texto plano
       if (!doc.originalDocument) {
-        console.log('No original document found, using plain text template');
-        const mergedText = doc.template.replace(/{{(\w+)}}/g, (match, variable) => {
-          return entry.values[variable] || match;
-        });
-
-        if (isDownload) {
-          res.setHeader('Content-Type', 'text/plain');
-          res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.txt"`);
-          return res.send(mergedText);
-        } else {
-          const htmlContent = `<div style="white-space: pre-wrap; font-family: monospace;">${
-            mergedText.split('\n').map(line => `<p>${line}</p>`).join('')
-          }</div>`;
-          return res.json({ result: htmlContent });
-        }
+        return res.status(400).send("No se encontró el documento original");
       }
 
-      console.log('Original document found, proceeding with merge');
-
       try {
+        console.log('Processing document merge in DOCX format');
+
         // Convertir el documento original de binario a buffer
         const originalDocBuffer = Buffer.from(doc.originalDocument, 'binary');
 
-        if (isDownload) {
-          console.log('Generating merged document for download');
-          const buffer = await createReport({
-            template: originalDocBuffer,
-            data: entry.values || {},
-            cmdDelimiter: ['{{', '}}'],
-            failFast: false,
-            rejectNullish: false,
-            fixSmartQuotes: true,
-            processLineBreaks: true
-          });
+        // Crear el documento fusionado manteniendo el formato DOCX
+        const mergedBuffer = await createReport({
+          template: originalDocBuffer,
+          data: entry.values || {},
+          cmdDelimiter: ['{{', '}}'],
+          failFast: false,
+          rejectNullish: false,
+          fixSmartQuotes: true,
+          processLineBreaks: true
+        });
 
+        if (isDownload) {
+          // Para descarga, enviar el documento DOCX directamente
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
           res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
-          return res.send(buffer);
+          return res.send(mergedBuffer);
         } else {
-          console.log('Generating preview with formatting');
-          // Para preview, primero hacer el merge y luego convertir a HTML
-          const mergedBuffer = await createReport({
-            template: originalDocBuffer,
-            data: entry.values || {},
-            cmdDelimiter: ['{{', '}}'],
-            failFast: false,
-            rejectNullish: false,
-            fixSmartQuotes: true,
-            processLineBreaks: true
-          });
-
+          // Para vista previa, convertir el documento fusionado a HTML manteniendo el formato
           const result = await mammoth.convertToHtml({
             buffer: mergedBuffer,
             options: {
