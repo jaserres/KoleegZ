@@ -19,12 +19,13 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword'
+      'application/msword',
+      'text/plain'
     ];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Solo se permiten archivos .doc y .docx'));
+      cb(new Error('Solo se permiten archivos .doc, .docx y .txt'));
     }
   }
 });
@@ -73,7 +74,66 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Rutas existentes permanecen igual...
+  // Add document upload route
+  app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No se ha proporcionado ningún archivo" });
+      }
+
+      let template: string;
+      let preview: string;
+
+      if (req.file.mimetype === 'text/plain') {
+        template = req.file.buffer.toString('utf-8')
+          .replace(/\0/g, '')
+          .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
+        preview = template;
+      } else {
+        const result = await mammoth.extractRawText({ buffer: req.file.buffer });
+        template = result.value;
+        preview = template;
+      }
+
+      return res.json({
+        name: req.file.originalname.split('.')[0],
+        template,
+        preview
+      });
+
+    } catch (error: any) {
+      console.error('Error processing document:', error);
+      return res.status(500).json({
+        error: "Error al procesar el documento",
+        details: error.message
+      });
+    }
+  });
+
+  // Add document preview download route
+  app.get("/api/forms/:formId/documents/preview/download", async (req, res) => {
+    try {
+      const template = req.query.template as string;
+      const filename = req.query.filename as string;
+
+      if (!template || !filename) {
+        return res.status(400).json({ error: "Template and filename are required" });
+      }
+
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.txt"`);
+      return res.send(template);
+
+    } catch (error: any) {
+      console.error('Error downloading preview:', error);
+      return res.status(500).json({
+        error: "Error al descargar la vista previa",
+        details: error.message
+      });
+    }
+  });
+
+  // Document merge route
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -88,7 +148,7 @@ export function registerRoutes(app: Express): Server {
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
       if (!form) {
-        return res.status(404).send("Form not found");
+        return res.status(404).json({ error: "Form not found" });
       }
 
       const [doc] = await db.select()
@@ -96,7 +156,7 @@ export function registerRoutes(app: Express): Server {
         .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
 
       if (!doc) {
-        return res.status(404).send("Document not found");
+        return res.status(404).json({ error: "Document not found" });
       }
 
       const [entry] = await db.select()
@@ -104,7 +164,7 @@ export function registerRoutes(app: Express): Server {
         .where(and(eq(entries.id, entryId), eq(entries.formId, formId)));
 
       if (!entry) {
-        return res.status(404).send("Entry not found");
+        return res.status(404).json({ error: "Entry not found" });
       }
 
       const documentBuffer = await readFile(doc.filePath);
@@ -141,44 +201,7 @@ export function registerRoutes(app: Express): Server {
         } else {
           // Mejorar la preservación del formato usando opciones avanzadas de mammoth
           const result = await mammoth.convertToHtml({
-            buffer: mergedBuffer,
-            options: {
-              transformDocument: (input: any) => {
-                return input;
-              },
-              // Mantener absolutamente todos los estilos y estructura
-              styleMap: [
-                "p[style-name='Normal'] => p:fresh",
-                "p[style-name='Title'] => h1:fresh",
-                "p[style-name='Heading 1'] => h1:fresh",
-                "p[style-name='Heading 2'] => h2:fresh",
-                "p[style-name='Heading 3'] => h3:fresh",
-                "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
-                "r[style-name='Strong'] => strong",
-                "r[style-name='Bold'] => strong",
-                "r[style-name='Emphasis'] => em",
-                "b => strong",
-                "i => em",
-                "u => u",
-                "strike => s",
-                "w:p => p:fresh",
-                "w:r => span:fresh",
-                "w:t => span:fresh",
-                "w:rPr/w:b => strong",
-                "w:rPr/w:i => em",
-                "w:rPr/w:u => u",
-                "w:pPr/w:jc[@w:val='center'] => p.align-center:fresh",
-                "w:pPr/w:jc[@w:val='right'] => p.align-right:fresh",
-                "w:pPr/w:jc[@w:val='justify'] => p.align-justify:fresh",
-                "table => table",
-                "tr => tr",
-                "td => td"
-              ],
-              ignoreEmptyParagraphs: false,
-              preserveEmptyParagraphs: true,
-              includeDefaultStyleMap: true,
-              idPrefix: 'doc-'
-            }
+            buffer: mergedBuffer
           });
 
           const styledHtml = `
