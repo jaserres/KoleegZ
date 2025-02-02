@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -733,6 +734,9 @@ export default function FormEntries() {
                             <DialogContent className="max-w-2xl">
                               <DialogHeader>
                                 <DialogTitle>Mail Merge</DialogTitle>
+                                 <DialogDescription>
+                                  Seleccione una plantilla para combinar con los datos de esta entrada
+                                </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div className="grid gap-4 grid-cols-2">
@@ -771,7 +775,7 @@ export default function FormEntries() {
                                           onClick={() => {
                                             if (selectedTemplate && selectedEntry) {
                                               try {
-                                                const baseUrl = window.location.origin;
+                                                const baseUrl = window.location.origin.replace(/\/$/, '');
                                                 const endpoint = `api/forms/${id}/documents/${selectedTemplate.id}/merge`;
                                                 const params = new URLSearchParams({
                                                   entryId: selectedEntry.toString(),
