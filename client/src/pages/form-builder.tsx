@@ -476,22 +476,33 @@ export default function FormBuilder() {
   const PreviewDialog = () => {
     if (!previewContent) return null;
 
-    const handleDownload = () => {
-      // Crear un blob con el contenido
-      const blob = new Blob([previewContent.template], { type: 'text/plain' });
-      const url = window.URL.createObjectURL(blob);
+    const handleDownload = async () => {
+      try {
+        const response = await fetch(`/api/forms/${id || 'temp'}/documents/preview/download?template=${encodeURIComponent(previewContent.template)}&filename=${encodeURIComponent(previewContent.name)}`);
 
-      // Crear un elemento de enlace temporal
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${previewContent.name}.txt`;
+        if (!response.ok) {
+          throw new Error('Error al descargar el documento');
+        }
 
-      // Simular clic y limpiar
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${previewContent.name}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Error downloading document:', error);
+        toast({
+          title: "Error",
+          description: "No se pudo descargar el documento",
+          variant: "destructive"
+        });
+      }
     };
+
 
     return (
       <Dialog open={!!previewContent} onOpenChange={() => setPreviewContent(null)}>

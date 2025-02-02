@@ -637,6 +637,25 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Add new route for document preview download
+  app.get("/api/forms/:formId/documents/preview/download", async (req, res) => {
+    try {
+      const template = req.query.template as string;
+      const filename = req.query.filename as string;
+
+      if (!template || !filename) {
+        return res.status(400).send("Template and filename are required");
+      }
+
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.txt"`);
+      res.send(template);
+    } catch (error) {
+      console.error('Error downloading preview:', error);
+      res.status(500).send("Error al descargar la vista previa");
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
