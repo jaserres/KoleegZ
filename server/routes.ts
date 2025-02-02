@@ -241,6 +241,14 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).send("No se ha proporcionado ningún archivo");
       }
 
+      // Log file information
+      console.log('Archivo recibido:', {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        bufferLength: file.buffer.length
+      });
+
       if (formId !== null) {
         const [form] = await db.select()
           .from(forms)
@@ -252,8 +260,13 @@ export function registerRoutes(app: Express): Server {
       }
 
       try {
-        // Guardar el documento original como base64 para preservar el formato binario
+        if (!file.buffer || file.buffer.length === 0) {
+          throw new Error('El archivo está vacío o es inválido');
+        }
+
+        // Guardar el documento original como base64
         const originalDocBase64 = file.buffer.toString('base64');
+        console.log('Documento convertido a base64, longitud:', originalDocBase64.length);
 
         // Convertir el documento a HTML para preview manteniendo el formato
         const [htmlResult, textResult] = await Promise.all([
@@ -295,6 +308,14 @@ export function registerRoutes(app: Express): Server {
           })
           .returning();
 
+        // Log document saved
+        console.log('Documento guardado:', {
+          id: doc.id,
+          name: doc.name,
+          hasOriginal: !!doc.originalDocument,
+          originalLength: doc.originalDocument ? doc.originalDocument.length : 0
+        });
+
         res.status(201).json(doc);
       } catch (error: any) {
         console.error('Error processing document:', error);
@@ -304,7 +325,7 @@ export function registerRoutes(app: Express): Server {
       console.error('Error in document upload:', error);
       res.status(500).send(`Error al subir el documento: ${error.message}`);
     }
-});
+  });
 
   app.post("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
