@@ -233,32 +233,32 @@ export function registerRoutes(app: Express): Server {
       const user = ensureAuth(req);
       const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
       const file = req.file;
-  
+
       if (!file) {
         return res.status(400).send("No se ha proporcionado ningún archivo");
       }
-  
+
       // Solo verificar propiedad del formulario si no es una carga temporal
       if (formId !== null) {
         const [form] = await db.select()
           .from(forms)
           .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-  
+
         if (!form) {
           return res.status(404).send("Form not found");
         }
       }
-  
-      // Procesar el archivo .docx usando mammoth para obtener HTML y texto
+
       try {
+        // Guardar el buffer original como base64
+        const originalDocBase64 = file.buffer.toString('base64');
+
+        // Procesar el archivo .docx usando mammoth para obtener HTML para preview
         const [htmlResult, textResult] = await Promise.all([
           mammoth.convertToHtml({ buffer: file.buffer }),
           mammoth.extractRawText({ buffer: file.buffer })
         ]);
-  
-        // Guardar el buffer original como base64
-        const originalDocBase64 = file.buffer.toString('base64');
-  
+
         // Si es una carga temporal, solo devolver el contenido
         if (formId === null) {
           return res.status(200).json({
@@ -267,18 +267,18 @@ export function registerRoutes(app: Express): Server {
             preview: htmlResult.value
           });
         }
-  
+
         // Guardar en la base de datos
         const [doc] = await db.insert(documents)
           .values({
             formId,
             name: file.originalname.replace(/\.[^/.]+$/, ""),
-            template: textResult.value,
-            preview: htmlResult.value,
-            originalDocument: originalDocBase64
+            template: textResult.value, // Guardar texto plano para búsqueda de variables
+            preview: htmlResult.value, // Guardar HTML para preview
+            originalDocument: originalDocBase64 // Guardar documento original completo
           })
           .returning();
-  
+
         res.status(201).json(doc);
       } catch (error) {
         console.error('Error processing document:', error);
