@@ -335,8 +335,7 @@ export default function FormEntries() {
         title: "Éxito",
         description: "Entrada actualizada correctamente",
       });
-      setSelectedRowId(null);
-      setFormValues({});
+      // Ya no limpiamos los datos aquí
     },
     onError: (error: Error) => {
       toast({
