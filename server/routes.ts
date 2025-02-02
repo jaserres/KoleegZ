@@ -501,31 +501,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).send("Formato no soportado");
     }
   });
-
-  app.patch("/api/forms/:formId/entries/autosave", async (req, res) => {
-    const user = ensureAuth(req);
-    const formId = parseInt(req.params.formId);
-
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-    if (!form) {
-      return res.status(404).send("Form not found");
-    }
-
-    // Create a new entry
-    const [entry] = await db.insert(entries)
-      .values({
-        formId,
-        values: req.body,
-      })
-      .returning();
-
-    res.json(entry);
-  });
-
+  
   app.patch("/api/forms/:formId/entries/:entryId", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
