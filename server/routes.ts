@@ -457,53 +457,63 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Entry not found");
       }
 
+      // Para preview o descarga, primero verificar si tenemos el documento original
+      if (!doc.originalDocument) {
+        // Si no hay documento original, usar el template de texto plano
+        const mergedText = doc.template.replace(/{{(\w+)}}/g, (match, variable) => {
+          return entry.values[variable] || match;
+        });
+
+        if (isDownload) {
+          // Para descarga, enviar como archivo de texto
+          res.setHeader('Content-Type', 'text/plain');
+          res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.txt"`);
+          return res.send(mergedText);
+        } else {
+          // Para preview, enviar el texto con formato HTML básico
+          const htmlContent = mergedText
+            .split('\n')
+            .map(line => `<p>${line}</p>`)
+            .join('');
+          return res.json({ result: htmlContent });
+        }
+      }
+
+      // Si tenemos el documento original, proceder con el merge manteniendo el formato
+      const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
+
       if (isDownload) {
         try {
-          if (!doc.originalDocument) {
-            throw new Error('No se encontró el documento original');
-          }
-
-          // Convertir el documento original de base64 a Buffer
-          const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
-
-          // Usar docx-templates para realizar el merge manteniendo el formato
           const buffer = await createReport({
             template: originalDocBuffer,
             data: entry.values,
           });
 
-          // Configurar headers para DOCX
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
           res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
-
           return res.send(buffer);
         } catch (error) {
           console.error('Error generating document:', error);
-          return res.status(500).send("Error al generar el documento");
+          return res.status(500).send("Error al generar el documento con formato");
         }
       }
 
-      // Para preview, realizar el merge y convertir a HTML
+      // Para preview con formato
       try {
-        const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
-
-        // Realizar el merge primero
         const mergedBuffer = await createReport({
           template: originalDocBuffer,
           data: entry.values,
         });
 
-        // Convertir el resultado a HTML para mantener el formato
         const result = await mammoth.convertToHtml({ buffer: mergedBuffer });
-
         res.json({ result: result.value });
       } catch (error) {
         console.error('Error generating preview:', error);
-        res.status(500).send("Error al generar la vista previa");
+        res.status(500).send("Error al generar la vista previa con formato");
       }
     } catch (error) {
       console.error('Error in merge operation:', error);
-      res.status(500).send("Error processing merge request");
+      res.status(500).send("Error al procesar la solicitud de merge");
     }
   });
 
