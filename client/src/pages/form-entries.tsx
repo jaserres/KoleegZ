@@ -318,6 +318,35 @@ export default function FormEntries() {
       setSelectedRowId(entry.id);
     };
 
+    const updateEntryMutation = useMutation({
+    mutationFn: async ({ entryId, values }: { entryId: number; values: Record<string, any> }) => {
+      const res = await apiRequest("PATCH", `/api/forms/${id}/entries/${entryId}`, {
+        values,
+      });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al actualizar la entrada");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
+      toast({
+        title: "Éxito",
+        description: "Entrada actualizada correctamente",
+      });
+      setSelectedRowId(null);
+      setFormValues({});
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo actualizar la entrada",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
@@ -333,8 +362,13 @@ export default function FormEntries() {
       }
     });
 
-    // Create a new entry
-    createEntryMutation.mutate(values);
+    if (selectedRowId) {
+      // Actualizar entrada existente
+      updateEntryMutation.mutate({ entryId: selectedRowId, values });
+    } else {
+      // Crear nueva entrada
+      createEntryMutation.mutate(values);
+    }
   };
   
   const handleCreateFormFromTemplate = () => {
@@ -424,27 +458,38 @@ export default function FormEntries() {
                 </div>
               ))}
               <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={createEntryMutation.isPending}>
-                  {createEntryMutation.isPending ? (
-                    <Spinner variant="dots" size="sm" className="mr-2" />
+                <Button 
+                  type="submit" 
+                  disabled={selectedRowId ? updateEntryMutation.isPending : createEntryMutation.isPending}
+                >
+                  {selectedRowId ? (
+                    updateEntryMutation.isPending ? (
+                      <Spinner variant="dots" size="sm" className="mr-2" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )
                   ) : (
-                    <Plus className="mr-2 h-4 w-4" />
+                    createEntryMutation.isPending ? (
+                      <Spinner variant="dots" size="sm" className="mr-2" />
+                    ) : (
+                      <Plus className="mr-2 h-4 w-4" />
+                    )
                   )}
-                  {selectedRowId ? "Guardar como nueva entrada" : "Agregar entrada"}
+                  {selectedRowId ? "Guardar cambios" : "Agregar entrada"}
                 </Button>
-                  {selectedRowId && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedRowId(null);
-                        setCurrentEntryId(null);
-                        setFormValues({});
-                      }}
-                    >
-                      Cancelar edición
-                    </Button>
-                  )}
+                {selectedRowId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedRowId(null);
+                      setCurrentEntryId(null);
+                      setFormValues({});
+                    }}
+                  >
+                    Cancelar edición
+                  </Button>
+                )}
               </div>
             </form>
           </CardContent>
