@@ -513,16 +513,24 @@ export function registerRoutes(app: Express): Server {
     const isDownload = req.body.download === true;
 
     try {
+      console.log('Iniciando operación de merge:', {
+        formId,
+        documentId,
+        entryId,
+        isDownload
+      });
+
       // Verificaciones de seguridad y existencia
       const [form] = await db.select()
         .from(forms)
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
       if (!form) {
+        console.error('Formulario no encontrado:', { formId, userId: user.id });
         return res.status(404).send("Form not found");
       }
 
-      console.log(`Buscando documento ${documentId} del formulario ${formId}`);
+      console.log('Buscando documento en la base de datos...', { documentId, formId });
       const [doc] = await db.select()
         .from(documents)
         .where(and(
@@ -531,16 +539,33 @@ export function registerRoutes(app: Express): Server {
         ));
 
       if (!doc) {
-        console.error('Documento no encontrado:', { documentId, formId });
+        console.error('Documento no encontrado en la base de datos:', { documentId, formId });
         return res.status(404).send("Document not found");
       }
 
-    console.log('Documento encontrado para merge:', {
-      id: doc.id,
-      name: doc.name,
-      hasOriginalDoc: !!doc.originalDocument,
-      originalDocLength: doc.originalDocument ? doc.originalDocument.length : 0
-    });
+      console.log('Documento encontrado:', {
+        id: doc.id,
+        name: doc.name,
+        hasOriginalDoc: !!doc.originalDocument,
+        originalDocLength: doc.originalDocument?.length || 0,
+        originalDocSample: doc.originalDocument?.substring(0, 100)
+      });
+
+      if (!doc.originalDocument) {
+        console.error('Documento original no encontrado:', {
+          docId: doc.id,
+          docName: doc.name,
+          docFields: Object.keys(doc)
+        });
+        return res.status(400).json({
+          error: "No se encontró el documento original",
+          details: {
+            documentId: doc.id,
+            documentName: doc.name,
+            availableFields: Object.keys(doc)
+          }
+        });
+      }
 
       const [entry] = await db.select()
         .from(entries)
@@ -554,24 +579,19 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Entry not found");
       }
 
-      if (!doc.originalDocument) {
-        console.error('No se encontró el documento original en la base de datos', {
-          docId: doc.id,
-          docName: doc.name,
-          docFields: Object.keys(doc)
-        });
-        return res.status(400).send("No se encontró el documento original");
-      }
-
       try {
-        // Decodificar el documento base64
+        console.log('Intentando decodificar el documento base64...');
         const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
-        console.log('Buffer preparado para merge:', {
-          decodedLength: originalDocBuffer.length,
-          sample: originalDocBuffer.slice(0, 20).toString('hex')
+        console.log('Documento decodificado exitosamente:', {
+          bufferLength: originalDocBuffer.length,
+          bufferSample: originalDocBuffer.slice(0, 20).toString('hex')
         });
-  
-        // Crear el documento fusionado
+
+        console.log('Iniciando merge con datos:', {
+          documentName: doc.name,
+          entryValues: entry.values
+        });
+
         const mergedBuffer = await createReport({
           template: originalDocBuffer,
           data: entry.values || {},
@@ -582,13 +602,13 @@ export function registerRoutes(app: Express): Server {
           processLineBreaks: true
         });
 
+        console.log('Merge completado exitosamente');
+
         if (isDownload) {
-          // Para descarga, enviar el documento DOCX directamente
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
           res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
           return res.send(mergedBuffer);
         } else {
-          // Para vista previa, convertir el documento fusionado a HTML manteniendo el formato
           const result = await mammoth.convertToHtml({
             buffer: mergedBuffer,
             options: {
@@ -610,19 +630,25 @@ export function registerRoutes(app: Express): Server {
           });
         }
       } catch (error: any) {
-        console.error('Error en el procesamiento del merge:', error);
+        console.error('Error en el procesamiento del merge:', {
+          error: error.message,
+          stack: error.stack,
+          documentName: doc.name,
+          documentId: doc.id,
+          originalDocLength: doc.originalDocument?.length || 0
+        });
         return res.status(500).json({
-            error: `Error procesando el documento: ${error.message}`,
-            details: {
-                documentId,
-                documentName: doc.name,
-                hasOriginal: !!doc.originalDocument,
-                originalType: typeof doc.originalDocument
-            }
+          error: `Error procesando el documento: ${error.message}`,
+          details: {
+            documentId,
+            documentName: doc.name,
+            hasOriginal: !!doc.originalDocument,
+            originalLength: doc.originalDocument?.length || 0
+          }
         });
       }
     } catch (error: any) {
-      console.error('Error in merge operation:', {
+      console.error('Error general en operación de merge:', {
         error: error.message,
         stack: error.stack,
         documentId,
