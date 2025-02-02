@@ -122,6 +122,13 @@ export default function FormBuilder() {
         }))
       };
 
+      console.log('Creating form with data:', {
+        formName,
+        variablesCount: variables.length,
+        hasTemplate: !!templateContent,
+        templateLength: templateContent?.length
+      });
+
       const res = await apiRequest("POST", "/api/forms", formData);
 
       if (!res.ok) {
@@ -134,6 +141,7 @@ export default function FormBuilder() {
       // Si hay una plantilla cargada, crear el documento
       if (templateContent) {
         console.log('Creating document with template:', {
+          formId: form.id,
           name: formName,
           templateLength: templateContent.length,
           hasOriginalFile: !!originalFile
@@ -152,6 +160,8 @@ export default function FormBuilder() {
           const error = await docRes.text();
           throw new Error(error || "Error al crear el documento");
         }
+
+        console.log('Document created successfully');
       }
 
       return form;
@@ -167,6 +177,7 @@ export default function FormBuilder() {
       setLocation("/");
     },
     onError: (error: Error) => {
+      console.error('Error en createFormMutation:', error);
       toast({
         title: "Error al crear el formulario",
         description: error.message,
@@ -587,6 +598,12 @@ export default function FormBuilder() {
               Cancelar
             </Button>
             <Button onClick={() => {
+              // Asegurar que el templateContent se establezca correctamente
+              console.log('Setting template content:', {
+                name: previewContent.name,
+                template: previewContent.template,
+                hasOriginalFile: !!previewContent.originalFile
+              });
               setFormName(previewContent.name);
               setVariables(previewContent.variables);
               setTemplateContent(previewContent.template);
