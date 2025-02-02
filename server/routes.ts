@@ -254,6 +254,7 @@ export function registerRoutes(app: Express): Server {
       });
   
       if (formId !== null) {
+        // Verify ownership
         const [form] = await db.select()
           .from(forms)
           .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
@@ -267,14 +268,6 @@ export function registerRoutes(app: Express): Server {
         }
       }
   
-      if (!file.buffer || file.buffer.length === 0) {
-        console.error('Archivo vacío o inválido:', {
-          bufferExists: !!file.buffer,
-          bufferLength: file.buffer?.length
-        });
-        throw new Error('El archivo está vacío o es inválido');
-      }
-  
       let template = '';
       let preview = '';
       let originalDocument = '';
@@ -286,20 +279,25 @@ export function registerRoutes(app: Express): Server {
         // Convertir el buffer a base64 para almacenar el documento original
         originalDocument = file.buffer.toString('base64');
   
-        // Extraer el texto para búsqueda y preview
-        const [htmlResult, textResult] = await Promise.all([
-          mammoth.convertToHtml({ buffer: file.buffer }),
-          mammoth.extractRawText({ buffer: file.buffer })
-        ]);
+        try {
+          // Extraer el texto para búsqueda y preview
+          const [htmlResult, textResult] = await Promise.all([
+            mammoth.convertToHtml({ buffer: file.buffer }),
+            mammoth.extractRawText({ buffer: file.buffer })
+          ]);
   
-        template = textResult.value;
-        preview = htmlResult.value;
+          template = textResult.value;
+          preview = htmlResult.value;
   
-        console.log('Documento DOCX procesado:', {
-          templateLength: template.length,
-          previewLength: preview.length,
-          originalDocumentLength: originalDocument.length
-        });
+          console.log('Documento DOCX procesado:', {
+            templateLength: template.length,
+            previewLength: preview.length,
+            originalDocumentLength: originalDocument.length
+          });
+        } catch (error) {
+          console.error('Error al procesar el documento DOCX:', error);
+          throw new Error('Error al procesar el documento DOCX');
+        }
       } else {
         // Para archivos .txt, usar el contenido directamente
         template = file.buffer.toString('utf-8');
@@ -312,7 +310,8 @@ export function registerRoutes(app: Express): Server {
         return res.status(200).json({
           name: file.originalname.replace(/\.[^/.]+$/, ""),
           template,
-          preview
+          preview,
+          originalDocument // Incluir el documento original en la respuesta temporal
         });
       }
   
@@ -343,6 +342,10 @@ export function registerRoutes(app: Express): Server {
         .where(eq(documents.id, doc.id));
   
       if (!savedDoc || !savedDoc.originalDocument) {
+        console.error('Error: Documento no guardado correctamente:', {
+          savedDoc: savedDoc ? 'exists' : 'null',
+          hasOriginalDocument: savedDoc ? !!savedDoc.originalDocument : false
+        });
         throw new Error('El documento no se guardó correctamente en la base de datos');
       }
   
@@ -534,9 +537,20 @@ export function registerRoutes(app: Express): Server {
         id: doc.id,
         name: doc.name,
         hasOriginalDoc: !!doc.originalDocument,
-        originalDocLength: doc.originalDocument?.length || 0,
-        originalDocSample: doc.originalDocument?.substring(0, 100)
+        originalDocLength: doc.originalDocument?.length || 0
       });
+
+      const [entry] = await db.select()
+        .from(entries)
+        .where(and(
+          eq(entries.id, entryId),
+          eq(entries.formId, formId)
+        ));
+
+      if (!entry) {
+        console.error('Entrada no encontrada:', { entryId, formId });
+        return res.status(404).send("Entry not found");
+      }
 
       if (!doc.originalDocument) {
         console.error('Documento original no encontrado:', {
@@ -552,18 +566,6 @@ export function registerRoutes(app: Express): Server {
             availableFields: Object.keys(doc)
           }
         });
-      }
-
-      const [entry] = await db.select()
-        .from(entries)
-        .where(and(
-          eq(entries.id, entryId),
-          eq(entries.formId, formId)
-        ));
-
-      if (!entry) {
-        console.error('Entrada no encontrada:', { entryId, formId });
-        return res.status(404).send("Entry not found");
       }
 
       try {
