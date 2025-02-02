@@ -619,24 +619,34 @@ export function registerRoutes(app: Express): Server {
             buffer: mergedBuffer,
             options: {
               styleMap: [
+                "p[style-name='Normal'] => p:fresh",
                 "p[style-name='Heading 1'] => h1:fresh",
                 "p[style-name='Heading 2'] => h2:fresh",
                 "p[style-name='Heading 3'] => h3:fresh",
+                "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
+                "r[style-name='Strong'] => strong",
                 "b => strong",
                 "i => em",
                 "u => u",
                 "strike => s",
                 "tab => span.tab",
-                "br => br"
+                "br => br",
+                "table => table",
+                "tr => tr",
+                "td => td",
+                "p[style-name='Footer'] => div.footer > p:fresh",
+                "p[style-name='Header'] => div.header > p:fresh"
               ],
+              includeDefaultStyleMap: true,
               preserveEmptyParagraphs: true,
               ignoreEmptyParagraphs: false,
+              idPrefix: 'doc-',
               convertImage: mammoth.images.imgElement(function(image) {
                 return image.read().then(function(imageBuffer) {
                   const base64Image = imageBuffer.toString('base64');
-                  const contentType = image.contentType;
                   return {
-                    src: `data:${contentType};base64,${base64Image}`
+                    src: `data:${image.contentType};base64,${base64Image}`,
+                    class: 'doc-image'
                   };
                 });
               })
@@ -651,37 +661,88 @@ export function registerRoutes(app: Express): Server {
                 max-width: 800px;
                 margin: 0 auto;
                 padding: 20px;
+                background: white;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.12);
               }
               .document-preview p {
-                margin: 1em 0;
+                margin: 0;
+                padding: 0.5em 0;
                 text-align: justify;
+                white-space: pre-wrap;
               }
-              .document-preview h1, .document-preview h2, .document-preview h3 {
-                margin-top: 1.5em;
-                margin-bottom: 0.5em;
+              .document-preview h1 {
+                font-size: 24px;
                 font-weight: bold;
+                margin: 24px 0 12px;
+              }
+              .document-preview h2 {
+                font-size: 20px;
+                font-weight: bold;
+                margin: 20px 0 10px;
+              }
+              .document-preview h3 {
+                font-size: 16px;
+                font-weight: bold;
+                margin: 16px 0 8px;
               }
               .document-preview .tab {
                 display: inline-block;
-                width: 2em;
+                width: 36px;
               }
               .document-preview table {
                 border-collapse: collapse;
                 width: 100%;
                 margin: 1em 0;
+                page-break-inside: avoid;
               }
               .document-preview td, .document-preview th {
                 border: 1px solid #ddd;
                 padding: 8px;
+                vertical-align: top;
               }
-              .document-preview img {
+              .document-preview .doc-image {
                 max-width: 100%;
                 height: auto;
+                margin: 1em 0;
+                display: block;
+              }
+              .document-preview .list-paragraph {
+                margin-left: 24px;
+              }
+              .document-preview .header {
+                position: relative;
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #eee;
+              }
+              .document-preview .footer {
+                position: relative;
+                margin-top: 20px;
+                padding-top: 10px;
+                border-top: 1px solid #eee;
+              }
+              @media print {
+                .document-preview {
+                  box-shadow: none;
+                  margin: 0;
+                  padding: 0;
+                }
+                .document-preview .header {
+                  position: fixed;
+                  top: 0;
+                }
+                .document-preview .footer {
+                  position: fixed;
+                  bottom: 0;
+                }
               }
             </style>
             <div class="document-preview">
               ${result.value}
             </div>`;
+
+          // Log el HTML generado para diagnóstico
+          console.log('HTML generado:', result.value.substring(0, 500));
 
           return res.json({ result: styledHtml });
         }
