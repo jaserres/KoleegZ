@@ -207,30 +207,56 @@ export default function FormBuilder() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Verificar que sea un archivo .txt
-      if (!file.name.toLowerCase().endsWith('.txt')) {
+      // Verificar tipos de archivo permitidos
+      const allowedTypes = [
+        'text/plain',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
         toast({
           title: "Error al cargar archivo",
-          description: "Solo se permiten archivos .txt",
+          description: "Solo se permiten archivos .txt, .doc y .docx",
           variant: "destructive"
         });
         return;
       }
 
       try {
-        const text = await file.text();
-        const sanitizedText = text
-          .replace(/\0/g, '')
-          .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
+        let text;
+        if (file.type === 'text/plain') {
+          // Procesar archivo .txt
+          const fileText = await file.text();
+          text = fileText
+            .replace(/\0/g, '')
+            .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
+        } else {
+          // Para archivos .doc y .docx, usar FormData y el endpoint de upload
+          const formData = new FormData();
+          formData.append('file', file);
 
-        setTemplateContent(sanitizedText);
-        const detectedVariables = extractVariables(sanitizedText);
+          const response = await fetch(`/api/forms/${id || 'temp'}/documents/upload`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error(await response.text());
+          }
+
+          const doc = await response.json();
+          text = doc.template;
+        }
+
+        setTemplateContent(text);
+        const detectedVariables = extractVariables(text);
 
         if (detectedVariables.length === 0) {
           toast({
             title: "No se encontraron variables válidas",
             description: "La plantilla no contiene variables válidas en formato {{nombreVariable}}. Las variables deben contener solo letras y números, y comenzar con una letra.",
-             variant: "destructive"
+            variant: "destructive"
           });
           return;
         }
@@ -246,7 +272,7 @@ export default function FormBuilder() {
       } catch (error) {
         toast({
           title: "Error al cargar archivo",
-          description: "El archivo debe ser un documento de texto válido",
+          description: error.message || "Error al procesar el archivo",
           variant: "destructive"
         });
       }
@@ -485,7 +511,7 @@ export default function FormBuilder() {
                     <div className="space-y-4">
                       <Input
                         type="file"
-                        accept=".txt"
+                        accept=".txt,.doc,.docx"
                         onChange={handleFileUpload}
                         className="hidden"
                         id="template-upload"
