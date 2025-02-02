@@ -51,7 +51,7 @@ export default function FormEntries() {
   const [mergedResult, setMergedResult] = useState("");
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
-    const [detectedVariables, setDetectedVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
+  const [detectedVariables, setDetectedVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -621,77 +621,77 @@ export default function FormEntries() {
                       Nueva Plantilla
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[400px]">
-                    <DialogHeader>
+                  <DialogContent className="sm:max-w-[400px] max-h-[85vh] p-0">
+                    <DialogHeader className="px-6 pt-6">
                       <DialogTitle>Crear Nueva Plantilla</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4">
-                      {detectedVariables.length > variableLimit && (
-                        <Alert>
-                          <AlertDescription>
-                            <p className="mb-2">
-                              Su plantilla tiene {detectedVariables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
-                            </p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={removeExcessVariables}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar variables excedentes
-                            </Button>
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                      <div>
-                        <Label>Nombre de la Plantilla</Label>
-                        <Input
-                          value={documentName}
-                          onChange={(e) => setDocumentName(e.target.value)}
-                          placeholder="Ej: Carta de Presentación"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label>Contenido de la Plantilla</Label>
-                        <div className="text-sm text-muted-foreground mb-2">
-                          Usa {'{'}{'{'}<span className="font-mono">nombre_variable</span>{'}'}{'}'}  para insertar variables
-                        </div>
-                        <div className="space-y-4">
-                          <Textarea
-                            value={documentTemplate}
-                            onChange={(e) => setDocumentTemplate(e.target.value)}
-                            className="h-32"
-                            placeholder="Ej: Estimado {{nombre}}, ..."
+                    <ScrollArea className="px-6 pb-6">
+                      <div className="space-y-4">
+                        {detectedVariables.length > variableLimit && (
+                          <Alert>
+                            <AlertDescription>
+                              <p className="mb-2">
+                                Su plantilla tiene {detectedVariables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
+                              </p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={removeExcessVariables}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar variables excedentes
+                              </Button>
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                        <div>
+                          <Label>Nombre de la Plantilla</Label>
+                          <Input
+                            value={documentName}
+                            onChange={(e) => setDocumentName(e.target.value)}
+                            placeholder="Ej: Carta de Presentación"
                             required
                           />
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              id="file-upload"
-                              type="file"
-                              accept=".txt,.doc,.docx"
-                              className="flex-1"
-                              onChange={handleFileUpload}
+                        </div>
+                        <div>
+                          <Label>Contenido de la Plantilla</Label>
+                          <div className="text-sm text-muted-foreground mb-2">
+                            Usa {'{'}{'{'}<span className="font-mono">nombre_variable</span>{'}'}{'}'}  para insertar variables
+                          </div>
+                          <div className="space-y-4">
+                            <Textarea
+                              value={documentTemplate}
+                              onChange={(e) => setDocumentTemplate(e.target.value)}
+                              className="h-32"
+                              placeholder="Ej: Estimado {{nombre}}, ..."
+                              required
                             />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              onClick={() => {
-                                const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-                                fileInput?.click();
-                              }}
-                            >
-                              <Upload className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center space-x-2">
+                              <Input
+                                id="file-upload"
+                                type="file"
+                                accept=".txt,.doc,.docx"
+                                className="flex-1"
+                                onChange={handleFileUpload}
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                onClick={() => {
+                                  const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+                                  fileInput?.click();
+                                }}
+                              >
+                                <Upload className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      {detectedVariables.length > 0 && (
-                        <div className="space-y-2">
-                          <Label>Variables Detectadas</Label>
-                          <ScrollArea className="h-[120px] w-full rounded-md border">
-                            <div className="p-4">
+                        {detectedVariables.length > 0 && (
+                          <div className="space-y-2">
+                            <Label>Variables Detectadas</Label>
+                            <div className="bg-muted p-4 rounded-md max-h-[120px] overflow-y-auto">
                               <ul className="list-disc list-inside space-y-1">
                                 {detectedVariables.map((variable, index) => (
                                   <li key={index} className="text-sm">
@@ -700,25 +700,25 @@ export default function FormEntries() {
                                 ))}
                               </ul>
                             </div>
-                          </ScrollArea>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center pt-4 space-x-2">
-                        <Button
-                          variant="outline"
-                          onClick={handleCreateFormFromTemplate}
-                          disabled={detectedVariables.length === 0}
-                        >
-                          <Wand2 className="mr-2 h-4 w-4" />
-                          Crear Form
-                        </Button>
-                        <Button 
-                          onClick={handleCreateDocument}
-                          disabled={createDocumentMutation.isPending || !documentName || !documentTemplate}
-                        >
-                          {createDocumentMutation.isPending ? "Creando..." : "Crear"}
-                        </Button>
+                          </div>
+                        )}
                       </div>
+                    </ScrollArea>
+                    <div className="flex justify-between items-center px-6 py-4 border-t mt-4">
+                      <Button
+                        variant="outline"
+                        onClick={handleCreateFormFromTemplate}
+                        disabled={detectedVariables.length === 0}
+                      >
+                        <Wand2 className="mr-2 h-4 w-4" />
+                        Crear Form
+                      </Button>
+                      <Button 
+                        onClick={handleCreateDocument}
+                        disabled={createDocumentMutation.isPending || !documentName || !documentTemplate}
+                      >
+                        {createDocumentMutation.isPending ? "Creando..." : "Crear"}
+                      </Button>
                     </div>
                   </DialogContent>
                 </Dialog>
