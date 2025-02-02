@@ -502,6 +502,49 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.patch("/api/forms/:formId/entries/autosave", async (req, res) => {
+    const user = ensureAuth(req);
+    const formId = parseInt(req.params.formId);
+
+    // Verify ownership
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+
+    // Get the most recent entry or create a new one
+    let [entry] = await db.select()
+      .from(entries)
+      .where(eq(entries.formId, formId))
+      .orderBy(desc(entries.updatedAt))
+      .limit(1);
+
+    if (!entry) {
+      // Create new entry if none exists
+      [entry] = await db.insert(entries)
+        .values({
+          formId,
+          values: req.body,
+        })
+        .returning();
+    } else {
+      // Update existing entry
+      [entry] = await db.update(entries)
+        .set({
+          values: { ...entry.values, ...req.body },
+          updatedAt: new Date()
+        })
+        .where(eq(entries.id, entry.id))
+        .returning();
+    }
+
+    res.json(entry);
+  });
+
+
   const httpServer = createServer(app);
   return httpServer;
 }

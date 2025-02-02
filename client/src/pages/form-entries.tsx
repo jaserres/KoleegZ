@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoSave } from "@/hooks/use-auto-save";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText, Trash2, Wand2 } from "lucide-react";
+import { ArrowLeft, Plus, FileText, Trash2, Wand2, Save } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -44,6 +45,20 @@ export default function FormEntries() {
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   const [detectedVariables, setDetectedVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
+  const [formValues, setFormValues] = useState<Record<string, any>>({});
+
+
+  const { saving } = useAutoSave(
+    `/api/forms/${id}/entries/autosave`,
+    formValues,
+    {
+      debounceMs: 1000,
+      showToast: false,
+      onSave: () => {
+        queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
+      },
+    }
+  );
 
   const { data: form } = useQuery({
     queryKey: [`/api/forms/${id}`],
@@ -226,6 +241,13 @@ export default function FormEntries() {
 
     await createDocumentMutation.mutateAsync();
   };
+  
+    const handleFieldChange = (name: string, value: any) => {
+      setFormValues((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -274,7 +296,15 @@ export default function FormEntries() {
       <div className="grid gap-8">
         <Card>
           <CardHeader>
-            <CardTitle>New Entry for {form?.name}</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>New Entry for {form?.name}</CardTitle>
+              {saving && (
+                <div className="flex items-center text-muted-foreground text-sm">
+                  <Save className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -286,11 +316,13 @@ export default function FormEntries() {
                     name={variable.name}
                     type={variable.type === "date" ? "date" :
                           variable.type === "number" ? "number" : "text"}
+                    value={formValues[variable.name] || ""}
+                    onChange={(e) => handleFieldChange(variable.name, e.target.value)}
                     required
                   />
                 </div>
               ))}
-              <Button type="submit" disabled={createEntryMutation.isPending}>
+              <Button type="submit" disabled={createEntryMutation.isPending || saving}>
                 <Plus className="mr-2 h-4 w-4" />
                 Add Entry
               </Button>
