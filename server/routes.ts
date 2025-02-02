@@ -597,7 +597,7 @@ export function registerRoutes(app: Express): Server {
         const mergedBuffer = await createReport({
           template: documentBuffer,
           data: mergeData,
-          cmdDelimiter: ['{%', '%}'], // Cambiar delimitadores para evitar conflictos
+          cmdDelimiter: ['{{', '}}'], // Usar los delimitadores que coinciden con el formato del documento
           failFast: false,
           rejectNullish: false,
           fixSmartQuotes: true,
@@ -631,7 +631,7 @@ export function registerRoutes(app: Express): Server {
           details: mergeError.stack,
           data: mergeData,
           template: doc.template ? doc.template.substring(0, 200) + '...' : 'No template', // Mostrar primeros 200 caracteres del template
-          delimiters: ['{%', '%}']
+          delimiters: ['{{', '}}']
         });
       }
     } catch (error: any) {
