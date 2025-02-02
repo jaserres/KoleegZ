@@ -457,29 +457,36 @@ export function registerRoutes(app: Express): Server {
 
       if (isDownload) {
         try {
-            // Usar docx-templates para realizar el merge manteniendo el formato
-            const buffer = await createReport({
-                template: doc.originalDocument,
-                data: entry.values,
-            });
+          // Obtener el documento original de la base de datos
+          const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
 
-            // Configurar headers para DOCX
-            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-            res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
+          if (!originalDocBuffer) {
+            throw new Error('No se encontró el documento original');
+          }
 
-            return res.send(buffer);
+          // Usar docx-templates para realizar el merge manteniendo el formato
+          const buffer = await createReport({
+            template: originalDocBuffer,
+            data: entry.values,
+          });
+
+          // Configurar headers para DOCX
+          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
+
+          return res.send(buffer);
         } catch (error) {
-            console.error('Error generating document:', error);
-            return res.status(500).send("Error al generar el documento");
+          console.error('Error generating document:', error);
+          return res.status(500).send("Error al generar el documento");
         }
       }
 
-        // Para preview, usar el texto plano
+      // Para preview, usar el texto plano
       let result = doc.template;
       for (const [key, value] of Object.entries(entry.values as Record<string, string>)) {
         result = result.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
       }
-    
+
       res.json({ result });
     } catch (error) {
       console.error('Error in merge operation:', error);
