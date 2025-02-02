@@ -424,7 +424,9 @@ export default function FormEntries() {
       </Button>
 
       <div className="grid gap-8">
-        <Card>
+        <Card className="transition-colors" style={form?.theme ? {
+          borderColor: `${form.theme.primary}20`
+        } : undefined}>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>
@@ -452,12 +454,22 @@ export default function FormEntries() {
                       value={formValues[variable.name] || ""}
                       onChange={(e) => handleFieldChange(variable.name, e.target.value)}
                       className="w-full"
+                      style={form?.theme ? {
+                        '--primary': form.theme.primary,
+                        borderColor: `${form.theme.primary}20`
+                      } as React.CSSProperties : undefined}
                     />
                   </div>
                 </div>
               ))}
               <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={createEntryMutation.isPending}>
+                <Button 
+                  type="submit" 
+                  disabled={createEntryMutation.isPending}
+                  style={form?.theme ? {
+                    '--primary': form.theme.primary,
+                  } as React.CSSProperties : undefined}
+                >
                   {createEntryMutation.isPending ? (
                     <Spinner variant="dots" size="sm" className="mr-2" />
                   ) : (
@@ -478,6 +490,9 @@ export default function FormEntries() {
                           updateEntryMutation.mutate(formValues);
                         }
                       }}
+                      style={form?.theme ? {
+                        '--primary': form.theme.primary,
+                      } as React.CSSProperties : undefined}
                     >
                       {updateEntryMutation.isPending ? (
                         <Spinner variant="dots" size="sm" className="mr-2" />
@@ -494,6 +509,10 @@ export default function FormEntries() {
                         setCurrentEntryId(null);
                         setFormValues({});
                       }}
+                      style={form?.theme ? {
+                        '--primary': form.theme.primary,
+                        borderColor: `${form.theme.primary}20`
+                      } as React.CSSProperties : undefined}
                     >
                       Cancelar edición
                     </Button>
