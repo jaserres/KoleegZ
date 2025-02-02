@@ -365,24 +365,35 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Form not found");
       }
 
-      // Crear un nuevo documento DOCX usando docx-templates
-      const template = await createReport({
-        template: Buffer.from(''),  // Empty template
-        data: {},
-        cmdDelimiter: ['{{', '}}'],
-        failFast: false,
-        rejectNullish: false,
-        fixSmartQuotes: true,
-        processLineBreaks: true
+      // Crear un documento DOCX básico con el contenido del template
+      const docx = require('docx');
+      const { Document, Paragraph, TextRun } = docx;
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: req.body.template || '',
+                })
+              ],
+            }),
+          ],
+        }],
       });
+
+      // Convertir el documento a buffer
+      const buffer = await doc.save();
 
       // Guardar el archivo DOCX
       const fileName = `template-${Date.now()}.docx`;
-      const filePath = await saveFile(template, fileName);
+      const filePath = await saveFile(buffer, fileName);
 
       const preview = generatePreview(req.body.template);
 
-      const [doc] = await db.insert(documents)
+      const [document] = await db.insert(documents)
         .values({
           formId,
           name: req.body.name,
@@ -392,7 +403,7 @@ export function registerRoutes(app: Express): Server {
         })
         .returning();
 
-      res.status(201).json(doc);
+      res.status(201).json(document);
     } catch (error: any) {
       console.error('Error creating document:', error);
       res.status(500).json({
