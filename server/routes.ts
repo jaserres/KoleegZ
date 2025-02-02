@@ -11,7 +11,7 @@ import { createReport } from 'docx-templates';
 import { promises as fs } from 'fs';
 import mammoth from 'mammoth';
 import { saveFile, readFile, deleteFile } from './storage';
-import { Document, Paragraph, TextRun } from 'docx';
+import { Document, Paragraph, TextRun, Packer } from 'docx';
 
 // Configurar multer para manejar archivos
 const upload = multer({
@@ -375,15 +375,15 @@ export function registerRoutes(app: Express): Server {
               children: [
                 new TextRun({
                   text: req.body.template || '',
-                })
+                }),
               ],
             }),
           ],
         }],
       });
 
-      // Convertir el documento a buffer
-      const buffer = await doc.save();
+      // Usar Packer para generar el buffer del documento
+      const buffer = await Packer.toBuffer(doc);
 
       // Guardar el archivo DOCX
       const fileName = `template-${Date.now()}.docx`;
