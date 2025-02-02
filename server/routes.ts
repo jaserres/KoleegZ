@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
 import { forms, variables, entries, documents, users } from "@db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, asc } from "drizzle-orm";
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
 
@@ -54,7 +54,9 @@ export function registerRoutes(app: Express): Server {
     const form = await db.query.forms.findFirst({
       where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
       with: {
-        variables: true,
+        variables: {
+          orderBy: [asc(variables.id)],
+        },
       },
     });
 
