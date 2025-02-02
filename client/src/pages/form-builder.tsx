@@ -133,6 +133,12 @@ export default function FormBuilder() {
 
       // Si hay una plantilla cargada, crear el documento
       if (templateContent) {
+        console.log('Creating document with template:', {
+          name: formName,
+          templateLength: templateContent.length,
+          hasOriginalFile: !!originalFile
+        });
+
         const docRes = await apiRequest("POST", `/api/forms/${form.id}/documents`, {
           name: formName,
           template: templateContent,
