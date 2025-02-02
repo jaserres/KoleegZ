@@ -771,7 +771,14 @@ export default function FormEntries() {
                                           onClick={() => {
                                             if (selectedTemplate && selectedEntry) {
                                               try {
-                                                window.location.href = `/api/forms/${id}/documents/${selectedTemplate.id}/merge?entryId=${selectedEntry}&download=true`;
+                                                const baseUrl = window.location.origin;
+                                                const endpoint = `api/forms/${id}/documents/${selectedTemplate.id}/merge`;
+                                                const params = new URLSearchParams({
+                                                  entryId: selectedEntry.toString(),
+                                                  download: 'true'
+                                                });
+
+                                                window.location.href = `${baseUrl}/${endpoint}?${params.toString()}`;
                                               } catch (error) {
                                                 toast({
                                                   title: "Error",
