@@ -7,7 +7,7 @@ import { eq, and, desc, asc } from "drizzle-orm";
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
 import multer from 'multer';
-import { Document, Paragraph, TextRun, Packer } from 'docx';
+import { createReport } from 'docx-templates';
 import { promises as fs } from 'fs';
 
 // Configurar multer para manejar archivos
@@ -232,55 +232,55 @@ export function registerRoutes(app: Express): Server {
       const user = ensureAuth(req);
       const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
       const file = req.file;
-
+  
       if (!file) {
         return res.status(400).send("No se ha proporcionado ningún archivo");
       }
-
+  
       // Solo verificar propiedad del formulario si no es una carga temporal
       if (formId !== null) {
         const [form] = await db.select()
           .from(forms)
           .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
+  
         if (!form) {
           return res.status(404).send("Form not found");
         }
       }
-
-      // Procesar el archivo .docx usando mammoth
-      let result;
+  
+      // Procesar el archivo .docx usando mammoth solo para extraer el texto para preview
+      let previewText;
       try {
-          const mammoth = require('mammoth');
-          result = await mammoth.extractRawText({ buffer: file.buffer });
+        const mammoth = require('mammoth');
+        const result = await mammoth.extractRawText({ buffer: file.buffer });
+        previewText = result.value;
       } catch (error) {
         console.error('Error processing document:', error);
         return res.status(400).send("Error al procesar el documento");
       }
-
-
-      const template = result.value;
-      const preview = generatePreview(template);
-
+  
+      const preview = generatePreview(previewText);
+  
       // Si es una carga temporal, solo devolver el contenido
       if (formId === null) {
         return res.status(200).json({
           name: file.originalname.replace(/\.[^/.]+$/, ""),
-          template,
+          template: previewText,
           preview
         });
       }
-
-      // Crear el documento en la base de datos si tenemos un formId válido
+  
+      // Guardar el buffer original del documento
       const [doc] = await db.insert(documents)
         .values({
           formId,
           name: file.originalname.replace(/\.[^/.]+$/, ""),
-          template,
+          template: previewText,
           preview,
+          originalDocument: file.buffer // Añadir el buffer original
         })
         .returning();
-
+  
       res.status(201).json(doc);
     } catch (error) {
       console.error('Error in document upload:', error);
@@ -455,39 +455,31 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Entry not found");
       }
 
-      // Perform mail merge on the template
+      if (isDownload) {
+        try {
+            // Usar docx-templates para realizar el merge manteniendo el formato
+            const buffer = await createReport({
+                template: doc.originalDocument,
+                data: entry.values,
+            });
+
+            // Configurar headers para DOCX
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
+
+            return res.send(buffer);
+        } catch (error) {
+            console.error('Error generating document:', error);
+            return res.status(500).send("Error al generar el documento");
+        }
+      }
+
+        // Para preview, usar el texto plano
       let result = doc.template;
       for (const [key, value] of Object.entries(entry.values as Record<string, string>)) {
         result = result.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
       }
-
-      if (isDownload) {
-        // Crear un nuevo documento DOCX
-        const document = new Document({
-          sections: [{
-            properties: {},
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: result,
-                  }),
-                ],
-              }),
-            ],
-          }],
-        });
-
-        // Generar el buffer del documento
-        const buffer = await Packer.toBuffer(document);
-
-        // Configurar headers para DOCX
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
-
-        return res.send(buffer);
-      }
-
+    
       res.json({ result });
     } catch (error) {
       console.error('Error in merge operation:', error);
@@ -620,44 +612,44 @@ export function registerRoutes(app: Express): Server {
     res.json(entry);
   });
 
-  app.delete("/api/forms/:id", async (req, res) => {
+    app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
-
-    try {
-      // Verify ownership
-      const [form] = await db.select()
-        .from(forms)
-        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-      if (!form) {
-        return res.status(404).send("Form not found");
-      }
-
-      // Delete all related records first
-      await db.transaction(async (tx) => {
-        // Delete entries
-        await tx.delete(entries)
-          .where(eq(entries.formId, formId));
-
-        // Delete variables
-        await tx.delete(variables)
-          .where(eq(variables.formId, formId));
-
-        // Delete documents
-        await tx.delete(documents)
-          .where(eq(documents.formId, formId));
-
-        // Finally delete the form
-        await tx.delete(forms)
+  
+      try {
+        // Verify ownership
+        const [form] = await db.select()
+          .from(forms)
           .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-      });
-
-      res.sendStatus(200);
-    } catch (error) {
-      console.error('Error deleting form:', error);
-      res.status(500).send("Error deleting form");
-    }
+  
+        if (!form) {
+          return res.status(404).send("Form not found");
+        }
+  
+        // Delete all related records first
+        await db.transaction(async (tx) => {
+          // Delete entries
+          await tx.delete(entries)
+            .where(eq(entries.formId, formId));
+  
+          // Delete variables
+          await tx.delete(variables)
+            .where(eq(variables.formId, formId));
+  
+          // Delete documents
+          await tx.delete(documents)
+            .where(eq(documents.formId, formId));
+  
+          // Finally delete the form
+          await tx.delete(forms)
+            .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+        });
+  
+        res.sendStatus(200);
+      } catch (error) {
+        console.error('Error deleting form:', error);
+        res.status(500).send("Error deleting form");
+      }
   });
 
   // Add new route for document preview download

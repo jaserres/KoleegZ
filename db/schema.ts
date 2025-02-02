@@ -33,12 +33,14 @@ export const entries = pgTable("entries", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// La columna original_document se maneja como BYTEA en PostgreSQL
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
   formId: integer("form_id").references(() => forms.id, { onDelete: "cascade" }).notNull(),
   name: text("name").notNull(),
   template: text("template").notNull(),
   preview: text("preview"),
+  originalDocument: text("original_document"), // Esto se maneja como BYTEA en PostgreSQL
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
