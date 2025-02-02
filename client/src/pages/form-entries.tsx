@@ -428,7 +428,9 @@ export default function FormEntries() {
     sessionStorage.setItem("selectedTemplate", JSON.stringify({
       name: documentName,
       variables: detectedVariables,
-      template: documentTemplate
+      template: documentTemplate,
+      originalFile: originalFile,
+      originalMimeType: originalMimeType
     }));
 
     // Redirect to form creation page
@@ -916,6 +918,7 @@ export default function FormEntries() {
                          >
                            Ver Plantilla
                          </Button>
+```
                        </div>
                      </CardContent>
                    </Card>

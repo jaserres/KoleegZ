@@ -169,41 +169,70 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Add document upload route
-  app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
+  app.post("/api/forms/temp/documents/upload", upload.single('file'), async (req, res) => {
     try {
+      console.log('Processing document upload request');
+
       if (!req.file) {
         return res.status(400).json({ error: "No se ha proporcionado ningún archivo" });
       }
-  
+
+      console.log('File received:', {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      });
+
       // Generate a unique filename for the original document
       const originalFileName = `original_${Date.now()}_${req.file.originalname}`;
-  
-      // Save the original file with corrected parameter order
-      await saveFile(originalFileName, req.file.buffer);
-  
+      console.log('Generated original filename:', originalFileName);
+
+      try {
+        // Save the original file
+        await saveFile(originalFileName, req.file.buffer);
+        console.log('Original file saved successfully');
+      } catch (saveError) {
+        console.error('Error saving original file:', saveError);
+        throw saveError;
+      }
+
       let template: string;
       let preview: string;
-  
+
       if (req.file.mimetype === 'text/plain') {
         template = req.file.buffer.toString('utf-8')
           .replace(/\0/g, '')
           .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
         preview = template;
       } else {
-        // Extract text for preview while keeping the original file
-        const result = await mammoth.extractRawText({ buffer: req.file.buffer });
-        template = result.value;
-        preview = template;
+        try {
+          // Extract text for preview while keeping the original file
+          const result = await mammoth.extractRawText({ buffer: req.file.buffer });
+          template = result.value;
+          preview = template;
+          console.log('Document text extracted successfully');
+        } catch (extractError) {
+          console.error('Error extracting text from document:', extractError);
+          throw extractError;
+        }
       }
-  
-      return res.json({
+
+      const response = {
         name: req.file.originalname.split('.')[0],
         template,
         preview,
         originalFile: originalFileName,
         originalMimeType: req.file.mimetype
+      };
+
+      console.log('Sending response:', {
+        name: response.name,
+        hasTemplate: !!response.template,
+        hasOriginalFile: !!response.originalFile
       });
-  
+
+      return res.json(response);
+
     } catch (error: any) {
       console.error('Error processing document:', error);
       return res.status(500).json({

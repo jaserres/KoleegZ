@@ -38,6 +38,8 @@ export default function FormBuilder() {
   const { user } = useAuth();
   const [showEditor, setShowEditor] = useState(false);
   const [templateContent, setTemplateContent] = useState("");
+  const [originalFile, setOriginalFile] = useState<string | null>(null);
+  const [originalMimeType, setOriginalMimeType] = useState<string | null>(null);
   const [formTheme, setFormTheme] = useState<{ primary: string; variant: string }>({
     primary: "#64748b",
     variant: "default",
@@ -46,6 +48,8 @@ export default function FormBuilder() {
     name: string;
     template: string;
     preview: string;
+    originalFile?: string;
+    originalMimeType?: string;
     variables: Array<Partial<SelectVariable>>;
   } | null>(null);
 
@@ -85,6 +89,8 @@ export default function FormBuilder() {
         setFormName(template.name);
         setVariables(template.variables);
         setTemplateContent(template.template || "");
+        setOriginalFile(template.originalFile || null);
+        setOriginalMimeType(template.originalMimeType || null);
         setShowEditor(true);
         sessionStorage.removeItem("selectedTemplate");
       } catch (error) {
@@ -130,6 +136,8 @@ export default function FormBuilder() {
         const docRes = await apiRequest("POST", `/api/forms/${form.id}/documents`, {
           name: formName,
           template: templateContent,
+          originalFile: originalFile,
+          originalMimeType: originalMimeType
         });
 
         if (!docRes.ok) {
@@ -202,7 +210,7 @@ export default function FormBuilder() {
     }
   });
 
-    const extractVariables = (template: string) => {
+  const extractVariables = (template: string) => {
     const variableRegex = /{{([^}]+)}}/g;
     const matches = template.match(variableRegex) || [];
     const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
@@ -296,6 +304,8 @@ export default function FormBuilder() {
             name: result.name,
             template: result.template,
             preview: result.preview,
+            originalFile: result.originalFile,
+            originalMimeType: result.mimeType,
             variables: detectedVariables
           });
         }
@@ -574,6 +584,8 @@ export default function FormBuilder() {
               setFormName(previewContent.name);
               setVariables(previewContent.variables);
               setTemplateContent(previewContent.template);
+              setOriginalFile(previewContent.originalFile || null);
+              setOriginalMimeType(previewContent.originalMimeType || null);
               setShowEditor(true);
               setPreviewContent(null);
               toast({
@@ -677,7 +689,7 @@ export default function FormBuilder() {
                   <h1 className="text-3xl font-bold">
                     {formName || "Nuevo Formulario"}
                   </h1>
-                  <Button 
+                  <Button
                     variant="outline"
                     onClick={() => {
                       setShowEditor(false);
@@ -685,6 +697,8 @@ export default function FormBuilder() {
                       setVariables([]);
                       setTemplateContent("");
                       setPreviewContent(null);
+                      setOriginalFile(null);
+                      setOriginalMimeType(null);
                     }}
                   >
                     Cambiar Plantilla
