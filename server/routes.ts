@@ -277,7 +277,8 @@ export function registerRoutes(app: Express): Server {
           }
 
           console.log('Original file exists, reading content');
-          finalBuffer = await readFile(originalFile);
+          const fileContent = await readFile(originalFile);
+          finalBuffer = Buffer.from(fileContent); // Asegurar que tenemos un Buffer válido
           console.log('Original file content read successfully');
         } else {
           console.log('Creating new document from template');
@@ -313,7 +314,7 @@ export function registerRoutes(app: Express): Server {
         }
 
         // Crear el registro en la base de datos
-        const document = await db
+        const [document] = await db
           .insert(documents)
           .values({
             formId,
@@ -322,8 +323,7 @@ export function registerRoutes(app: Express): Server {
             filePath: newFileName,
             mimeType: originalMimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           })
-          .returning()
-          .then(rows => rows[0]);
+          .returning();
 
         console.log('Document record created:', document);
         return res.json(document);

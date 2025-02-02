@@ -1,6 +1,5 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 
 // Directorio base para almacenar archivos
 const STORAGE_DIR = path.join(process.cwd(), 'storage', 'documents');
@@ -44,7 +43,8 @@ export async function readFile(fileName: string): Promise<Buffer> {
     if (!exists) {
       throw new Error(`File not found at ${filePath}`);
     }
-    return await fs.readFile(filePath);
+    const buffer = await fs.readFile(filePath);
+    return Buffer.from(buffer); // Asegurar que devolvemos un Buffer válido
   } catch (error) {
     console.error('Error reading file:', error);
     throw error;
