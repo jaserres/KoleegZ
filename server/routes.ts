@@ -275,57 +275,61 @@ export function registerRoutes(app: Express): Server {
         throw new Error('El archivo está vacío o es inválido');
       }
   
-      // Convertir el documento a HTML para preview manteniendo el formato
-      const [htmlResult, textResult] = await Promise.all([
-        mammoth.convertToHtml({ 
-          buffer: file.buffer,
-          options: {
-            styleMap: [
-              "p[style-name='Heading 1'] => h1:fresh",
-              "p[style-name='Heading 2'] => h2:fresh",
-              "p[style-name='Heading 3'] => h3:fresh",
-              "r[style-name='Strong'] => strong",
-              "r[style-name='Emphasis'] => em",
-              "table => table",
-              "p => p",
-              "br => br"
-            ]
-          }
-        }),
-        mammoth.extractRawText({ buffer: file.buffer })
-      ]);
+      let template = '';
+      let preview = '';
+      let originalDocument = '';
+  
+      // Si es un archivo .docx, mantener el documento original
+      if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        console.log('Procesando archivo DOCX...');
+  
+        // Convertir el buffer a base64 para almacenar el documento original
+        originalDocument = file.buffer.toString('base64');
+  
+        // Extraer el texto para búsqueda y preview
+        const [htmlResult, textResult] = await Promise.all([
+          mammoth.convertToHtml({ buffer: file.buffer }),
+          mammoth.extractRawText({ buffer: file.buffer })
+        ]);
+  
+        template = textResult.value;
+        preview = htmlResult.value;
+  
+        console.log('Documento DOCX procesado:', {
+          templateLength: template.length,
+          previewLength: preview.length,
+          originalDocumentLength: originalDocument.length
+        });
+      } else {
+        // Para archivos .txt, usar el contenido directamente
+        template = file.buffer.toString('utf-8');
+        preview = template;
+        originalDocument = file.buffer.toString('base64');
+      }
   
       // Si es una carga temporal, solo devolver el contenido
       if (formId === null) {
         return res.status(200).json({
           name: file.originalname.replace(/\.[^/.]+$/, ""),
-          template: textResult.value,
-          preview: htmlResult.value
+          template,
+          preview
         });
       }
-  
-      // Convertir el buffer a base64 de manera segura
-      const base64Content = file.buffer.toString('base64');
-      console.log('Contenido base64 generado:', {
-        length: base64Content.length,
-        sample: base64Content.substring(0, 100)
-      });
   
       // Preparar los datos del documento
       const docData = {
         formId,
         name: file.originalname.replace(/\.[^/.]+$/, ""),
-        template: textResult.value,
-        preview: htmlResult.value,
-        originalDocument: base64Content
+        template,
+        preview,
+        originalDocument
       };
   
-      // Log de los datos antes de la inserción
-      console.log('Datos a insertar:', {
+      console.log('Guardando documento en la base de datos:', {
         name: docData.name,
         templateLength: docData.template.length,
         previewLength: docData.preview.length,
-        originalDocumentLength: docData.originalDocument.length,
+        originalDocumentLength: docData.originalDocument.length
       });
   
       // Insertar el documento en la base de datos
@@ -333,47 +337,30 @@ export function registerRoutes(app: Express): Server {
         .values(docData)
         .returning();
   
-      // Verificar inmediatamente si el documento se guardó
+      // Verificar que el documento se guardó correctamente
       const [savedDoc] = await db.select()
         .from(documents)
         .where(eq(documents.id, doc.id));
   
-      // Log detallado del documento guardado
-      console.log('Documento guardado:', {
-        id: savedDoc.id,
-        name: savedDoc.name,
-        hasOriginalDoc: !!savedDoc.originalDocument,
-        originalDocLength: savedDoc.originalDocument ? savedDoc.originalDocument.length : 0,
-        originalDocSample: savedDoc.originalDocument ? savedDoc.originalDocument.substring(0, 100) : null
-      });
-  
-      if (!savedDoc.originalDocument) {
+      if (!savedDoc || !savedDoc.originalDocument) {
         throw new Error('El documento no se guardó correctamente en la base de datos');
       }
   
-      // Verificar que podemos decodificar el contenido guardado
-      try {
-        const decodedBuffer = Buffer.from(savedDoc.originalDocument, 'base64');
-        console.log('Verificación de decodificación:', {
-          decodedLength: decodedBuffer.length,
-          originalLength: file.buffer.length,
-          lengthsMatch: decodedBuffer.length === file.buffer.length
-        });
-      } catch (error) {
-        console.error('Error al decodificar el documento guardado:', error);
-        throw new Error('El documento guardado no se puede decodificar correctamente');
-      }
+      console.log('Documento guardado exitosamente:', {
+        id: savedDoc.id,
+        name: savedDoc.name,
+        hasOriginalDoc: !!savedDoc.originalDocument,
+        originalDocumentLength: savedDoc.originalDocument.length
+      });
   
       res.status(201).json(doc);
     } catch (error: any) {
-      console.error('Error processing document:', {
+      console.error('Error al procesar el documento:', {
         error: error.message,
-        stack: error.stack,
-        fileName: file?.originalname
+        stack: error.stack
       });
       return res.status(400).json({
-        error: `Error al procesar el documento: ${error.message}`,
-        fileName: file?.originalname
+        error: `Error al procesar el documento: ${error.message}`
       });
     }
   });
