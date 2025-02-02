@@ -11,22 +11,30 @@ import { Spinner } from "@/components/ui/spinner";
 export default function HomePage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { data: forms } = useQuery({ 
+  const { data: forms, refetch } = useQuery({ 
     queryKey: ["/api/forms"]
   });
 
   const deleteFormMutation = useMutation({
     mutationFn: async (formId: number) => {
-      await apiRequest("DELETE", `/api/forms/${formId}`);
+      const response = await apiRequest("DELETE", `/api/forms/${formId}`);
+      if (!response.ok) {
+        throw new Error("Error al eliminar el formulario");
+      }
+      return formId;
     },
-    onSuccess: () => {
+    onSuccess: (formId) => {
+      // Invalidar la caché y volver a obtener los formularios
       queryClient.invalidateQueries({ queryKey: ["/api/forms"] });
+      refetch();
+
       toast({
         title: "Éxito",
         description: "Formulario eliminado correctamente",
       });
     },
     onError: (error) => {
+      console.error("Error al eliminar formulario:", error);
       toast({
         title: "Error",
         description: "No se pudo eliminar el formulario",
@@ -34,6 +42,16 @@ export default function HomePage() {
       });
     },
   });
+
+  const handleDeleteForm = async (formId: number) => {
+    if (window.confirm("¿Estás seguro de que quieres eliminar este formulario?")) {
+      try {
+        await deleteFormMutation.mutateAsync(formId);
+      } catch (error) {
+        console.error("Error en handleDeleteForm:", error);
+      }
+    }
+  };
 
   return (
     <div className="container mx-auto py-8">
@@ -53,7 +71,7 @@ export default function HomePage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {forms?.map((form) => (
+        {forms?.map((form: any) => (
           <Card key={form.id}>
             <CardHeader>
               <div className="flex justify-between items-center">
@@ -67,11 +85,7 @@ export default function HomePage() {
                   variant="ghost"
                   size="icon"
                   className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                  onClick={() => {
-                    if (window.confirm("¿Estás seguro de que quieres eliminar este formulario?")) {
-                      deleteFormMutation.mutate(form.id);
-                    }
-                  }}
+                  onClick={() => handleDeleteForm(form.id)}
                   disabled={deleteFormMutation.isPending}
                 >
                   {deleteFormMutation.isPending ? (

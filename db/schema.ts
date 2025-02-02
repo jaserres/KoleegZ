@@ -11,7 +11,7 @@ export const users = pgTable("users", {
 
 export const forms = pgTable("forms", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   name: text("name").notNull(),
   theme: jsonb("theme").default({ primary: "#64748b", variant: "default" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -20,7 +20,7 @@ export const forms = pgTable("forms", {
 
 export const variables = pgTable("variables", {
   id: serial("id").primaryKey(),
-  formId: integer("form_id").references(() => forms.id).notNull(),
+  formId: integer("form_id").references(() => forms.id, { onDelete: "cascade" }).notNull(),
   name: text("name").notNull(),
   label: text("label").notNull(),
   type: text("type").notNull(),
@@ -28,14 +28,14 @@ export const variables = pgTable("variables", {
 
 export const entries = pgTable("entries", {
   id: serial("id").primaryKey(),
-  formId: integer("form_id").references(() => forms.id).notNull(),
+  formId: integer("form_id").references(() => forms.id, { onDelete: "cascade" }).notNull(),
   values: jsonb("values").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
-  formId: integer("form_id").references(() => forms.id).notNull(),
+  formId: integer("form_id").references(() => forms.id, { onDelete: "cascade" }).notNull(),
   name: text("name").notNull(),
   template: text("template").notNull(),
   preview: text("preview"),

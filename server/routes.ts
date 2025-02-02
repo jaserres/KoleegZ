@@ -558,6 +558,25 @@ export function registerRoutes(app: Express): Server {
     res.json(entry);
   });
 
+  app.delete("/api/forms/:id", async (req, res) => {
+    const user = ensureAuth(req);
+    const formId = parseInt(req.params.id);
+  
+    // Verify ownership
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+  
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+  
+    // Delete the form (cascade will handle related records)
+    await db.delete(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+  
+    res.sendStatus(200);
+  });
 
   const httpServer = createServer(app);
   return httpServer;
