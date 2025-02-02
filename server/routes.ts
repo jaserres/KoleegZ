@@ -341,7 +341,7 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/forms", async (req, res) => {
     try {
       const user = ensureAuth(req);
-      const { name, theme, variables } = req.body;
+      const { name, theme, variables: formVariables } = req.body;
 
       // Validar datos requeridos
       if (!name) {
@@ -360,8 +360,8 @@ export function registerRoutes(app: Express): Server {
           .returning();
 
         // Crear las variables si existen
-        if (variables && Array.isArray(variables)) {
-          for (const variable of variables) {
+        if (formVariables && Array.isArray(formVariables)) {
+          for (const variable of formVariables) {
             await tx.insert(variables)
               .values({
                 formId: form.id,
