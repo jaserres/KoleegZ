@@ -621,113 +621,112 @@ export default function FormEntries() {
                       Nueva Plantilla
                     </Button>
                   </DialogTrigger>
-                   <DialogContent className="sm:max-w-[600px] h-[90vh] flex flex-col p-0">
-                          <DialogHeader className="px-6 py-4 border-b">
-                            <DialogTitle>Crear Nueva Plantilla</DialogTitle>
-                          </DialogHeader>
-                          <div className="flex-1 overflow-hidden">
-                            <ScrollArea className="h-full">
-                              <div className="p-6 space-y-4">
-                                {detectedVariables.length > variableLimit && (
-                                  <Alert>
-                                    <AlertDescription className="flex items-center justify-between">
-                                      <span>
-                                        Su plantilla tiene {detectedVariables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
-                                        Necesita eliminar {detectedVariables.length - variableLimit} variable(s).
-                                      </span>
-                                      <Button
-                                        variant="outline"
-                                        onClick={removeExcessVariables}
-                                      >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Eliminar variables excedentes
-                                      </Button>
-                                    </AlertDescription>
-                                  </Alert>
-                                )}
-                                <div>
-                                  <Label>Nombre de la Plantilla</Label>
-                                  <Input
-                                    value={documentName}
-                                    onChange={(e) => setDocumentName(e.target.value)}
-                                    placeholder="Ej: Carta de Presentación"
-                                    required
-                                  />
-                                </div>
-                                <div>
-                                  <Label>Contenido de la Plantilla</Label>
-                                  <div className="text-sm text-muted-foreground mb-2">
-                                    Usa {'{'}{'{'}<span className="font-mono">nombre_variable</span>{'}'}{'}'}  para insertar variables
-                                  </div>
-                                  <div className="space-y-4">
-                                    <Textarea
-                                      value={documentTemplate}
-                                      onChange={(e) => setDocumentTemplate(e.target.value)}
-                                      className="h-40"
-                                      placeholder="Ej: Estimado {{nombre}}, ..."
-                                      required
-                                    />
-                                    <div className="flex items-center space-x-2">
-                                      <Label htmlFor="file-upload" className="sr-only">
-                                        Subir documento
-                                      </Label>
-                                      <Input
-                                        id="file-upload"
-                                        type="file"
-                                        accept=".txt,.doc,.docx"
-                                        className="max-w-xs"
-                                        onChange={handleFileUpload}
-                                      />
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={() => {
-                                          const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-                                          fileInput?.click();
-                                        }}
-                                      >
-                                        <Upload className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                                {detectedVariables.length > 0 && (
-                                  <div className="space-y-2">
-                                    <div className="flex justify-between items-center">
-                                      <Label>Variables Detectadas</Label>
-                                    </div>
-                                    <div className="bg-muted p-4 rounded-md">
-                                      <ul className="list-disc list-inside space-y-1">
-                                        {detectedVariables.map((variable, index) => (
-                                          <li key={index} className="text-sm">
-                                            {variable.label} ({variable.name})
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </ScrollArea>
-                          </div>
-                          <div className="flex justify-between items-center p-6 border-t bg-background">
+                  <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                      <DialogTitle>Crear Nueva Plantilla</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      {detectedVariables.length > variableLimit && (
+                        <Alert>
+                          <AlertDescription>
+                            <div className="space-y-2">
+                              <p>
+                                Su plantilla tiene {detectedVariables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
+                                Necesita eliminar {detectedVariables.length - variableLimit} variable(s).
+                              </p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={removeExcessVariables}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar variables excedentes
+                              </Button>
+                            </div>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      <div>
+                        <Label>Nombre de la Plantilla</Label>
+                        <Input
+                          value={documentName}
+                          onChange={(e) => setDocumentName(e.target.value)}
+                          placeholder="Ej: Carta de Presentación"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label>Contenido de la Plantilla</Label>
+                        <div className="text-sm text-muted-foreground mb-2">
+                          Usa {'{'}{'{'}<span className="font-mono">nombre_variable</span>{'}'}{'}'}  para insertar variables
+                        </div>
+                        <div className="space-y-4">
+                          <Textarea
+                            value={documentTemplate}
+                            onChange={(e) => setDocumentTemplate(e.target.value)}
+                            className="h-40"
+                            placeholder="Ej: Estimado {{nombre}}, ..."
+                            required
+                          />
+                          <div className="flex items-center space-x-2">
+                            <Label htmlFor="file-upload" className="sr-only">
+                              Subir documento
+                            </Label>
+                            <Input
+                              id="file-upload"
+                              type="file"
+                              accept=".txt,.doc,.docx"
+                              className="max-w-xs"
+                              onChange={handleFileUpload}
+                            />
                             <Button
+                              type="button"
                               variant="outline"
-                              onClick={handleCreateFormFromTemplate}
-                              disabled={detectedVariables.length === 0}
+                              size="icon"
+                              onClick={() => {
+                                const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+                                fileInput?.click();
+                              }}
                             >
-                              <Wand2 className="mr-2 h-4 w-4" />
-                              Crear Formulario
-                            </Button>
-                            <Button 
-                              onClick={handleCreateDocument}
-                              disabled={createDocumentMutation.isPending || !documentName || !documentTemplate}
-                            >
-                              {createDocumentMutation.isPending ? "Creando..." : "Crear Plantilla"}
+                              <Upload className="h-4 w-4" />
                             </Button>
                           </div>
-                        </DialogContent>
+                        </div>
+                      </div>
+                      {detectedVariables.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <Label>Variables Detectadas</Label>
+                          </div>
+                          <div className="bg-muted p-4 rounded-md max-h-[200px] overflow-y-auto">
+                            <ul className="list-disc list-inside space-y-1">
+                              {detectedVariables.map((variable, index) => (
+                                <li key={index} className="text-sm">
+                                  {variable.label} ({variable.name})
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center pt-4">
+                        <Button
+                          variant="outline"
+                          onClick={handleCreateFormFromTemplate}
+                          disabled={detectedVariables.length === 0}
+                        >
+                          <Wand2 className="mr-2 h-4 w-4" />
+                          Crear Formulario
+                        </Button>
+                        <Button 
+                          onClick={handleCreateDocument}
+                          disabled={createDocumentMutation.isPending || !documentName || !documentTemplate}
+                        >
+                          {createDocumentMutation.isPending ? "Creando..." : "Crear Plantilla"}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
                 </Dialog>
               </div>
             </div>
