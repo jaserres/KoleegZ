@@ -129,14 +129,13 @@ export function registerRoutes(app: Express): Server {
       // Generar nombre de archivo único
       const fileName = `${form.id}_${Date.now()}.docx`;
 
-      // Guardar el contenido del template
-      await saveFile(fileName, template);
 
       // Crear el registro del documento en la base de datos
       const [document] = await db.insert(documents)
         .values({
           formId: form.id,
           name,
+          template,
           filePath: fileName,
         })
         .returning();
