@@ -126,19 +126,18 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ error: "Formulario no encontrado" });
       }
 
-      // Guardar el documento
+      // Generar nombre de archivo único
       const fileName = `${form.id}_${Date.now()}.docx`;
-      const filePath = fileName;
 
       // Guardar el contenido del template
-      await saveFile(filePath, Buffer.from(template));
+      await saveFile(fileName, template);
 
       // Crear el registro del documento en la base de datos
       const [document] = await db.insert(documents)
         .values({
           formId: form.id,
           name,
-          filePath,
+          filePath: fileName,
         })
         .returning();
 
