@@ -28,43 +28,82 @@ export function ThemePreview({ primary, variant }: ThemePreviewProps) {
           transition={{ duration: 0.5 }}
           className="relative"
           style={{
-            '--theme-primary': primary,
+            '--primary': primary,
+            '--primary-foreground': '#ffffff',
           } as React.CSSProperties}
         >
-          <Card className="overflow-hidden">
-            <CardHeader className="border-b">
+          <Card className="overflow-hidden border-2 transition-colors duration-300" 
+                style={{ borderColor: variant === 'tint' ? primary + '20' : undefined }}>
+            <CardHeader className={cn(
+              "border-b transition-colors duration-300",
+              variant === 'tint' && "bg-[var(--primary)]/5"
+            )}>
               <CardTitle className="flex items-center gap-2">
-                Preview
-                <Badge variant="outline" className="text-xs">
+                <span className={cn(
+                  "transition-colors duration-300",
+                  variant === 'gradient' && "bg-gradient-to-r from-[var(--primary)] to-[var(--primary)]/60 bg-clip-text text-transparent"
+                )}>
+                  Preview
+                </span>
+                <Badge 
+                  variant="outline" 
+                  className={cn(
+                    "text-xs transition-colors duration-300",
+                    variant === 'tint' && "border-[var(--primary)]/20 bg-[var(--primary)]/5"
+                  )}
+                >
                   {variant}
                 </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
               <div className="space-y-2">
-                <h3 className={cn(
-                  "text-2xl font-bold",
-                  variant === "gradient" && "bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60"
-                )}>
+                <motion.h3 
+                  className={cn(
+                    "text-2xl font-bold transition-colors duration-300",
+                    variant === "gradient" && "bg-gradient-to-r from-[var(--primary)] to-[var(--primary)]/60 bg-clip-text text-transparent"
+                  )}
+                  animate={{ 
+                    color: variant === 'tint' ? primary : undefined 
+                  }}
+                >
                   Sample Heading
-                </h3>
+                </motion.h3>
                 <p className="text-muted-foreground">
                   This is how your form elements will look.
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-4">
-                <Button>Primary Button</Button>
+                <Button 
+                  style={{ 
+                    backgroundColor: variant === 'tint' ? `${primary}10` : primary,
+                    borderColor: variant === 'tint' ? primary : undefined,
+                    color: variant === 'tint' ? primary : '#fff'
+                  }}
+                  className="transition-colors duration-300"
+                >
+                  Primary Button
+                </Button>
                 <Button variant="secondary">Secondary</Button>
                 <Button variant="outline">Outline</Button>
               </div>
 
               <Card className="w-full">
-                <CardHeader className="bg-primary/5">
+                <CardHeader className={cn(
+                  "transition-colors duration-300",
+                  variant === 'tint' ? "bg-[var(--primary)]/5" : "bg-[var(--primary)]/10"
+                )}>
                   <CardTitle className="text-sm">Card Example</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <div className="h-20 rounded-lg bg-primary/10 animate-pulse" />
+                  <motion.div 
+                    className="h-20 rounded-lg"
+                    animate={{ 
+                      backgroundColor: variant === 'tint' ? `${primary}10` : `${primary}20`
+                    }}
+                    transition={{ duration: 0.5 }}
+                  />
                 </CardContent>
               </Card>
             </CardContent>
