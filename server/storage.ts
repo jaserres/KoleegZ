@@ -24,7 +24,7 @@ function generateUniqueFileName(originalName: string): string {
 }
 
 // Guardar un archivo
-export async function saveFile(buffer: Buffer, originalName: string): Promise<string> {
+export async function saveFile(originalName: string, buffer: Buffer): Promise<string> {
   await ensureStorageDir();
   const fileName = generateUniqueFileName(originalName);
   const filePath = path.join(STORAGE_DIR, fileName);

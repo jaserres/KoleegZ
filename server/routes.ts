@@ -178,7 +178,7 @@ export function registerRoutes(app: Express): Server {
       // Generate a unique filename for the original document
       const originalFileName = `original_${Date.now()}_${req.file.originalname}`;
   
-      // Save the original file
+      // Save the original file with corrected parameter order
       await saveFile(originalFileName, req.file.buffer);
   
       let template: string;
@@ -236,7 +236,7 @@ export function registerRoutes(app: Express): Server {
       // Generar nombre de archivo único
       const fileName = `${form.id}_${Date.now()}.docx`;
   
-      // Si hay un archivo original, copiarlo al nuevo nombre
+      // Si hay un archivo original, copiarlo al nuevo nombre con el orden correcto de parámetros
       if (originalFile) {
         const originalContent = await readFile(originalFile);
         await saveFile(fileName, originalContent);
