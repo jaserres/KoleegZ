@@ -102,13 +102,18 @@ export default function FormEntries() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
       setCurrentEntryId(data.id);
-      setFormValues({}); // Clear form after successful creation
       toast({
         title: "Éxito",
         description: "Entrada agregada correctamente",
       });
       // Trigger confetti celebration
       triggerConfetti();
+      // Solo limpiar el formulario después de confirmar que se guardó correctamente
+      setTimeout(() => {
+        setFormValues({});
+        setSelectedRowId(null);
+        setCurrentEntryId(null);
+      }, 1000);
     },
     onError: (error: Error) => {
       toast({
@@ -328,10 +333,6 @@ export default function FormEntries() {
 
     // Create a new entry
     createEntryMutation.mutate(values);
-    // Reset selected states
-    setSelectedRowId(null);
-    setCurrentEntryId(null);
-    setFormValues({});
   };
   
   const handleCreateFormFromTemplate = () => {
