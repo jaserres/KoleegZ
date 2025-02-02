@@ -361,7 +361,10 @@ export default function FormEntries() {
 
     if (selectedRowId) {
       // Actualizar entrada existente
-      updateEntryMutation.mutate({ entryId: selectedRowId, values });
+      updateEntryMutation.mutate({ 
+        entryId: selectedRowId, 
+        values 
+      });
     } else {
       // Crear nueva entrada
       createEntryMutation.mutate(values);
