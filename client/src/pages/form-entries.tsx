@@ -46,10 +46,10 @@ export default function FormEntries() {
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   const [detectedVariables, setDetectedVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
-
+  const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
 
   const { saving } = useAutoSave(
-    `/api/forms/${id}/entries/autosave`,
+    currentEntryId ? `/api/forms/${id}/entries/${currentEntryId}` : null,
     formValues,
     {
       debounceMs: 1000,
@@ -82,8 +82,10 @@ export default function FormEntries() {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
+      setCurrentEntryId(data.id);
+      setFormValues({}); // Clear form after successful creation
       toast({
         title: "Success",
         description: "Entry added successfully",
@@ -261,7 +263,10 @@ export default function FormEntries() {
         : value;
     });
 
+    // Create a new entry
     createEntryMutation.mutate(values);
+    // Reset currentEntryId to ensure next changes will create a new entry for auto-save
+    setCurrentEntryId(null);
   };
 
   const handleCreateFormFromTemplate = () => {

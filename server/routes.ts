@@ -515,29 +515,44 @@ export function registerRoutes(app: Express): Server {
       return res.status(404).send("Form not found");
     }
 
-    // Get the most recent entry or create a new one
-    let [entry] = await db.select()
-      .from(entries)
-      .where(eq(entries.formId, formId))
-      .orderBy(desc(entries.createdAt))
-      .limit(1);
+    // Create a new entry
+    const [entry] = await db.insert(entries)
+      .values({
+        formId,
+        values: req.body,
+      })
+      .returning();
+
+    res.json(entry);
+  });
+
+  app.patch("/api/forms/:formId/entries/:entryId", async (req, res) => {
+    const user = ensureAuth(req);
+    const formId = parseInt(req.params.formId);
+    const entryId = parseInt(req.params.entryId);
+
+    // Verify ownership
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+
+    // Update existing entry
+    const [entry] = await db.update(entries)
+      .set({
+        values: req.body,
+      })
+      .where(and(
+        eq(entries.id, entryId),
+        eq(entries.formId, formId)
+      ))
+      .returning();
 
     if (!entry) {
-      // Create new entry if none exists
-      [entry] = await db.insert(entries)
-        .values({
-          formId,
-          values: req.body,
-        })
-        .returning();
-    } else {
-      // Update existing entry
-      [entry] = await db.update(entries)
-        .set({
-          values: { ...entry.values as Record<string, unknown>, ...req.body }
-        })
-        .where(eq(entries.id, entry.id))
-        .returning();
+      return res.status(404).send("Entry not found");
     }
 
     res.json(entry);
