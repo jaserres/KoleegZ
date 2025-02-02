@@ -511,42 +511,47 @@ export default function FormBuilder() {
       }
     };
 
-
     return (
       <Dialog open={!!previewContent} onOpenChange={() => setPreviewContent(null)}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
+        <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0">
+          <DialogHeader className="px-6 py-4 border-b">
             <DialogTitle>Vista Previa del Documento</DialogTitle>
             <DialogDescription>
               Revise el contenido y las variables detectadas antes de crear el formulario
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="font-medium">Contenido del Documento</h3>
-                <Button variant="outline" size="sm" onClick={handleDownload}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Descargar Documento
-                </Button>
-              </div>
-              <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-                <pre className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: previewContent.preview }} />
-              </ScrollArea>
-            </div>
-            <div>
-              <h3 className="font-medium mb-2">Variables Detectadas ({previewContent.variables.length})</h3>
-              <div className="grid gap-2">
-                {previewContent.variables.map((variable, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <code className="bg-muted px-2 py-1 rounded">{'{{' + variable.name + '}}'}</code>
-                    <span className="text-muted-foreground">{variable.label}</span>
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="p-6 space-y-6">
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-medium">Contenido del Documento</h3>
+                    <Button variant="outline" size="sm" onClick={handleDownload}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Descargar Documento
+                    </Button>
                   </div>
-                ))}
+                  <div className="bg-muted rounded-md p-4">
+                    <pre className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: previewContent.preview }} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-medium mb-2">Variables Detectadas ({previewContent.variables.length})</h3>
+                  <div className="bg-muted rounded-md p-4">
+                    <div className="grid gap-2">
+                      {previewContent.variables.map((variable, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <code className="bg-background px-2 py-1 rounded">{'{{' + variable.name + '}}'}</code>
+                          <span className="text-muted-foreground">{variable.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            </ScrollArea>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-2 px-6 py-4 border-t bg-background">
             <Button variant="outline" onClick={() => setPreviewContent(null)}>
               Cancelar
             </Button>
@@ -563,7 +568,7 @@ export default function FormBuilder() {
             }}>
               Crear Formulario
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     );
