@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Select,
   SelectContent,
@@ -23,12 +24,15 @@ export default function FormBuilder() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [showEditor, setShowEditor] = useState(false);
   const [templateContent, setTemplateContent] = useState("");
   const [formTheme, setFormTheme] = useState<{ primary: string; variant: string }>({
     primary: "#64748b",
     variant: "default",
   });
+
+  const variableLimit = user?.isPremium ? 50 : 10;
 
   const { data: form } = useQuery({
     queryKey: [`/api/forms/${id}`],
@@ -38,7 +42,7 @@ export default function FormBuilder() {
   const [formName, setFormName] = useState("");
   const [variables, setVariables] = useState<Array<Partial<SelectVariable>>>([]);
 
-  // Efecto para cargar datos del formulario cuando se obtienen
+  // Effect to load form data when obtained
   useEffect(() => {
     if (form) {
       setFormName(form.name);
@@ -46,12 +50,21 @@ export default function FormBuilder() {
     }
   }, [form]);
 
-  // Efecto para cargar plantilla seleccionada
+  // Effect to load selected template
   useEffect(() => {
     const templateData = sessionStorage.getItem("selectedTemplate");
     if (templateData && !id) {
       try {
         const template = JSON.parse(templateData);
+        // Check variable limit before loading template
+        if (template.variables.length > variableLimit) {
+          toast({
+            title: "Límite de variables excedido",
+            description: `Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario. Actualiza a premium para aumentar este límite.`,
+            variant: "destructive"
+          });
+          return;
+        }
         setFormName(template.name);
         setVariables(template.variables);
         setTemplateContent(template.template || "");
@@ -61,10 +74,15 @@ export default function FormBuilder() {
         console.error("Error parsing template data:", error);
       }
     }
-  }, [id]);
+  }, [id, variableLimit, user?.isPremium]);
 
   const createFormMutation = useMutation({
     mutationFn: async () => {
+      // Check variable limit before creating form
+      if (variables.length > variableLimit) {
+        throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
+      }
+
       const res = await apiRequest("POST", "/api/forms", { 
         name: formName,
         theme: formTheme
@@ -72,8 +90,14 @@ export default function FormBuilder() {
       const form = await res.json();
 
       // Create variables
-      for (const variable of variables) {
-        await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
+      try {
+        for (const variable of variables) {
+          await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
+        }
+      } catch (error) {
+        // If variable creation fails, delete the form to maintain consistency
+        await apiRequest("DELETE", `/api/forms/${form.id}`);
+        throw error;
       }
 
       return form;
@@ -86,11 +110,23 @@ export default function FormBuilder() {
       });
       setLocation("/");
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Error al crear el formulario",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
   });
 
   const updateFormMutation = useMutation({
     mutationFn: async () => {
       if (!id) return;
+
+      // Check variable limit before updating
+      if (variables.length > variableLimit) {
+        throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
+      }
 
       // Update form name and theme
       await apiRequest("PATCH", `/api/forms/${id}`, { 
@@ -115,6 +151,13 @@ export default function FormBuilder() {
       });
       setLocation("/");
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Error al actualizar el formulario",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
   });
 
   const extractVariables = (template: string) => {
