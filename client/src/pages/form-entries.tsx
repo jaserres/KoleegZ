@@ -103,6 +103,8 @@ export default function FormEntries() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
+      // Mantener los valores actualizados y la selección
+      setFormValues(data.values);
       toast({
         title: "Éxito",
         description: "Entrada actualizada correctamente",
@@ -130,7 +132,6 @@ export default function FormEntries() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
-      setCurrentEntryId(data.id);
       toast({
         title: "Éxito",
         description: "Entrada agregada correctamente",
