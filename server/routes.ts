@@ -449,6 +449,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Form not found");
       }
 
+      console.log(`Buscando documento ${documentId} del formulario ${formId}`);
       const [doc] = await db.select()
         .from(documents)
         .where(and(
@@ -459,6 +460,14 @@ export function registerRoutes(app: Express): Server {
       if (!doc) {
         return res.status(404).send("Document not found");
       }
+
+      console.log('Documento encontrado:', {
+        id: doc.id,
+        formId: doc.formId,
+        name: doc.name,
+        hasOriginalDoc: !!doc.originalDocument,
+        originalDocLength: doc.originalDocument ? doc.originalDocument.length : 0
+      });
 
       const [entry] = await db.select()
         .from(entries)
@@ -472,14 +481,22 @@ export function registerRoutes(app: Express): Server {
       }
 
       if (!doc.originalDocument) {
+        console.error('No se encontró el documento original en la base de datos');
         return res.status(400).send("No se encontró el documento original");
       }
 
       try {
         console.log('Processing document merge in DOCX format');
 
+        // Verificar que el documento original es un string base64 válido
+        if (!doc.originalDocument.match(/^[A-Za-z0-9+/=]+$/)) {
+          console.error('El documento original no está en formato base64 válido');
+          return res.status(400).send("El formato del documento original no es válido");
+        }
+
         // Convertir el documento de base64 a buffer
         const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
+        console.log('Buffer creado correctamente, tamaño:', originalDocBuffer.length);
 
         // Crear el documento fusionado manteniendo el formato DOCX
         const mergedBuffer = await createReport({
@@ -527,7 +544,7 @@ export function registerRoutes(app: Express): Server {
       console.error('Error in merge operation:', error);
       res.status(500).send("Error al procesar la solicitud de merge");
     }
-});
+  });
 
   // Export entries endpoints
   app.get("/api/forms/:formId/entries/export", async (req, res) => {
