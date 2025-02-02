@@ -252,6 +252,9 @@ export function registerRoutes(app: Express): Server {
       }
 
       try {
+        // Guardar el documento original como base64 para preservar el formato binario
+        const originalDocBase64 = file.buffer.toString('base64');
+
         // Convertir el documento a HTML para preview manteniendo el formato
         const [htmlResult, textResult] = await Promise.all([
           mammoth.convertToHtml({ 
@@ -281,14 +284,14 @@ export function registerRoutes(app: Express): Server {
           });
         }
 
-        // Guardar en la base de datos manteniendo el documento original como buffer binario
+        // Guardar en la base de datos con el documento original en base64
         const [doc] = await db.insert(documents)
           .values({
             formId,
             name: file.originalname.replace(/\.[^/.]+$/, ""),
             template: textResult.value,
             preview: htmlResult.value,
-            originalDocument: file.buffer.toString('binary') // Guardar como binario directamente
+            originalDocument: originalDocBase64 // Guardar como base64
           })
           .returning();
 
@@ -301,7 +304,7 @@ export function registerRoutes(app: Express): Server {
       console.error('Error in document upload:', error);
       res.status(500).send(`Error al subir el documento: ${error.message}`);
     }
-  });
+});
 
   app.post("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
@@ -475,8 +478,8 @@ export function registerRoutes(app: Express): Server {
       try {
         console.log('Processing document merge in DOCX format');
 
-        // Convertir el documento original de binario a buffer
-        const originalDocBuffer = Buffer.from(doc.originalDocument, 'binary');
+        // Convertir el documento de base64 a buffer
+        const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
 
         // Crear el documento fusionado manteniendo el formato DOCX
         const mergedBuffer = await createReport({
@@ -524,7 +527,7 @@ export function registerRoutes(app: Express): Server {
       console.error('Error in merge operation:', error);
       res.status(500).send("Error al procesar la solicitud de merge");
     }
-  });
+});
 
   // Export entries endpoints
   app.get("/api/forms/:formId/entries/export", async (req, res) => {
