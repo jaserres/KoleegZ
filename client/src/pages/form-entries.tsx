@@ -87,6 +87,7 @@ export default function FormEntries() {
     enabled: !!id,
   });
 
+
   const { trigger: triggerConfetti } = useConfetti();
 
   const createEntryMutation = useMutation({
@@ -413,7 +414,10 @@ export default function FormEntries() {
 
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto py-8" style={form?.theme ? {
+      '--primary': form.theme.primary,
+      '--primary-foreground': '#ffffff',
+    } as React.CSSProperties : undefined}>
       <Button variant="ghost" className="mb-8" onClick={() => setLocation("/")}>
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to Forms
