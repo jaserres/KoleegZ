@@ -40,7 +40,7 @@ export const documents = pgTable("documents", {
   name: text("name").notNull(),
   template: text("template").notNull(),
   preview: text("preview"),
-  originalDocument: text("original_document").notNull(),
+  filePath: text("file_path").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

@@ -10,6 +10,7 @@ import multer from 'multer';
 import { createReport } from 'docx-templates';
 import { promises as fs } from 'fs';
 import mammoth from 'mammoth';
+import { saveFile, readFile, deleteFile } from './storage';
 
 // Configurar multer para manejar archivos
 const upload = multer({
@@ -244,13 +245,10 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Log detallado del archivo recibido
       console.log('Archivo recibido:', {
         originalname: file.originalname,
         mimetype: file.mimetype,
-        size: file.size,
-        bufferLength: file.buffer.length,
-        bufferSample: file.buffer.slice(0, 20).toString('hex')
+        size: file.size
       });
 
       if (formId !== null) {
@@ -270,17 +268,13 @@ export function registerRoutes(app: Express): Server {
 
       let template = '';
       let preview = '';
-      let originalDocument = '';
+      let filePath = '';
 
-      // Si es un archivo .docx, mantener el documento original
       if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         console.log('Procesando archivo DOCX...');
 
-        // Mantener la extensión .docx para documentos DOCX
-        const fileName = file.originalname;
-
-        // Convertir el buffer a base64 para almacenar el documento original
-        originalDocument = file.buffer.toString('base64');
+        // Guardar el archivo en el sistema de archivos
+        filePath = await saveFile(file.buffer, file.originalname);
 
         try {
           // Extraer el texto para búsqueda y preview
@@ -293,46 +287,44 @@ export function registerRoutes(app: Express): Server {
           preview = htmlResult.value;
 
           console.log('Documento DOCX procesado:', {
-            fileName,
+            originalName: file.originalname,
+            filePath,
             templateLength: template.length,
-            previewLength: preview.length,
-            originalDocumentLength: originalDocument.length
+            previewLength: preview.length
           });
         } catch (error) {
           console.error('Error al procesar el documento DOCX:', error);
           throw new Error('Error al procesar el documento DOCX');
         }
       } else {
-        // Para archivos .txt, podemos eliminar la extensión
+        // Para archivos .txt
         template = file.buffer.toString('utf-8');
         preview = template;
-        originalDocument = file.buffer.toString('base64');
+        filePath = await saveFile(file.buffer, file.originalname);
       }
 
       // Si es una carga temporal, solo devolver el contenido
       if (formId === null) {
         return res.status(200).json({
-          name: file.mimetype.includes('document') ? file.originalname : file.originalname.replace(/\.[^/.]+$/, ""),
+          name: file.originalname,
           template,
           preview,
-          originalDocument // Incluir el documento original en la respuesta temporal
+          filePath
         });
       }
 
       // Preparar los datos del documento
       const docData = {
         formId,
-        name: file.mimetype.includes('document') ? file.originalname : file.originalname.replace(/\.[^/.]+$/, ""),
+        name: file.originalname,
         template,
         preview,
-        originalDocument
+        filePath
       };
 
       console.log('Guardando documento en la base de datos:', {
         name: docData.name,
-        templateLength: docData.template.length,
-        previewLength: docData.preview.length,
-        originalDocumentLength: docData.originalDocument.length
+        filePath: docData.filePath
       });
 
       // Insertar el documento en la base de datos
@@ -345,27 +337,14 @@ export function registerRoutes(app: Express): Server {
         .from(documents)
         .where(eq(documents.id, doc.id));
 
-      if (!savedDoc || !savedDoc.originalDocument) {
-        console.error('Error: Documento no guardado correctamente:', {
-          savedDoc: savedDoc ? 'exists' : 'null',
-          hasOriginalDocument: savedDoc ? !!savedDoc.originalDocument : false
-        });
+      if (!savedDoc || !savedDoc.filePath) {
+        console.error('Error: Documento no guardado correctamente');
         throw new Error('El documento no se guardó correctamente en la base de datos');
       }
 
-      console.log('Documento guardado exitosamente:', {
-        id: savedDoc.id,
-        name: savedDoc.name,
-        hasOriginalDoc: !!savedDoc.originalDocument,
-        originalDocumentLength: savedDoc.originalDocument.length
-      });
-
       res.status(201).json(doc);
     } catch (error: any) {
-      console.error('Error al procesar el documento:', {
-        error: error.message,
-        stack: error.stack
-      });
+      console.error('Error al procesar el documento:', error);
       return res.status(400).json({
         error: `Error al procesar el documento: ${error.message}`
       });
@@ -424,29 +403,39 @@ export function registerRoutes(app: Express): Server {
     const formId = parseInt(req.params.formId);
     const documentId = parseInt(req.params.documentId);
 
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+    try {
+      // Verify ownership
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-    if (!form) {
-      return res.status(404).send("Form not found");
+      if (!form) {
+        return res.status(404).send("Form not found");
+      }
+
+      // Verify document exists and belongs to the form
+      const [doc] = await db.select()
+        .from(documents)
+        .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
+
+      if (!doc) {
+        return res.status(404).send("Document not found");
+      }
+
+      // Eliminar el archivo físico primero
+      await deleteFile(doc.filePath);
+
+      // Luego eliminar el registro de la base de datos
+      await db.delete(documents)
+        .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
+
+      res.sendStatus(200);
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      res.status(500).send("Error deleting document");
     }
-
-    // Verify document exists and belongs to the form
-    const [doc] = await db.select()
-      .from(documents)
-      .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
-
-    if (!doc) {
-      return res.status(404).send("Document not found");
-    }
-
-    await db.delete(documents)
-      .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
-
-    res.sendStatus(200);
   });
+
 
   app.patch("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
@@ -520,142 +509,76 @@ export function registerRoutes(app: Express): Server {
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
       if (!form) {
-        console.error('Formulario no encontrado:', { formId, userId: user.id });
         return res.status(404).send("Form not found");
       }
 
-      console.log('Buscando documento en la base de datos...', { documentId, formId });
       const [doc] = await db.select()
         .from(documents)
-        .where(and(
-          eq(documents.id, documentId),
-          eq(documents.formId, formId)
-        ));
+        .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
 
       if (!doc) {
-        console.error('Documento no encontrado en la base de datos:', { documentId, formId });
         return res.status(404).send("Document not found");
       }
+
+      const [entry] = await db.select()
+        .from(entries)
+        .where(and(eq(entries.id, entryId), eq(entries.formId, formId)));
+
+      if (!entry) {
+        return res.status(404).send("Entry not found");
+      }
+
+      // Leer el archivo original
+      const documentBuffer = await readFile(doc.filePath);
 
       console.log('Documento encontrado:', {
         id: doc.id,
         name: doc.name,
-        hasOriginalDoc: !!doc.originalDocument,
-        originalDocLength: doc.originalDocument?.length || 0
+        filePath: doc.filePath
       });
 
-      const [entry] = await db.select()
-        .from(entries)
-        .where(and(
-          eq(entries.id, entryId),
-          eq(entries.formId, formId)
-        ));
+      // Realizar el merge
+      const mergedBuffer = await createReport({
+        template: documentBuffer,
+        data: entry.values || {},
+        cmdDelimiter: ['{{', '}}'],
+        failFast: false,
+        rejectNullish: false,
+        fixSmartQuotes: true,
+        processLineBreaks: true
+      });
 
-      if (!entry) {
-        console.error('Entrada no encontrada:', { entryId, formId });
-        return res.status(404).send("Entry not found");
-      }
+      console.log('Merge completado exitosamente');
 
-      if (!doc.originalDocument) {
-        console.error('Documento original no encontrado:', {
-          docId: doc.id,
-          docName: doc.name,
-          docFields: Object.keys(doc)
-        });
-        return res.status(400).json({
-          error: "No se encontró el documento original",
-          details: {
-            documentId: doc.id,
-            documentName: doc.name,
-            availableFields: Object.keys(doc)
+      if (isDownload) {
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+        return res.send(mergedBuffer);
+      } else {
+        const result = await mammoth.convertToHtml({
+          buffer: mergedBuffer,
+          options: {
+            styleMap: [
+              "p[style-name='Heading 1'] => h1:fresh",
+              "p[style-name='Heading 2'] => h2:fresh",
+              "p[style-name='Heading 3'] => h3:fresh",
+              "r[style-name='Strong'] => strong",
+              "r[style-name='Emphasis'] => em",
+              "table => table",
+              "p => p",
+              "br => br"
+            ]
           }
         });
-      }
 
-      try {
-        console.log('Intentando decodificar el documento base64...');
-        const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
-        console.log('Documento decodificado exitosamente:', {
-          bufferLength: originalDocBuffer.length,
-          bufferSample: originalDocBuffer.slice(0, 20).toString('hex')
-        });
-
-        console.log('Iniciando merge con datos:', {
-          documentName: doc.name,
-          entryValues: entry.values
-        });
-
-        const mergedBuffer = await createReport({
-          template: originalDocBuffer,
-          data: entry.values || {},
-          cmdDelimiter: ['{{', '}}'],
-          failFast: false,
-          rejectNullish: false,
-          fixSmartQuotes: true,
-          processLineBreaks: true
-        });
-
-        console.log('Merge completado exitosamente');
-
-        if (isDownload) {
-          // Usar el nombre original del documento con la extensión
-          const fileName = doc.name.toLowerCase().endsWith('.docx') ? 
-            doc.name : 
-            `${doc.name}.docx`;
-
-          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-          res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-          return res.send(mergedBuffer);
-        } else {
-          const result = await mammoth.convertToHtml({
-            buffer: mergedBuffer,
-            options: {
-              styleMap: [
-                "p[style-name='Heading 1'] => h1:fresh",
-                "p[style-name='Heading 2'] => h2:fresh",
-                "p[style-name='Heading 3'] => h3:fresh",
-                "r[style-name='Strong'] => strong",
-                "r[style-name='Emphasis'] => em",
-                "table => table",
-                "p => p",
-                "br => br"
-              ]
-            }
-          });
-
-          return res.json({ 
-            result: `<div class="document-preview">${result.value}</div>` 
-          });
-        }
-      } catch (error: any) {
-        console.error('Error en el procesamiento del merge:', {
-          error: error.message,
-          stack: error.stack,
-          documentName: doc.name,
-          documentId: doc.id,
-          originalDocLength: doc.originalDocument?.length || 0
-        });
-        return res.status(500).json({
-          error: `Error procesando el documento: ${error.message}`,
-          details: {
-            documentId,
-            documentName: doc.name,
-            hasOriginal: !!doc.originalDocument,
-            originalLength: doc.originalDocument?.length || 0
-          }
+        return res.json({ 
+          result: `<div class="document-preview">${result.value}</div>` 
         });
       }
     } catch (error: any) {
-      console.error('Error general en operación de merge:', {
-        error: error.message,
-        stack: error.stack,
-        documentId,
-        formId,
-        entryId
-      });
+      console.error('Error en el procesamiento del merge:', error);
       return res.status(500).json({
-        error: "Error al procesar la solicitud de merge",
-        details: error.message
+        error: `Error procesando el documento: ${error.message}`
       });
     }
   });
