@@ -76,7 +76,7 @@ export default function FormEntries() {
     enabled: !!id,
   });
 
-  const { data: entries } = useQuery({
+  const { data: entries = [] } = useQuery({
     queryKey: [`/api/forms/${id}/entries`],
     enabled: !!id,
   });
@@ -93,6 +93,10 @@ export default function FormEntries() {
       const res = await apiRequest("POST", `/api/forms/${id}/entries`, {
         values,
       });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al crear la entrada");
+      }
       return res.json();
     },
     onSuccess: (data) => {
@@ -100,11 +104,18 @@ export default function FormEntries() {
       setCurrentEntryId(data.id);
       setFormValues({}); // Clear form after successful creation
       toast({
-        title: "Success",
-        description: "Entry added successfully",
+        title: "Éxito",
+        description: "Entrada agregada correctamente",
       });
       // Trigger confetti celebration
       triggerConfetti();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo crear la entrada",
+        variant: "destructive",
+      });
     },
   });
 
