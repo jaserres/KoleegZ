@@ -15,35 +15,6 @@ export default function HomePage() {
     queryKey: ["/api/forms"]
   });
 
-  const createFormMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/forms", {
-        name: "Nuevo Formulario"
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/forms"] });
-      toast({
-        title: "Éxito",
-        description: "Formulario creado correctamente",
-        variant: "success",
-      });
-    },
-    onError: (error: Error) => {
-      console.error("Error al crear formulario:", error);
-      toast({
-        title: "¡Ups! Algo salió mal",
-        description: error.message || "No se pudo crear el formulario",
-        variant: "destructive",
-      });
-    },
-  });
-
   const deleteFormMutation = useMutation({
     mutationFn: async (formId: number) => {
       try {
@@ -63,7 +34,6 @@ export default function HomePage() {
       toast({
         title: "Éxito",
         description: "Formulario eliminado correctamente",
-        variant: "success",
       });
     },
     onError: (error: Error) => {
@@ -95,17 +65,12 @@ export default function HomePage() {
             {user?.isPremium ? "Cuenta premium" : "Cuenta gratuita"}
           </p>
         </div>
-        <Button 
-          onClick={() => createFormMutation.mutate()}
-          disabled={createFormMutation.isPending}
-        >
-          {createFormMutation.isPending ? (
-            <Spinner className="mr-2" />
-          ) : (
+        <Link href="/forms/new">
+          <Button>
             <Plus className="mr-2 h-4 w-4" />
-          )}
-          Nuevo Formulario
-        </Button>
+            Nuevo Formulario
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
