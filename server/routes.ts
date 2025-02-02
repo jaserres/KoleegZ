@@ -107,6 +107,33 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Agregar la ruta para obtener un formulario específico
+  app.get("/api/forms/:formId", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
+
+      const form = await db.query.forms.findFirst({
+        where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
+        with: {
+          variables: true
+        }
+      });
+
+      if (!form) {
+        return res.status(404).json({ error: "Form not found" });
+      }
+
+      return res.json(form);
+    } catch (error: any) {
+      console.error('Error fetching form:', error);
+      return res.status(500).json({
+        error: "Error al obtener el formulario",
+        details: error.message
+      });
+    }
+  });
+
   // Add toggle premium route at the top level
   app.post("/api/toggle-premium", async (req, res) => {
     try {
