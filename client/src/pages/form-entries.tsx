@@ -351,7 +351,6 @@ export default function FormEntries() {
       }
     };
 
-
   const handleCreateDocument = async () => {
     if (!documentName || !documentTemplate) {
       toast({
