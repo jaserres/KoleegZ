@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText, Trash2, Wand2, Save } from "lucide-react";
+import { ArrowLeft, Plus, FileText, Wand2, Save } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Trash2 } from "lucide-react";
 
 export default function FormEntries() {
   const { id } = useParams();
@@ -53,6 +54,10 @@ export default function FormEntries() {
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
+  
+    const user = {
+    isPremium: true,
+  };
 
   const { saving } = useAutoSave(
     currentEntryId ? `/api/forms/${id}/entries/${currentEntryId}` : null,
@@ -188,13 +193,12 @@ export default function FormEntries() {
     const extractVariables = (template: string) => {
       const variableRegex = /{{([^}]+)}}/g;
       const matches = template.match(variableRegex) || [];
-      const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
+      const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
       const invalidVariables: string[] = [];
       const validVariables = new Set<string>();
 
       matches.forEach(match => {
         const varName = match.slice(2, -2).trim();
-        // Convertir espacios y guiones a guiones bajos
         const normalizedName = varName
           .replace(/[\s-]+/g, '_')
           .replace(/[^a-zA-Z0-9_]/g, '');
@@ -220,20 +224,9 @@ export default function FormEntries() {
         label: varName
           .split('_')
           .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' '), // Convert snake_case to Title Case
-        type: 'text' // Default type
+          .join(' '),
+        type: 'text'
       }));
-
-      // Check variable limit
-      const variableLimit = user?.isPremium ? 50 : 10;
-      if (variables.length > variableLimit) {
-        const excess = variables.length - variableLimit;
-        toast({
-          title: "Demasiadas variables detectadas",
-          description: `El documento tiene ${variables.length} variables, pero su plan ${user?.isPremium ? 'premium' : 'gratuito'} permite hasta ${variableLimit}. Necesita eliminar ${excess} variable${excess > 1 ? 's' : ''} o actualizar a premium.`,
-          variant: "destructive"
-        });
-      }
 
       return variables;
     };
@@ -359,6 +352,19 @@ export default function FormEntries() {
     setLocation("/forms/new");
   };
 
+  const variableLimit = user?.isPremium ? 50 : 10;
+  
+  const removeExcessVariables = () => {
+    const excess = detectedVariables.length - variableLimit;
+    if (excess > 0) {
+      setDetectedVariables(detectedVariables.slice(0, variableLimit));
+      toast({
+        title: "Variables eliminadas",
+        description: `Se han eliminado ${excess} variables para cumplir con el límite del plan.`,
+      });
+    }
+  };
+
 
   return (
     <div className="container mx-auto py-8">
@@ -461,6 +467,23 @@ export default function FormEntries() {
                       <DialogTitle>Crear Nueva Plantilla</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
+                       {detectedVariables.length > variableLimit && (
+                        <Alert>
+                          <AlertDescription className="flex items-center justify-between">
+                            <span>
+                              Su plantilla tiene {detectedVariables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
+                              Necesita eliminar {detectedVariables.length - variableLimit} variable(s).
+                            </span>
+                            <Button
+                              variant="outline"
+                              onClick={removeExcessVariables}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Eliminar variables excedentes
+                            </Button>
+                          </AlertDescription>
+                        </Alert>
+                      )}
                       <div>
                         <Label>Nombre de la Plantilla</Label>
                         <Input

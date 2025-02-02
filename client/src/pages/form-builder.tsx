@@ -19,6 +19,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formTemplates } from "@/lib/form-templates";
 import type { SelectVariable } from "@db/schema";
 import { ThemeSelector } from "@/components/theme-selector";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Trash2 } from "lucide-react";
 
 export default function FormBuilder() {
   const { id } = useParams();
@@ -160,7 +162,7 @@ export default function FormBuilder() {
     }
   });
 
-  const extractVariables = (template: string) => {
+    const extractVariables = (template: string) => {
     const variableRegex = /{{([^}]+)}}/g;
     const matches = template.match(variableRegex) || [];
     const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
@@ -199,17 +201,6 @@ export default function FormBuilder() {
       type: 'text' // Default type
     }));
 
-    // Check variable limit
-    const variableLimit = user?.isPremium ? 50 : 10;
-    if (variables.length > variableLimit) {
-      const excess = variables.length - variableLimit;
-      toast({
-        title: "Demasiadas variables detectadas",
-        description: `El documento tiene ${variables.length} variables, pero su plan ${user?.isPremium ? 'premium' : 'gratuito'} permite hasta ${variableLimit}. Necesita eliminar ${excess} variable${excess > 1 ? 's' : ''} o actualizar a premium.`,
-        variant: "destructive"
-      });
-    }
-
     return variables;
   };
 
@@ -239,23 +230,19 @@ export default function FormBuilder() {
           toast({
             title: "No se encontraron variables válidas",
             description: "La plantilla no contiene variables válidas en formato {{nombreVariable}}. Las variables deben contener solo letras y números, y comenzar con una letra.",
-            variant: "destructive"
+             variant: "destructive"
           });
           return;
         }
 
-        // Only proceed if we're within limits
-        const variableLimit = user?.isPremium ? 50 : 10;
-        if (detectedVariables.length <= variableLimit) {
-          setFormName(file.name.split('.')[0]);
-          setVariables(detectedVariables);
-          setShowEditor(true);
+        setFormName(file.name.split('.')[0]);
+        setVariables(detectedVariables);
+        setShowEditor(true);
 
-          toast({
-            title: "Plantilla cargada",
-            description: `Se detectaron ${detectedVariables.length} variables válidas en la plantilla`,
-          });
-        }
+        toast({
+          title: "Plantilla cargada",
+          description: `Se detectaron ${detectedVariables.length} variables válidas en la plantilla`,
+        });
       } catch (error) {
         toast({
           title: "Error al cargar archivo",
@@ -266,12 +253,40 @@ export default function FormBuilder() {
     }
   };
 
+  const removeExcessVariables = () => {
+    const excess = variables.length - variableLimit;
+    if (excess > 0) {
+      setVariables(variables.slice(0, variableLimit));
+      toast({
+        title: "Variables eliminadas",
+        description: `Se han eliminado ${excess} variables para cumplir con el límite del plan.`,
+      });
+    }
+  };
+
   const renderFormEditor = () => (
     <Card>
       <CardHeader>
         <CardTitle>Configurar Formulario</CardTitle>
       </CardHeader>
       <CardContent className="space-y-8">
+        {variables.length > variableLimit && (
+          <Alert>
+            <AlertDescription className="flex items-center justify-between">
+              <span>
+                Su formulario tiene {variables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
+                Necesita eliminar {variables.length - variableLimit} variable(s).
+              </span>
+              <Button
+                variant="outline"
+                onClick={removeExcessVariables}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Eliminar variables excedentes
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
         <div>
           <Label htmlFor="formName">Nombre del Formulario</Label>
           <Input
