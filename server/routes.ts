@@ -110,6 +110,48 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Agregar la ruta para crear documentos
+  app.post("/api/forms/:formId/documents", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
+      const { name, template } = req.body;
+
+      // Verificar que el formulario pertenece al usuario
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+      if (!form) {
+        return res.status(404).json({ error: "Formulario no encontrado" });
+      }
+
+      // Guardar el documento
+      const fileName = `${form.id}_${Date.now()}.docx`;
+      const filePath = fileName;
+
+      // Guardar el contenido del template
+      await saveFile(filePath, Buffer.from(template));
+
+      // Crear el registro del documento en la base de datos
+      const [document] = await db.insert(documents)
+        .values({
+          formId: form.id,
+          name,
+          filePath,
+        })
+        .returning();
+
+      return res.json(document);
+    } catch (error: any) {
+      console.error('Error al crear documento:', error);
+      return res.status(500).json({
+        error: "Error al crear el documento",
+        details: error.message
+      });
+    }
+  });
+
   // Add document preview download route
   app.get("/api/forms/:formId/documents/preview/download", async (req, res) => {
     try {

@@ -102,27 +102,30 @@ export default function FormBuilder() {
 
       const res = await apiRequest("POST", "/api/forms", {
         name: formName,
-        theme: formTheme
+        theme: formTheme,
+        variables: variables // Enviamos las variables junto con el formulario
       });
+
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al crear el formulario");
+      }
+
       const form = await res.json();
 
-      // Create variables
-      try {
-        for (const variable of variables) {
-          await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
-        }
+      // Si hay una plantilla cargada, crear el documento
+      if (templateContent) {
+        const docRes = await apiRequest("POST", `/api/forms/${form.id}/documents`, {
+          name: formName,
+          template: templateContent,
+        });
 
-        // Si hay una plantilla cargada, crear el documento
-        if (templateContent) {
-          await apiRequest("POST", `/api/forms/${form.id}/documents`, {
-            name: formName,
-            template: templateContent,
-          });
+        if (!docRes.ok) {
+          // Si falla la creación del documento, eliminar el formulario
+          await apiRequest("DELETE", `/api/forms/${form.id}`);
+          const error = await docRes.text();
+          throw new Error(error || "Error al crear el documento");
         }
-      } catch (error) {
-        // If variable or document creation fails, delete the form to maintain consistency
-        await apiRequest("DELETE", `/api/forms/${form.id}`);
-        throw error;
       }
 
       return form;
