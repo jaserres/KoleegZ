@@ -36,6 +36,8 @@ import {
 import { Download, Upload, FileDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function FormEntries() {
   const { id } = useParams();
@@ -284,12 +286,23 @@ export default function FormEntries() {
     setCurrentEntryId(null);
     setFormValues({});
   };
-
+  
   const handleCreateFormFromTemplate = () => {
     if (detectedVariables.length === 0) {
       toast({
         title: "Error",
         description: "No se detectaron variables en la plantilla",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if number of variables exceeds limit
+    const variableLimit = user?.isPremium ? 50 : 10;
+    if (detectedVariables.length > variableLimit) {
+      toast({
+        title: "Límite de variables excedido",
+        description: `Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario. Actualiza a premium para aumentar este límite.`,
         variant: "destructive"
       });
       return;
@@ -594,7 +607,6 @@ export default function FormEntries() {
                                                           })
                                                         }
                                                       );
-
                                                       if (!response.ok) {
                                                         throw new Error('Error al descargar el documento');
                                                       }
