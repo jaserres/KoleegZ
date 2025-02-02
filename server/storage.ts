@@ -8,10 +8,15 @@ const STORAGE_DIR = path.join(process.cwd(), 'storage', 'documents');
 // Asegurar que el directorio existe
 async function ensureStorageDir() {
   try {
-    await fs.mkdir(STORAGE_DIR, { recursive: true });
-  } catch (error) {
-    console.error('Error creating storage directory:', error);
-    throw error;
+    await fs.access(STORAGE_DIR);
+  } catch {
+    try {
+      await fs.mkdir(STORAGE_DIR, { recursive: true });
+      console.log(`Storage directory created at ${STORAGE_DIR}`);
+    } catch (error) {
+      console.error('Error creating storage directory:', error);
+      throw error;
+    }
   }
 }
 
@@ -30,8 +35,8 @@ export async function saveFile(originalName: string, buffer: Buffer): Promise<st
   const filePath = path.join(STORAGE_DIR, fileName);
 
   try {
-    // Escribir el archivo en modo binario
     await fs.writeFile(filePath, buffer);
+    console.log(`File saved successfully at ${filePath}`);
     return fileName;
   } catch (error) {
     console.error('Error saving file:', error);
@@ -43,7 +48,11 @@ export async function saveFile(originalName: string, buffer: Buffer): Promise<st
 export async function readFile(fileName: string): Promise<Buffer> {
   const filePath = path.join(STORAGE_DIR, fileName);
   try {
-    // Leer el archivo en modo binario
+    console.log(`Attempting to read file from ${filePath}`);
+    const exists = await fs.access(filePath).then(() => true).catch(() => false);
+    if (!exists) {
+      throw new Error(`File not found at ${filePath}`);
+    }
     return await fs.readFile(filePath);
   } catch (error) {
     console.error('Error reading file:', error);
@@ -55,9 +64,18 @@ export async function readFile(fileName: string): Promise<Buffer> {
 export async function deleteFile(fileName: string): Promise<void> {
   const filePath = path.join(STORAGE_DIR, fileName);
   try {
+    const exists = await fs.access(filePath).then(() => true).catch(() => false);
+    if (!exists) {
+      console.log(`File ${filePath} already deleted or doesn't exist`);
+      return;
+    }
     await fs.unlink(filePath);
+    console.log(`File deleted successfully: ${filePath}`);
   } catch (error) {
     console.error('Error deleting file:', error);
     throw error;
   }
 }
+
+// Inicializar el directorio de almacenamiento al importar el módulo
+ensureStorageDir().catch(console.error);

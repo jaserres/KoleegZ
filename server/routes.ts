@@ -262,31 +262,50 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ error: "Formulario no encontrado" });
       }
   
+      console.log('Creating document for form:', { formId, name, hasOriginalFile: !!originalFile });
+  
       // Generar nombre de archivo único
       const fileName = `${form.id}_${Date.now()}.docx`;
   
-      // Si hay un archivo original, copiarlo al nuevo nombre con el orden correcto de parámetros
-      if (originalFile) {
-        const originalContent = await readFile(originalFile);
-        await saveFile(fileName, originalContent);
-        // Limpiar el archivo temporal original
-        await deleteFile(originalFile);
+      try {
+        // Si hay un archivo original, copiarlo al nuevo nombre
+        if (originalFile) {
+          console.log('Attempting to copy original file:', originalFile);
+          const originalContent = await readFile(originalFile);
+          await saveFile(fileName, originalContent);
+          console.log('Original file copied successfully to:', fileName);
+  
+          // Limpiar el archivo temporal original
+          try {
+            await deleteFile(originalFile);
+            console.log('Temporary file cleaned up:', originalFile);
+          } catch (cleanupError) {
+            console.error('Error cleaning up temporary file:', cleanupError);
+            // Continue even if cleanup fails
+          }
+        }
+  
+        // Crear el registro del documento en la base de datos
+        const [document] = await db.insert(documents)
+          .values({
+            formId: form.id,
+            name,
+            template,
+            filePath: fileName,
+            mimeType: originalMimeType || 'text/plain'
+          })
+          .returning();
+  
+        console.log('Document record created:', document);
+        return res.json(document);
+  
+      } catch (fileError) {
+        console.error('Error handling document file:', fileError);
+        throw new Error(`Error processing document file: ${fileError.message}`);
       }
   
-      // Crear el registro del documento en la base de datos
-      const [document] = await db.insert(documents)
-        .values({
-          formId: form.id,
-          name,
-          template,
-          filePath: fileName,
-          mimeType: originalMimeType || 'text/plain'
-        })
-        .returning();
-  
-      return res.json(document);
     } catch (error: any) {
-      console.error('Error al crear documento:', error);
+      console.error('Error creating document:', error);
       return res.status(500).json({
         error: "Error al crear el documento",
         details: error.message
