@@ -298,15 +298,16 @@ export function registerRoutes(app: Express): Server {
       return res.status(404).send("Form not found");
     }
 
-    await db.update(forms)
+    const [updatedForm] = await db.update(forms)
       .set({ 
         name: req.body.name,
         theme: req.body.theme || form.theme,
         updatedAt: new Date()
       })
-      .where(eq(forms.id, formId));
+      .where(eq(forms.id, formId))
+      .returning();
 
-    res.sendStatus(200);
+    res.json(updatedForm);
   });
   
   app.patch("/api/forms/:formId/variables/:variableId", async (req, res) => {
