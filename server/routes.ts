@@ -352,36 +352,54 @@ export function registerRoutes(app: Express): Server {
   });
 
   app.post("/api/forms/:formId/documents", async (req, res) => {
-    const user = ensureAuth(req);
-    const formId = parseInt(req.params.formId);
+    try {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
 
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+      // Verify ownership
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-    if (!form) {
-      return res.status(404).send("Form not found");
+      if (!form) {
+        return res.status(404).send("Form not found");
+      }
+
+      // Crear un nuevo documento DOCX usando docx-templates
+      const template = await createReport({
+        template: Buffer.from(''),  // Empty template
+        data: {},
+        cmdDelimiter: ['{{', '}}'],
+        failFast: false,
+        rejectNullish: false,
+        fixSmartQuotes: true,
+        processLineBreaks: true
+      });
+
+      // Guardar el archivo DOCX
+      const fileName = `template-${Date.now()}.docx`;
+      const filePath = await saveFile(template, fileName);
+
+      const preview = generatePreview(req.body.template);
+
+      const [doc] = await db.insert(documents)
+        .values({
+          formId,
+          name: req.body.name,
+          template: req.body.template,
+          preview,
+          filePath,
+        })
+        .returning();
+
+      res.status(201).json(doc);
+    } catch (error: any) {
+      console.error('Error creating document:', error);
+      res.status(500).json({
+        error: `Error creating document: ${error.message}`,
+        details: error.stack
+      });
     }
-
-    // Si no hay archivo, crear un archivo temporal con el contenido del template
-    const buffer = Buffer.from(req.body.template, 'utf-8');
-    const fileName = `template-${Date.now()}.docx`; // Cambiar extensión a .docx
-    const filePath = await saveFile(buffer, fileName);
-
-    const preview = generatePreview(req.body.template);
-
-    const [doc] = await db.insert(documents)
-      .values({
-        formId,
-        name: req.body.name,
-        template: req.body.template,
-        preview,
-        filePath,
-      })
-      .returning();
-
-    res.status(201).json(doc);
   });
 
   app.get("/api/forms/:formId/documents", async (req, res) => {
