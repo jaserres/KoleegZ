@@ -39,8 +39,41 @@ function ensureAuth(req: Request) {
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
-  // Rutas existentes permanecen igual...
+  // Add toggle premium route at the top level
+  app.post("/api/toggle-premium", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
 
+      // Update the user's premium status in the database
+      const [updatedUser] = await db.update(users)
+        .set({ isPremium: !user.isPremium })
+        .where(eq(users.id, user.id))
+        .returning();
+
+      if (!updatedUser) {
+        return res.status(500).json({ error: "Failed to update user status" });
+      }
+
+      // Update the session user object
+      if (req.user) {
+        req.user.isPremium = updatedUser.isPremium;
+      }
+
+      return res.json({ 
+        success: true, 
+        isPremium: updatedUser.isPremium 
+      });
+
+    } catch (error: any) {
+      console.error('Error toggling premium status:', error);
+      return res.status(500).json({ 
+        error: "Error updating premium status",
+        details: error.message 
+      });
+    }
+  });
+
+  // Rutas existentes permanecen igual...
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
