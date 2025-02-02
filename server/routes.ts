@@ -166,57 +166,72 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Add document upload route
   app.post("/api/forms/temp/documents/upload", upload.single('file'), async (req, res) => {
     try {
       console.log('Processing document upload request');
-  
+
       if (!req.file) {
         return res.status(400).json({ error: "No se ha proporcionado ningún archivo" });
       }
-  
+
       console.log('File received:', {
         originalname: req.file.originalname,
         mimetype: req.file.mimetype,
-        size: req.file.size
+        size: req.file.size,
+        buffer: req.file.buffer ? 'Buffer present' : 'No buffer'
       });
-  
-      // Generate a unique filename for the original document
+
+      // Validate MIME type
+      const allowedMimeTypes = {
+        'text/plain': '.txt',
+        'application/msword': '.doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx'
+      };
+
+      if (!allowedMimeTypes[req.file.mimetype]) {
+        return res.status(400).json({ 
+          error: "Tipo de archivo no permitido",
+          details: `Solo se permiten archivos: ${Object.values(allowedMimeTypes).join(', ')}`
+        });
+      }
+
+      // Generate a unique filename preserving the original extension
+      const fileExtension = allowedMimeTypes[req.file.mimetype];
       const originalFileName = `temp_${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       console.log('Generated original filename:', originalFileName);
-  
+
       try {
         // Save the original file
         await saveFile(originalFileName, req.file.buffer);
         console.log('Original file saved successfully');
       } catch (saveError) {
         console.error('Error saving original file:', saveError);
-        throw saveError;
+        throw new Error(`Error al guardar el archivo original: ${saveError.message}`);
       }
-  
+
       let template: string;
       let preview: string;
-  
+
       if (req.file.mimetype === 'text/plain') {
-        // Para archivos de texto plano, usar el contenido directamente
+        console.log('Processing text file');
         template = req.file.buffer.toString('utf-8')
           .replace(/\0/g, '')
           .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
         preview = template;
       } else {
+        console.log('Processing DOCX file');
         try {
           // Para archivos DOCX, extraer texto solo para la vista previa
           const result = await mammoth.extractRawText({ buffer: req.file.buffer });
           preview = result.value;
-          // Para DOCX, usar una plantilla vacía ya que mantendremos el archivo original
-          template = preview;
-          console.log('Document preview extracted successfully');
+          template = preview; // Guardamos el texto extraído como plantilla
+          console.log('DOCX preview extracted successfully');
         } catch (extractError) {
-          console.error('Error extracting preview from document:', extractError);
-          throw extractError;
+          console.error('Error extracting preview from DOCX:', extractError);
+          throw new Error(`Error al procesar el archivo DOCX: ${extractError.message}`);
         }
       }
-  
+
       const response = {
         name: req.file.originalname.split('.')[0],
         template,
@@ -224,17 +239,17 @@ export function registerRoutes(app: Express): Server {
         originalFile: originalFileName,
         originalMimeType: req.file.mimetype
       };
-  
+
       console.log('Sending response:', {
         name: response.name,
-        hasTemplate: !!response.template,
-        hasPreview: !!response.preview,
-        hasOriginalFile: !!response.originalFile,
+        templateLength: response.template?.length,
+        previewLength: response.preview?.length,
+        originalFile: response.originalFile,
         mimeType: response.originalMimeType
       });
-  
+
       return res.json(response);
-  
+
     } catch (error: any) {
       console.error('Error processing document:', error);
       return res.status(500).json({
