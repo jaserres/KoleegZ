@@ -803,7 +803,7 @@ export default function FormEntries() {
                                 {mergedResult && (
                                   <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                      <Label>Preview</Label>
+                                      <Label>Vista Previa</Label>
                                       {selectedTemplate && (
                                          <Button
                                           variant="outline"
@@ -811,14 +811,18 @@ export default function FormEntries() {
                                           onClick={() => handleDownloadMerge(selectedTemplate.id, selectedEntry)}
                                         >
                                           <FileDown className="mr-2 h-4 w-4" />
-                                          Download
+                                          Descargar
                                         </Button>
                                       )}
                                     </div>
-                                    <Textarea
-                                      value={mergedResult}
-                                      readOnly
-                                      className="h-40"
+                                    <div 
+                                      className="p-4 border rounded-md bg-white"
+                                      style={{ 
+                                        minHeight: "200px",
+                                        maxHeight: "400px",
+                                        overflowY: "auto"
+                                      }}
+                                      dangerouslySetInnerHTML={{ __html: mergedResult }}
                                     />
                                   </div>
                                 )}

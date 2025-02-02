@@ -232,55 +232,61 @@ export function registerRoutes(app: Express): Server {
       const user = ensureAuth(req);
       const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
       const file = req.file;
-  
+
       if (!file) {
         return res.status(400).send("No se ha proporcionado ningún archivo");
       }
-  
+
       // Solo verificar propiedad del formulario si no es una carga temporal
       if (formId !== null) {
         const [form] = await db.select()
           .from(forms)
           .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-  
+
         if (!form) {
           return res.status(404).send("Form not found");
         }
       }
-  
-      // Procesar el archivo .docx usando mammoth solo para extraer el texto para preview
-      let previewText;
+
+      // Procesar el archivo .docx usando mammoth para obtener HTML y texto
+      let previewHtml = '';
+      let previewText = '';
       try {
         const mammoth = require('mammoth');
-        const result = await mammoth.extractRawText({ buffer: file.buffer });
-        previewText = result.value;
+        const results = await Promise.all([
+          mammoth.convertToHtml({ buffer: file.buffer }),
+          mammoth.extractRawText({ buffer: file.buffer })
+        ]);
+        previewHtml = results[0].value;
+        previewText = results[1].value;
       } catch (error) {
         console.error('Error processing document:', error);
         return res.status(400).send("Error al procesar el documento");
       }
-  
-      const preview = generatePreview(previewText);
-  
+
+      // Guardar el buffer original como base64
+      const originalDocBase64 = file.buffer.toString('base64');
+
       // Si es una carga temporal, solo devolver el contenido
       if (formId === null) {
         return res.status(200).json({
           name: file.originalname.replace(/\.[^/.]+$/, ""),
           template: previewText,
-          preview
+          preview: previewHtml
         });
       }
-  
-      // Guardar el buffer original del documento
+
+      // Guardar en la base de datos
       const [doc] = await db.insert(documents)
         .values({
           formId,
           name: file.originalname.replace(/\.[^/.]+$/, ""),
           template: previewText,
-          preview,
-          originalDocument: file.buffer // Añadir el buffer original
+          preview: previewHtml,
+          originalDocument: originalDocBase64
         })
         .returning();
-  
+
       res.status(201).json(doc);
     } catch (error) {
       console.error('Error in document upload:', error);
@@ -457,12 +463,12 @@ export function registerRoutes(app: Express): Server {
 
       if (isDownload) {
         try {
-          // Obtener el documento original de la base de datos
-          const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
-
-          if (!originalDocBuffer) {
+          if (!doc.originalDocument) {
             throw new Error('No se encontró el documento original');
           }
+
+          // Convertir el documento original de base64 a Buffer
+          const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
 
           // Usar docx-templates para realizar el merge manteniendo el formato
           const buffer = await createReport({
@@ -481,13 +487,25 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Para preview, usar el texto plano
-      let result = doc.template;
-      for (const [key, value] of Object.entries(entry.values as Record<string, string>)) {
-        result = result.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
-      }
+      // Para preview, realizar el merge y convertir a HTML
+      try {
+        const mammoth = require('mammoth');
+        const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
 
-      res.json({ result });
+        // Realizar el merge primero
+        const mergedBuffer = await createReport({
+          template: originalDocBuffer,
+          data: entry.values,
+        });
+
+        // Convertir el resultado a HTML para mantener el formato
+        const result = await mammoth.convertToHtml({ buffer: mergedBuffer });
+
+        res.json({ result: result.value });
+      } catch (error) {
+        console.error('Error generating preview:', error);
+        res.status(500).send("Error al generar la vista previa");
+      }
     } catch (error) {
       console.error('Error in merge operation:', error);
       res.status(500).send("Error processing merge request");
