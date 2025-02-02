@@ -21,6 +21,15 @@ import type { SelectVariable } from "@db/schema";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Trash2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function FormBuilder() {
   const { id } = useParams();
@@ -33,6 +42,12 @@ export default function FormBuilder() {
     primary: "#64748b",
     variant: "default",
   });
+  const [previewContent, setPreviewContent] = useState<{
+    name: string;
+    template: string;
+    preview: string;
+    variables: Array<Partial<SelectVariable>>;
+  } | null>(null);
 
   const variableLimit = user?.isPremium ? 50 : 10;
 
@@ -85,7 +100,7 @@ export default function FormBuilder() {
         throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
       }
 
-      const res = await apiRequest("POST", "/api/forms", { 
+      const res = await apiRequest("POST", "/api/forms", {
         name: formName,
         theme: formTheme
       });
@@ -116,7 +131,7 @@ export default function FormBuilder() {
       queryClient.invalidateQueries({ queryKey: ["/api/forms"] });
       toast({
         title: "Éxito",
-        description: templateContent 
+        description: templateContent
           ? "Formulario y plantilla creados exitosamente"
           : "Formulario creado exitosamente",
       });
@@ -141,9 +156,9 @@ export default function FormBuilder() {
       }
 
       // Update form name and theme
-      await apiRequest("PATCH", `/api/forms/${id}`, { 
+      await apiRequest("PATCH", `/api/forms/${id}`, {
         name: formName,
-        theme: formTheme 
+        theme: formTheme
       });
 
       // Update variables
@@ -217,7 +232,6 @@ export default function FormBuilder() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Verificar tipos de archivo permitidos
       const allowedTypes = [
         'text/plain',
         'application/msword',
@@ -236,13 +250,19 @@ export default function FormBuilder() {
       try {
         let text;
         if (file.type === 'text/plain') {
-          // Procesar archivo .txt
           const fileText = await file.text();
           text = fileText
             .replace(/\0/g, '')
             .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
+
+          const detectedVariables = extractVariables(text);
+          setPreviewContent({
+            name: file.name.split('.')[0],
+            template: text,
+            preview: generatePreview(text),
+            variables: detectedVariables
+          });
         } else {
-          // Para archivos .doc y .docx, usar FormData y el endpoint de upload
           const formData = new FormData();
           formData.append('file', file);
 
@@ -256,34 +276,14 @@ export default function FormBuilder() {
           }
 
           const result = await response.json();
-          text = result.template;
-
-          if (!id) {
-            // Si estamos creando un nuevo formulario, usar el nombre del archivo
-            setFormName(result.name);
-          }
-        }
-
-        setTemplateContent(text);
-        const detectedVariables = extractVariables(text);
-
-        if (detectedVariables.length === 0) {
-          toast({
-            title: "No se encontraron variables válidas",
-            description: "La plantilla no contiene variables válidas en formato {{nombreVariable}}. Las variables deben contener solo letras y números, y comenzar con una letra.",
-            variant: "destructive"
+          const detectedVariables = extractVariables(result.template);
+          setPreviewContent({
+            name: result.name,
+            template: result.template,
+            preview: result.preview,
+            variables: detectedVariables
           });
-          return;
         }
-
-        setFormName(file.name.split('.')[0]);
-        setVariables(detectedVariables);
-        setShowEditor(true);
-
-        toast({
-          title: "Plantilla cargada",
-          description: `Se detectaron ${detectedVariables.length} variables válidas en la plantilla`,
-        });
       } catch (error) {
         console.error('Error al cargar archivo:', error);
         toast({
@@ -294,6 +294,14 @@ export default function FormBuilder() {
       }
     }
   };
+
+  const generatePreview = (template: string) => {
+    const variableRegex = /{{([^}]+)}}/g;
+    return template.replace(variableRegex, (match, variable) => {
+      return `<span class='bg-yellow-100 px-1 rounded'>${match}</span>`;
+    });
+  };
+
 
   const removeExcessVariables = () => {
     const excess = variables.length - variableLimit;
@@ -465,61 +473,116 @@ export default function FormBuilder() {
     </Card>
   );
 
-  if (!id) {
-    return (
-      <div className="container mx-auto py-8">
-        <Button
-          variant="ghost"
-          className="mb-8"
-          onClick={() => setLocation("/")}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Volver a Formularios
-        </Button>
+  const PreviewDialog = () => {
+    if (!previewContent) return null;
 
-        <div className="space-y-8">
-          {!showEditor ? (
-            <>
-              <h1 className="text-3xl font-bold">Crear Nuevo Formulario</h1>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {formTemplates.map((template) => (
-                  <Card 
-                    key={template.name} 
+    return (
+      <Dialog open={!!previewContent} onOpenChange={() => setPreviewContent(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Vista Previa del Documento</DialogTitle>
+            <DialogDescription>
+              Revise el contenido y las variables detectadas antes de crear el formulario
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div>
+              <h3 className="font-medium mb-2">Contenido del Documento</h3>
+              <ScrollArea className="h-[300px] w-full rounded-md border p-4">
+                <pre className="whitespace-pre-wrap">{previewContent.preview}</pre>
+              </ScrollArea>
+            </div>
+            <div>
+              <h3 className="font-medium mb-2">Variables Detectadas ({previewContent.variables.length})</h3>
+              <div className="grid gap-2">
+                {previewContent.variables.map((variable, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <code className="bg-muted px-2 py-1 rounded">{'{{' + variable.name + '}}'}</code>
+                    <span className="text-muted-foreground">{variable.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewContent(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => {
+              setFormName(previewContent.name);
+              setVariables(previewContent.variables);
+              setTemplateContent(previewContent.template);
+              setShowEditor(true);
+              setPreviewContent(null);
+              toast({
+                title: "Plantilla cargada",
+                description: `Se detectaron ${previewContent.variables.length} variables válidas en la plantilla`,
+              });
+            }}>
+              Crear Formulario
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
+  return (
+    <div className="container mx-auto py-8">
+      <Button
+        variant="ghost"
+        className="mb-8"
+        onClick={() => setLocation("/")}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Volver a Formularios
+      </Button>
+
+      <div className="space-y-8">
+        {!id && (
+          <>
+            {!showEditor ? (
+              <>
+                <h1 className="text-3xl font-bold">Crear Nuevo Formulario</h1>
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {formTemplates.map((template) => (
+                    <Card
+                      key={template.name}
+                      className="cursor-pointer hover:bg-accent transition-colors"
+                      onClick={() => {
+                        setFormName(template.name);
+                        setVariables(template.variables);
+                        setShowEditor(true);
+                      }}
+                    >
+                      <CardHeader>
+                        <CardTitle>{template.name}</CardTitle>
+                        <CardDescription>{template.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground">
+                          {template.variables.length} variables predefinidas
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  <Card
                     className="cursor-pointer hover:bg-accent transition-colors"
                     onClick={() => {
-                      setFormName(template.name);
-                      setVariables(template.variables);
+                      setFormName("");
+                      setVariables([]);
                       setShowEditor(true);
                     }}
                   >
                     <CardHeader>
-                      <CardTitle>{template.name}</CardTitle>
-                      <CardDescription>{template.description}</CardDescription>
+                      <CardTitle>Formulario en Blanco</CardTitle>
+                      <CardDescription>Crear un formulario desde cero</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-muted-foreground">
-                        {template.variables.length} variables predefinidas
-                      </p>
+                      <Plus className="h-8 w-8 text-muted-foreground" />
                     </CardContent>
                   </Card>
-                ))}
-                <Card 
-                  className="cursor-pointer hover:bg-accent transition-colors"
-                  onClick={() => {
-                    setFormName("");
-                    setVariables([]);
-                    setShowEditor(true);
-                  }}
-                >
-                  <CardHeader>
-                    <CardTitle>Formulario en Blanco</CardTitle>
-                    <CardDescription>Crear un formulario desde cero</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Plus className="h-8 w-8 text-muted-foreground" />
-                  </CardContent>
-                </Card>
-                <Card className="cursor-pointer hover:bg-accent transition-colors">
+                  <Card className="cursor-pointer hover:bg-accent transition-colors">
                     <CardHeader>
                       <CardTitle>Cargar Plantilla</CardTitle>
                       <CardDescription>Crear formulario desde una plantilla de texto</CardDescription>
@@ -544,47 +607,35 @@ export default function FormBuilder() {
                       </div>
                     </CardContent>
                   </Card>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">
-                  {formName || "Nuevo Formulario"}
-                </h1>
-                <Button 
-                  variant="outline"
-                  onClick={() => {
-                    setShowEditor(false);
-                    setFormName("");
-                    setVariables([]);
-                    setTemplateContent("");
-                  }}
-                >
-                  Cambiar Plantilla
-                </Button>
-              </div>
-              {renderFormEditor()}
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between items-center">
+                  <h1 className="text-3xl font-bold">
+                    {formName || "Nuevo Formulario"}
+                  </h1>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setShowEditor(false);
+                      setFormName("");
+                      setVariables([]);
+                      setTemplateContent("");
+                      setPreviewContent(null);
+                    }}
+                  >
+                    Cambiar Plantilla
+                  </Button>
+                </div>
+                {renderFormEditor()}
+              </>
+            )}
+          </>
+        )}
 
-  return (
-    <div className="container mx-auto py-8">
-      <Button
-        variant="ghost"
-        className="mb-8"
-        onClick={() => setLocation("/")}
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Volver a Formularios
-      </Button>
-
-      <div className="space-y-8">
-        {renderFormEditor()}
+        {id && renderFormEditor()}
+        <PreviewDialog />
       </div>
     </div>
   );
