@@ -293,25 +293,35 @@ export function registerRoutes(app: Express): Server {
           });
         }
 
-        // Guardar en la base de datos con el documento original como Buffer
+        // Save the document with original binary content
         const docData = {
           formId,
           name: file.originalname.replace(/\.[^/.]+$/, ""),
           template: textResult.value,
           preview: htmlResult.value,
-          originalDocument: file.buffer
+          originalDocument: Buffer.from(file.buffer) // Ensure we're saving a copy of the buffer
         };
+
+        // Log before saving
+        console.log('Guardando documento:', {
+          name: docData.name,
+          templateLength: docData.template.length,
+          previewLength: docData.preview.length,
+          originalDocumentLength: docData.originalDocument.length,
+          isOriginalBuffer: Buffer.isBuffer(docData.originalDocument)
+        });
 
         const [doc] = await db.insert(documents)
           .values(docData)
           .returning();
 
-        // Log document saved
+        // Log after saving
         console.log('Documento guardado:', {
           id: doc.id,
           name: doc.name,
           hasOriginal: !!doc.originalDocument,
-          originalLength: doc.originalDocument ? doc.originalDocument.length : 0
+          originalLength: doc.originalDocument ? doc.originalDocument.length : 0,
+          isOriginalBuffer: Buffer.isBuffer(doc.originalDocument)
         });
 
         res.status(201).json(doc);
