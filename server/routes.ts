@@ -366,7 +366,7 @@ export function registerRoutes(app: Express): Server {
 
     // Si no hay archivo, crear un archivo temporal con el contenido del template
     const buffer = Buffer.from(req.body.template, 'utf-8');
-    const fileName = `template-${Date.now()}.txt`;
+    const fileName = `template-${Date.now()}.docx`; // Cambiar extensión a .docx
     const filePath = await saveFile(buffer, fileName);
 
     const preview = generatePreview(req.body.template);
@@ -377,7 +377,7 @@ export function registerRoutes(app: Express): Server {
         name: req.body.name,
         template: req.body.template,
         preview,
-        filePath, // Ahora siempre proporcionamos un filePath
+        filePath,
       })
       .returning();
 
