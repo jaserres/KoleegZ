@@ -39,8 +39,7 @@ export const documents = pgTable("documents", {
   name: text("name").notNull(),
   template: text("template").notNull(),
   preview: text("preview"),
-  // Mantener como BYTEA en PostgreSQL sin forzar una migración
-  originalDocument: text("original_document", { mode: "binary" }).notNull(),
+  originalDocument: text("original_document").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

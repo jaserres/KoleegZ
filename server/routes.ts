@@ -238,15 +238,19 @@ export function registerRoutes(app: Express): Server {
       const file = req.file;
   
       if (!file) {
-        return res.status(400).send("No se ha proporcionado ningún archivo");
+        console.error('No se proporcionó archivo');
+        return res.status(400).json({
+          error: "No se ha proporcionado ningún archivo"
+        });
       }
   
-      // Log file information
+      // Log detallado del archivo recibido
       console.log('Archivo recibido:', {
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
-        bufferLength: file.buffer.length
+        bufferLength: file.buffer.length,
+        bufferSample: file.buffer.slice(0, 20).toString('hex')
       });
   
       if (formId !== null) {
@@ -255,94 +259,122 @@ export function registerRoutes(app: Express): Server {
           .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
   
         if (!form) {
-          return res.status(404).send("Form not found");
-        }
-      }
-  
-      try {
-        if (!file.buffer || file.buffer.length === 0) {
-          throw new Error('El archivo está vacío o es inválido');
-        }
-  
-        // Convertir el documento a HTML para preview manteniendo el formato
-        const [htmlResult, textResult] = await Promise.all([
-          mammoth.convertToHtml({ 
-            buffer: file.buffer,
-            options: {
-              styleMap: [
-                "p[style-name='Heading 1'] => h1:fresh",
-                "p[style-name='Heading 2'] => h2:fresh",
-                "p[style-name='Heading 3'] => h3:fresh",
-                "r[style-name='Strong'] => strong",
-                "r[style-name='Emphasis'] => em",
-                "table => table",
-                "p => p",
-                "br => br"
-              ]
-            }
-          }),
-          mammoth.extractRawText({ buffer: file.buffer })
-        ]);
-  
-        // Si es una carga temporal, solo devolver el contenido
-        if (formId === null) {
-          return res.status(200).json({
-            name: file.originalname.replace(/\.[^/.]+$/, ""),
-            template: textResult.value,
-            preview: htmlResult.value
+          console.error('Formulario no encontrado:', { formId });
+          return res.status(404).json({
+            error: "Form not found",
+            formId
           });
         }
+      }
   
-        console.log('Preparando documento para guardar:', {
-          bufferType: typeof file.buffer,
-          isBuffer: Buffer.isBuffer(file.buffer),
-          bufferLength: file.buffer.length,
-          sample: file.buffer.slice(0, 20).toString('hex')
+      if (!file.buffer || file.buffer.length === 0) {
+        console.error('Archivo vacío o inválido:', {
+          bufferExists: !!file.buffer,
+          bufferLength: file.buffer?.length
         });
+        throw new Error('El archivo está vacío o es inválido');
+      }
   
-        // Save the document with original binary content
-        const docData = {
-          formId,
+      // Convertir el documento a HTML para preview manteniendo el formato
+      const [htmlResult, textResult] = await Promise.all([
+        mammoth.convertToHtml({ 
+          buffer: file.buffer,
+          options: {
+            styleMap: [
+              "p[style-name='Heading 1'] => h1:fresh",
+              "p[style-name='Heading 2'] => h2:fresh",
+              "p[style-name='Heading 3'] => h3:fresh",
+              "r[style-name='Strong'] => strong",
+              "r[style-name='Emphasis'] => em",
+              "table => table",
+              "p => p",
+              "br => br"
+            ]
+          }
+        }),
+        mammoth.extractRawText({ buffer: file.buffer })
+      ]);
+  
+      // Si es una carga temporal, solo devolver el contenido
+      if (formId === null) {
+        return res.status(200).json({
           name: file.originalname.replace(/\.[^/.]+$/, ""),
           template: textResult.value,
-          preview: htmlResult.value,
-          originalDocument: file.buffer
-        };
-  
-        // Log data before insert
-        console.log('Datos a insertar:', {
-          name: docData.name,
-          templateLength: docData.template.length,
-          previewLength: docData.preview.length,
-          originalDocumentType: typeof docData.originalDocument,
-          originalIsBuffer: Buffer.isBuffer(docData.originalDocument),
-          originalLength: docData.originalDocument.length
+          preview: htmlResult.value
         });
-  
-        // Insert document into database
-        const [doc] = await db.insert(documents)
-          .values(docData)
-          .returning();
-  
-        // Log after saving
-        console.log('Documento guardado:', {
-          id: doc.id,
-          name: doc.name,
-          hasOriginal: !!doc.originalDocument,
-          originalType: typeof doc.originalDocument,
-          originalIsBuffer: Buffer.isBuffer(doc.originalDocument),
-          originalLength: doc.originalDocument ? Buffer.from(doc.originalDocument).length : 0,
-          originalSample: doc.originalDocument ? Buffer.from(doc.originalDocument).slice(0, 20).toString('hex') : null
-        });
-  
-        res.status(201).json(doc);
-      } catch (error: any) {
-        console.error('Error processing document:', error);
-        return res.status(400).send(`Error al procesar el documento: ${error.message}`);
       }
+  
+      // Convertir el buffer a base64 de manera segura
+      const base64Content = file.buffer.toString('base64');
+      console.log('Contenido base64 generado:', {
+        length: base64Content.length,
+        sample: base64Content.substring(0, 100)
+      });
+  
+      // Preparar los datos del documento
+      const docData = {
+        formId,
+        name: file.originalname.replace(/\.[^/.]+$/, ""),
+        template: textResult.value,
+        preview: htmlResult.value,
+        originalDocument: base64Content
+      };
+  
+      // Log de los datos antes de la inserción
+      console.log('Datos a insertar:', {
+        name: docData.name,
+        templateLength: docData.template.length,
+        previewLength: docData.preview.length,
+        originalDocumentLength: docData.originalDocument.length,
+      });
+  
+      // Insertar el documento en la base de datos
+      const [doc] = await db.insert(documents)
+        .values(docData)
+        .returning();
+  
+      // Verificar inmediatamente si el documento se guardó
+      const [savedDoc] = await db.select()
+        .from(documents)
+        .where(eq(documents.id, doc.id));
+  
+      // Log detallado del documento guardado
+      console.log('Documento guardado:', {
+        id: savedDoc.id,
+        name: savedDoc.name,
+        hasOriginalDoc: !!savedDoc.originalDocument,
+        originalDocLength: savedDoc.originalDocument ? savedDoc.originalDocument.length : 0,
+        originalDocSample: savedDoc.originalDocument ? savedDoc.originalDocument.substring(0, 100) : null
+      });
+  
+      if (!savedDoc.originalDocument) {
+        throw new Error('El documento no se guardó correctamente en la base de datos');
+      }
+  
+      // Verificar que podemos decodificar el contenido guardado
+      try {
+        const decodedBuffer = Buffer.from(savedDoc.originalDocument, 'base64');
+        console.log('Verificación de decodificación:', {
+          decodedLength: decodedBuffer.length,
+          originalLength: file.buffer.length,
+          lengthsMatch: decodedBuffer.length === file.buffer.length
+        });
+      } catch (error) {
+        console.error('Error al decodificar el documento guardado:', error);
+        throw new Error('El documento guardado no se puede decodificar correctamente');
+      }
+  
+      res.status(201).json(doc);
     } catch (error: any) {
-      console.error('Error in document upload:', error);
-      res.status(500).send(`Error al subir el documento: ${error.message}`);
+      console.error('Error processing document:', {
+        error: error.message,
+        stack: error.stack,
+        fileName: file?.originalname
+      });
+      return res.status(400).json({
+        error: `Error al procesar el documento: ${error.message}`,
+        fileName: file?.originalname
+      });
     }
   });
   
@@ -499,19 +531,16 @@ export function registerRoutes(app: Express): Server {
         ));
 
       if (!doc) {
+        console.error('Documento no encontrado:', { documentId, formId });
         return res.status(404).send("Document not found");
       }
 
-      console.log('Documento encontrado:', {
-        id: doc.id,
-        formId: doc.formId,
-        name: doc.name,
-        hasOriginalDoc: !!doc.originalDocument,
-        originalDocType: typeof doc.originalDocument,
-        originalIsBuffer: Buffer.isBuffer(doc.originalDocument),
-        originalLength: doc.originalDocument ? Buffer.from(doc.originalDocument).length : 0,
-        originalSample: doc.originalDocument ? Buffer.from(doc.originalDocument).slice(0, 20).toString('hex') : null
-      });
+    console.log('Documento encontrado para merge:', {
+      id: doc.id,
+      name: doc.name,
+      hasOriginalDoc: !!doc.originalDocument,
+      originalDocLength: doc.originalDocument ? doc.originalDocument.length : 0
+    });
 
       const [entry] = await db.select()
         .from(entries)
@@ -521,34 +550,28 @@ export function registerRoutes(app: Express): Server {
         ));
 
       if (!entry) {
+        console.error('Entrada no encontrada:', { entryId, formId });
         return res.status(404).send("Entry not found");
       }
 
       if (!doc.originalDocument) {
-        console.error('No se encontró el documento original en la base de datos');
+        console.error('No se encontró el documento original en la base de datos', {
+          docId: doc.id,
+          docName: doc.name,
+          docFields: Object.keys(doc)
+        });
         return res.status(400).send("No se encontró el documento original");
       }
 
       try {
-        console.log('Processing document merge in DOCX format');
-        console.log('Original document info:', {
-          type: typeof doc.originalDocument,
-          isBuffer: Buffer.isBuffer(doc.originalDocument),
-          length: doc.originalDocument.length
-        });
-
-        // Asegurar que tenemos un Buffer válido
-        const originalDocBuffer = Buffer.isBuffer(doc.originalDocument)
-          ? doc.originalDocument
-          : Buffer.from(doc.originalDocument);
-
-        console.log('Buffer preparado:', {
-          isBuffer: Buffer.isBuffer(originalDocBuffer),
-          length: originalDocBuffer.length,
+        // Decodificar el documento base64
+        const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
+        console.log('Buffer preparado para merge:', {
+          decodedLength: originalDocBuffer.length,
           sample: originalDocBuffer.slice(0, 20).toString('hex')
         });
-
-        // Crear el documento fusionado manteniendo el formato DOCX
+  
+        // Crear el documento fusionado
         const mergedBuffer = await createReport({
           template: originalDocBuffer,
           data: entry.values || {},
@@ -587,12 +610,29 @@ export function registerRoutes(app: Express): Server {
           });
         }
       } catch (error: any) {
-        console.error('Error in document processing:', error);
-        return res.status(500).send(`Error procesando el documento: ${error.message}`);
+        console.error('Error en el procesamiento del merge:', error);
+        return res.status(500).json({
+            error: `Error procesando el documento: ${error.message}`,
+            details: {
+                documentId,
+                documentName: doc.name,
+                hasOriginal: !!doc.originalDocument,
+                originalType: typeof doc.originalDocument
+            }
+        });
       }
     } catch (error: any) {
-      console.error('Error in merge operation:', error);
-      res.status(500).send("Error al procesar la solicitud de merge");
+      console.error('Error in merge operation:', {
+        error: error.message,
+        stack: error.stack,
+        documentId,
+        formId,
+        entryId
+      });
+      return res.status(500).json({
+        error: "Error al procesar la solicitud de merge",
+        details: error.message
+      });
     }
   });
 
