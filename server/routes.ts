@@ -236,11 +236,11 @@ export function registerRoutes(app: Express): Server {
       const user = ensureAuth(req);
       const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
       const file = req.file;
-
+  
       if (!file) {
         return res.status(400).send("No se ha proporcionado ningún archivo");
       }
-
+  
       // Log file information
       console.log('Archivo recibido:', {
         originalname: file.originalname,
@@ -248,22 +248,22 @@ export function registerRoutes(app: Express): Server {
         size: file.size,
         bufferLength: file.buffer.length
       });
-
+  
       if (formId !== null) {
         const [form] = await db.select()
           .from(forms)
           .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
+  
         if (!form) {
           return res.status(404).send("Form not found");
         }
       }
-
+  
       try {
         if (!file.buffer || file.buffer.length === 0) {
           throw new Error('El archivo está vacío o es inválido');
         }
-
+  
         // Convertir el documento a HTML para preview manteniendo el formato
         const [htmlResult, textResult] = await Promise.all([
           mammoth.convertToHtml({ 
@@ -283,7 +283,7 @@ export function registerRoutes(app: Express): Server {
           }),
           mammoth.extractRawText({ buffer: file.buffer })
         ]);
-
+  
         // Si es una carga temporal, solo devolver el contenido
         if (formId === null) {
           return res.status(200).json({
@@ -292,40 +292,49 @@ export function registerRoutes(app: Express): Server {
             preview: htmlResult.value
           });
         }
-
+  
+        console.log('Preparando documento para guardar:', {
+          bufferType: typeof file.buffer,
+          isBuffer: Buffer.isBuffer(file.buffer),
+          bufferLength: file.buffer.length,
+          sample: file.buffer.slice(0, 20).toString('hex')
+        });
+  
         // Save the document with original binary content
         const docData = {
           formId,
           name: file.originalname.replace(/\.[^/.]+$/, ""),
           template: textResult.value,
           preview: htmlResult.value,
-          // Guardar el buffer directamente como BYTEA
           originalDocument: file.buffer
         };
-
-        // Log before saving
-        console.log('Guardando documento:', {
+  
+        // Log data before insert
+        console.log('Datos a insertar:', {
           name: docData.name,
           templateLength: docData.template.length,
           previewLength: docData.preview.length,
-          originalDocumentLength: docData.originalDocument.length,
-          isOriginalBuffer: Buffer.isBuffer(docData.originalDocument)
+          originalDocumentType: typeof docData.originalDocument,
+          originalIsBuffer: Buffer.isBuffer(docData.originalDocument),
+          originalLength: docData.originalDocument.length
         });
-
+  
         // Insert document into database
         const [doc] = await db.insert(documents)
           .values(docData)
           .returning();
-
+  
         // Log after saving
         console.log('Documento guardado:', {
           id: doc.id,
           name: doc.name,
           hasOriginal: !!doc.originalDocument,
+          originalType: typeof doc.originalDocument,
+          originalIsBuffer: Buffer.isBuffer(doc.originalDocument),
           originalLength: doc.originalDocument ? Buffer.from(doc.originalDocument).length : 0,
-          isOriginalBuffer: Buffer.isBuffer(doc.originalDocument)
+          originalSample: doc.originalDocument ? Buffer.from(doc.originalDocument).slice(0, 20).toString('hex') : null
         });
-
+  
         res.status(201).json(doc);
       } catch (error: any) {
         console.error('Error processing document:', error);
@@ -335,7 +344,7 @@ export function registerRoutes(app: Express): Server {
       console.error('Error in document upload:', error);
       res.status(500).send(`Error al subir el documento: ${error.message}`);
     }
-});
+  });
   
   app.post("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
@@ -498,9 +507,10 @@ export function registerRoutes(app: Express): Server {
         formId: doc.formId,
         name: doc.name,
         hasOriginalDoc: !!doc.originalDocument,
-        originalDocLength: doc.originalDocument ? doc.originalDocument.length : 0,
-        originalDocType: doc.originalDocument ? typeof doc.originalDocument : 'N/A',
-        isBuffer: doc.originalDocument ? Buffer.isBuffer(doc.originalDocument) : false
+        originalDocType: typeof doc.originalDocument,
+        originalIsBuffer: Buffer.isBuffer(doc.originalDocument),
+        originalLength: doc.originalDocument ? Buffer.from(doc.originalDocument).length : 0,
+        originalSample: doc.originalDocument ? Buffer.from(doc.originalDocument).slice(0, 20).toString('hex') : null
       });
 
       const [entry] = await db.select()
@@ -521,13 +531,22 @@ export function registerRoutes(app: Express): Server {
 
       try {
         console.log('Processing document merge in DOCX format');
+        console.log('Original document info:', {
+          type: typeof doc.originalDocument,
+          isBuffer: Buffer.isBuffer(doc.originalDocument),
+          length: doc.originalDocument.length
+        });
 
         // Asegurar que tenemos un Buffer válido
         const originalDocBuffer = Buffer.isBuffer(doc.originalDocument)
           ? doc.originalDocument
           : Buffer.from(doc.originalDocument);
 
-        console.log('Buffer original preparado, tamaño:', originalDocBuffer.length);
+        console.log('Buffer preparado:', {
+          isBuffer: Buffer.isBuffer(originalDocBuffer),
+          length: originalDocBuffer.length,
+          sample: originalDocBuffer.slice(0, 20).toString('hex')
+        });
 
         // Crear el documento fusionado manteniendo el formato DOCX
         const mergedBuffer = await createReport({
@@ -575,7 +594,7 @@ export function registerRoutes(app: Express): Server {
       console.error('Error in merge operation:', error);
       res.status(500).send("Error al procesar la solicitud de merge");
     }
-});
+  });
 
   // Export entries endpoints
   app.get("/api/forms/:formId/entries/export", async (req, res) => {
