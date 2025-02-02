@@ -17,27 +17,30 @@ export default function HomePage() {
 
   const deleteFormMutation = useMutation({
     mutationFn: async (formId: number) => {
-      const response = await apiRequest("DELETE", `/api/forms/${formId}`);
-      if (!response.ok) {
-        throw new Error("Error al eliminar el formulario");
+      try {
+        const response = await apiRequest("DELETE", `/api/forms/${formId}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || "Error al eliminar el formulario");
+        }
+        return formId;
+      } catch (error) {
+        console.error("Error en deleteFormMutation:", error);
+        throw error;
       }
-      return formId;
     },
     onSuccess: (formId) => {
-      // Invalidar la caché y volver a obtener los formularios
       queryClient.invalidateQueries({ queryKey: ["/api/forms"] });
-      refetch();
-
       toast({
         title: "Éxito",
         description: "Formulario eliminado correctamente",
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("Error al eliminar formulario:", error);
       toast({
         title: "Error",
-        description: "No se pudo eliminar el formulario",
+        description: error.message || "No se pudo eliminar el formulario",
         variant: "destructive",
       });
     },

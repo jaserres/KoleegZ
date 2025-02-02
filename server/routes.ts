@@ -561,21 +561,41 @@ export function registerRoutes(app: Express): Server {
   app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
-  
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-  
-    if (!form) {
-      return res.status(404).send("Form not found");
+
+    try {
+      // Verify ownership
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+      if (!form) {
+        return res.status(404).send("Form not found");
+      }
+
+      // Delete all related records first
+      await db.transaction(async (tx) => {
+        // Delete entries
+        await tx.delete(entries)
+          .where(eq(entries.formId, formId));
+
+        // Delete variables
+        await tx.delete(variables)
+          .where(eq(variables.formId, formId));
+
+        // Delete documents
+        await tx.delete(documents)
+          .where(eq(documents.formId, formId));
+
+        // Finally delete the form
+        await tx.delete(forms)
+          .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+      });
+
+      res.sendStatus(200);
+    } catch (error) {
+      console.error('Error deleting form:', error);
+      res.status(500).send("Error deleting form");
     }
-  
-    // Delete the form (cascade will handle related records)
-    await db.delete(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-  
-    res.sendStatus(200);
   });
 
   const httpServer = createServer(app);
