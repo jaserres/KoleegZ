@@ -616,12 +616,74 @@ export function registerRoutes(app: Express): Server {
           return res.send(mergedBuffer);
         } else {
           const result = await mammoth.convertToHtml({
-            buffer: mergedBuffer
+            buffer: mergedBuffer,
+            options: {
+              styleMap: [
+                "p[style-name='Heading 1'] => h1:fresh",
+                "p[style-name='Heading 2'] => h2:fresh",
+                "p[style-name='Heading 3'] => h3:fresh",
+                "b => strong",
+                "i => em",
+                "u => u",
+                "strike => s",
+                "tab => span.tab",
+                "br => br"
+              ],
+              preserveEmptyParagraphs: true,
+              ignoreEmptyParagraphs: false,
+              convertImage: mammoth.images.imgElement(function(image) {
+                return image.read().then(function(imageBuffer) {
+                  const base64Image = imageBuffer.toString('base64');
+                  const contentType = image.contentType;
+                  return {
+                    src: `data:${contentType};base64,${base64Image}`
+                  };
+                });
+              })
+            }
           });
 
-          return res.json({ 
-            result: `<div class="document-preview">${result.value}</div>` 
-          });
+          const styledHtml = `
+            <style>
+              .document-preview {
+                font-family: 'Calibri', sans-serif;
+                line-height: 1.5;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+              }
+              .document-preview p {
+                margin: 1em 0;
+                text-align: justify;
+              }
+              .document-preview h1, .document-preview h2, .document-preview h3 {
+                margin-top: 1.5em;
+                margin-bottom: 0.5em;
+                font-weight: bold;
+              }
+              .document-preview .tab {
+                display: inline-block;
+                width: 2em;
+              }
+              .document-preview table {
+                border-collapse: collapse;
+                width: 100%;
+                margin: 1em 0;
+              }
+              .document-preview td, .document-preview th {
+                border: 1px solid #ddd;
+                padding: 8px;
+              }
+              .document-preview img {
+                max-width: 100%;
+                height: auto;
+              }
+            </style>
+            <div class="document-preview">
+              ${result.value}
+            </div>`;
+
+          return res.json({ result: styledHtml });
         }
       } catch (mergeError: any) {
         console.error('Error específico en el merge:', mergeError);
