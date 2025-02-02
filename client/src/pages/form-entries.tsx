@@ -621,7 +621,7 @@ export default function FormEntries() {
                       Nueva Plantilla
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
+                  <DialogContent className="sm:max-w-[400px]">
                     <DialogHeader>
                       <DialogTitle>Crear Nueva Plantilla</DialogTitle>
                     </DialogHeader>
@@ -629,20 +629,17 @@ export default function FormEntries() {
                       {detectedVariables.length > variableLimit && (
                         <Alert>
                           <AlertDescription>
-                            <div className="space-y-2">
-                              <p>
-                                Su plantilla tiene {detectedVariables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
-                                Necesita eliminar {detectedVariables.length - variableLimit} variable(s).
-                              </p>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={removeExcessVariables}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Eliminar variables excedentes
-                              </Button>
-                            </div>
+                            <p className="mb-2">
+                              Su plantilla tiene {detectedVariables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
+                            </p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={removeExcessVariables}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Eliminar variables excedentes
+                            </Button>
                           </AlertDescription>
                         </Alert>
                       )}
@@ -664,19 +661,16 @@ export default function FormEntries() {
                           <Textarea
                             value={documentTemplate}
                             onChange={(e) => setDocumentTemplate(e.target.value)}
-                            className="h-40"
+                            className="h-32"
                             placeholder="Ej: Estimado {{nombre}}, ..."
                             required
                           />
                           <div className="flex items-center space-x-2">
-                            <Label htmlFor="file-upload" className="sr-only">
-                              Subir documento
-                            </Label>
                             <Input
                               id="file-upload"
                               type="file"
                               accept=".txt,.doc,.docx"
-                              className="max-w-xs"
+                              className="flex-1"
                               onChange={handleFileUpload}
                             />
                             <Button
@@ -695,34 +689,34 @@ export default function FormEntries() {
                       </div>
                       {detectedVariables.length > 0 && (
                         <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <Label>Variables Detectadas</Label>
-                          </div>
-                          <div className="bg-muted p-4 rounded-md max-h-[200px] overflow-y-auto">
-                            <ul className="list-disc list-inside space-y-1">
-                              {detectedVariables.map((variable, index) => (
-                                <li key={index} className="text-sm">
-                                  {variable.label} ({variable.name})
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
+                          <Label>Variables Detectadas</Label>
+                          <ScrollArea className="h-[120px] w-full rounded-md border">
+                            <div className="p-4">
+                              <ul className="list-disc list-inside space-y-1">
+                                {detectedVariables.map((variable, index) => (
+                                  <li key={index} className="text-sm">
+                                    {variable.label} ({variable.name})
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </ScrollArea>
                         </div>
                       )}
-                      <div className="flex justify-between items-center pt-4">
+                      <div className="flex justify-between items-center pt-4 space-x-2">
                         <Button
                           variant="outline"
                           onClick={handleCreateFormFromTemplate}
                           disabled={detectedVariables.length === 0}
                         >
                           <Wand2 className="mr-2 h-4 w-4" />
-                          Crear Formulario
+                          Crear Form
                         </Button>
                         <Button 
                           onClick={handleCreateDocument}
                           disabled={createDocumentMutation.isPending || !documentName || !documentTemplate}
                         >
-                          {createDocumentMutation.isPending ? "Creando..." : "Crear Plantilla"}
+                          {createDocumentMutation.isPending ? "Creando..." : "Crear"}
                         </Button>
                       </div>
                     </div>
