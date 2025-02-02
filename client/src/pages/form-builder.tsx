@@ -329,7 +329,7 @@ export default function FormBuilder() {
           <div className="space-y-4">
             {variables.map((variable, index) => (
               <Card key={variable.id || index}>
-                <CardContent className="pt-6 grid gap-4 md:grid-cols-3">
+                <CardContent className="pt-6 grid gap-4 md:grid-cols-4">
                   <div>
                     <Label>Nombre Interno (camelCase)</Label>
                     <Input
@@ -387,6 +387,22 @@ export default function FormBuilder() {
                         <SelectItem value="date">Fecha</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                      onClick={() => {
+                        setVariables(variables.filter((_, i) => i !== index));
+                        toast({
+                          title: "Variable eliminada",
+                          description: "La variable ha sido eliminada correctamente",
+                        });
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
