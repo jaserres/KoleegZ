@@ -3,6 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoSave } from "@/hooks/use-auto-save";
+import { useConfetti } from "@/hooks/use-confetti";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,6 +79,8 @@ export default function FormEntries() {
     enabled: !!id,
   });
 
+  const { trigger: triggerConfetti } = useConfetti();
+
   const createEntryMutation = useMutation({
     mutationFn: async (values: Record<string, any>) => {
       const res = await apiRequest("POST", `/api/forms/${id}/entries`, {
@@ -93,6 +96,8 @@ export default function FormEntries() {
         title: "Success",
         description: "Entry added successfully",
       });
+      // Trigger confetti celebration
+      triggerConfetti();
     },
   });
 
@@ -183,7 +188,7 @@ export default function FormEntries() {
       const variableRegex = /{{([^}]+)}}/g;
       const matches = template.match(variableRegex) || [];
       const uniqueVariables = new Set(matches.map(match => match.slice(2, -2)));
-
+    
       return Array.from(uniqueVariables).map(varName => ({
         name: varName,
         label: varName.split(/(?=[A-Z])/).join(' '), // Convert camelCase to spaces
