@@ -264,10 +264,6 @@ export function registerRoutes(app: Express): Server {
           throw new Error('El archivo está vacío o es inválido');
         }
 
-        // Guardar el documento original como base64
-        const originalDocBase64 = file.buffer.toString('base64');
-        console.log('Documento convertido a base64, longitud:', originalDocBase64.length);
-
         // Convertir el documento a HTML para preview manteniendo el formato
         const [htmlResult, textResult] = await Promise.all([
           mammoth.convertToHtml({ 
@@ -297,14 +293,14 @@ export function registerRoutes(app: Express): Server {
           });
         }
 
-        // Guardar en la base de datos con el documento original en base64
+        // Guardar en la base de datos con el documento original como buffer binario
         const [doc] = await db.insert(documents)
           .values({
             formId,
             name: file.originalname.replace(/\.[^/.]+$/, ""),
             template: textResult.value,
             preview: htmlResult.value,
-            originalDocument: originalDocBase64 // Guardar como base64
+            originalDocument: file.buffer // Guardar el buffer binario directamente
           })
           .returning();
 
@@ -453,6 +449,7 @@ export function registerRoutes(app: Express): Server {
     res.sendStatus(200);
   });
 
+  // Merge endpoint
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -509,15 +506,9 @@ export function registerRoutes(app: Express): Server {
       try {
         console.log('Processing document merge in DOCX format');
 
-        // Verificar que el documento original es un string base64 válido
-        if (!doc.originalDocument.match(/^[A-Za-z0-9+/=]+$/)) {
-          console.error('El documento original no está en formato base64 válido');
-          return res.status(400).send("El formato del documento original no es válido");
-        }
-
-        // Convertir el documento de base64 a buffer
-        const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
-        console.log('Buffer creado correctamente, tamaño:', originalDocBuffer.length);
+        // El documento original ya está como buffer binario, usarlo directamente
+        const originalDocBuffer = doc.originalDocument;
+        console.log('Buffer original encontrado, tamaño:', originalDocBuffer.length);
 
         // Crear el documento fusionado manteniendo el formato DOCX
         const mergedBuffer = await createReport({
