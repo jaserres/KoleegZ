@@ -293,15 +293,17 @@ export function registerRoutes(app: Express): Server {
           });
         }
 
-        // Guardar en la base de datos con el documento original como buffer binario
+        // Guardar en la base de datos con el documento original como Buffer
+        const docData = {
+          formId,
+          name: file.originalname.replace(/\.[^/.]+$/, ""),
+          template: textResult.value,
+          preview: htmlResult.value,
+          originalDocument: file.buffer
+        };
+
         const [doc] = await db.insert(documents)
-          .values({
-            formId,
-            name: file.originalname.replace(/\.[^/.]+$/, ""),
-            template: textResult.value,
-            preview: htmlResult.value,
-            originalDocument: file.buffer // Guardar el buffer binario directamente
-          })
+          .values(docData)
           .returning();
 
         // Log document saved
@@ -321,7 +323,7 @@ export function registerRoutes(app: Express): Server {
       console.error('Error in document upload:', error);
       res.status(500).send(`Error al subir el documento: ${error.message}`);
     }
-  });
+});
 
   app.post("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
@@ -484,7 +486,9 @@ export function registerRoutes(app: Express): Server {
         formId: doc.formId,
         name: doc.name,
         hasOriginalDoc: !!doc.originalDocument,
-        originalDocLength: doc.originalDocument ? doc.originalDocument.length : 0
+        originalDocLength: doc.originalDocument ? doc.originalDocument.length : 0,
+        originalDocType: doc.originalDocument ? typeof doc.originalDocument : 'N/A',
+        isBuffer: doc.originalDocument ? Buffer.isBuffer(doc.originalDocument) : false
       });
 
       const [entry] = await db.select()
@@ -506,9 +510,12 @@ export function registerRoutes(app: Express): Server {
       try {
         console.log('Processing document merge in DOCX format');
 
-        // El documento original ya está como buffer binario, usarlo directamente
-        const originalDocBuffer = doc.originalDocument;
-        console.log('Buffer original encontrado, tamaño:', originalDocBuffer.length);
+        // Asegurar que tenemos un Buffer válido
+        const originalDocBuffer = Buffer.isBuffer(doc.originalDocument) 
+          ? doc.originalDocument
+          : Buffer.from(doc.originalDocument);
+
+        console.log('Buffer original preparado, tamaño:', originalDocBuffer.length);
 
         // Crear el documento fusionado manteniendo el formato DOCX
         const mergedBuffer = await createReport({
@@ -556,7 +563,7 @@ export function registerRoutes(app: Express): Server {
       console.error('Error in merge operation:', error);
       res.status(500).send("Error al procesar la solicitud de merge");
     }
-  });
+});
 
   // Export entries endpoints
   app.get("/api/forms/:formId/entries/export", async (req, res) => {
