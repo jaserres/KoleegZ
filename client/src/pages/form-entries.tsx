@@ -329,13 +329,14 @@ export default function FormEntries() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
       toast({
         title: "Éxito",
         description: "Entrada actualizada correctamente",
       });
-      // Ya no limpiamos los datos aquí
+      // Mantener los valores actuales del formulario
+      setFormValues(data.values);
     },
     onError: (error: Error) => {
       toast({
