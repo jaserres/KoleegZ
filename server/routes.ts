@@ -211,6 +211,10 @@ export function registerRoutes(app: Express): Server {
       const formId = parseInt(req.params.formId);
       const { name, template } = req.body;
 
+      if (!name || !template) {
+        return res.status(400).json({ error: "Nombre y plantilla son requeridos" });
+      }
+
       // Verificar que el formulario pertenece al usuario
       const [form] = await db.select()
         .from(forms)
@@ -222,7 +226,6 @@ export function registerRoutes(app: Express): Server {
 
       // Generar nombre de archivo único
       const fileName = `${form.id}_${Date.now()}.docx`;
-
 
       // Crear el registro del documento en la base de datos
       const [document] = await db.insert(documents)
