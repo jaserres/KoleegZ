@@ -391,20 +391,23 @@ export default function FormEntries() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {form?.variables?.map((variable: any) => (
-                <div key={variable.id}>
-                  <Label htmlFor={variable.name}>{variable.label}</Label>
-                  <Input
-                    id={variable.name}
-                    name={variable.name}
-                    type={variable.type === "date" ? "date" :
-                          variable.type === "number" ? "number" : "text"}
-                    value={formValues[variable.name] || ""}
-                    onChange={(e) => handleFieldChange(variable.name, e.target.value)}
-                    required
-                  />
+                <div key={variable.id} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  <div className="w-full">
+                    <Label htmlFor={variable.name}>{variable.label}</Label>
+                    <Input
+                      id={variable.name}
+                      name={variable.name}
+                      type={variable.type === "date" ? "date" :
+                            variable.type === "number" ? "number" : "text"}
+                      value={formValues[variable.name] || ""}
+                      onChange={(e) => handleFieldChange(variable.name, e.target.value)}
+                      required
+                      className="w-full"
+                    />
+                  </div>
                 </div>
               ))}
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={createEntryMutation.isPending || saving}>
                   {createEntryMutation.isPending ? (
                     <Spinner variant="dots" size="sm" className="mr-2" />
@@ -567,172 +570,173 @@ export default function FormEntries() {
             </div>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table className="w-full overflow-auto">
               <TableHeader>
                 <TableRow>
                   {form?.variables?.map((variable: any) => (
-                    <TableHead key={variable.id}>{variable.label}</TableHead>
+                    <TableHead key={variable.id} className="whitespace-nowrap">{variable.label}</TableHead>
                   ))}
-                  <TableHead>Created</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="whitespace-nowrap">Created</TableHead>
+                  <TableHead className="whitespace-nowrap">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                  {entries?.map((entry: any) => (
-                    <TableRow 
-                      key={entry.id}
-                      className={cn(
-                        "cursor-pointer hover:bg-muted/50",
-                        selectedRowId === entry.id && "bg-muted"
-                      )}
-                      onClick={() => handleRowClick(entry)}
-                    >
-                      {form?.variables?.map((variable: any) => (
-                        <TableCell key={variable.id}>
-                          {entry.values[variable.name]}
-                        </TableCell>
-                      ))}
-                      <TableCell>
-                        {format(new Date(entry.createdAt), "PPp")}
+                {entries?.map((entry: any) => (
+                  <TableRow 
+                    key={entry.id}
+                    className={cn(
+                      "cursor-pointer hover:bg-muted/50",
+                      selectedRowId === entry.id && "bg-muted"
+                    )}
+                    onClick={() => handleRowClick(entry)}
+                  >
+                    {form?.variables?.map((variable: any) => (
+                      <TableCell key={variable.id} className="max-w-[200px] truncate">
+                        {entry.values[variable.name]}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                onClick={() => setSelectedEntry(entry.id)}
-                              >
-                                <FileText className="mr-2 h-4 w-4" />
-                                Merge
-                              </Button>
-                            </DialogTrigger>
-                              <DialogContent className="max-w-2xl">
-                              <DialogHeader>
-                                <DialogTitle>Mail Merge</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <div className="grid gap-4 grid-cols-2">
-                                  {documents?.map((doc: any) => (
-                                    <Card key={doc.id}>
-                                      <CardHeader>
-                                        <CardTitle>{doc.name}</CardTitle>
-                                      </CardHeader>
-                                      <CardContent>
-                                        <Button
-                                          onClick={() => {
-                                            mergeMutation.mutate({
-                                              documentId: doc.id,
-                                              entryId: selectedEntry!,
-                                            });
-                                          }}
-                                          disabled={mergeMutation.isPending}
-                                        >
-                                          {mergeMutation.isPending ? (
-                                            <Spinner variant="bounce" size="sm" className="mr-2" />
-                                          ) : null}
-                                          Merge with this template
-                                        </Button>
-                                      </CardContent>
-                                    </Card>
-                                  ))}
-                                </div>
-                                {mergedResult && (
-                                  <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                      <Label>Preview</Label>
-                                      {selectedTemplate && (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => {
-                                            if (selectedTemplate && selectedEntry) {
-                                              // Primero realizar el merge para asegurarnos que todo está correcto
-                                              mergeMutation.mutate(
-                                                {
-                                                  documentId: selectedTemplate.id,
-                                                  entryId: selectedEntry,
-                                                },
-                                                {
-                                                  onSuccess: async () => {
-                                                    try {
-                                                      // Realizar la descarga usando fetch
-                                                      const response = await fetch(
-                                                        `api/forms/${id}/documents/${selectedTemplate.id}/merge`,
-                                                        {
-                                                          method: 'POST',
-                                                          headers: {
-                                                            'Content-Type': 'application/json',
-                                                          },
-                                                          body: JSON.stringify({
-                                                            entryId: selectedEntry,
-                                                            download: true
-                                                          })
-                                                        }
-                                                      );
-                                                      if (!response.ok) {
-                                                        throw new Error('Error al descargar el documento');
-                                                      }
-
-                                                      const blob = await response.blob();
-                                                      const url = window.URL.createObjectURL(blob);
-                                                      const a = document.createElement('a');
-                                                      a.href = url;
-                                                      // Mantener la extensión original del archivo
-                                                      const extension = selectedTemplate.name.split('.').pop() || 'txt';
-                                                      a.download = `${selectedTemplate.name.split('.')[0]}.${extension}`;
-                                                      document.body.appendChild(a);
-                                                      a.click();
-                                                      window.URL.revokeObjectURL(url);
-                                                      document.body.removeChild(a);
-                                                    } catch (error) {
-                                                      toast({
-                                                        title: "Error",
-                                                        description: "No se pudo descargar el documento",
-                                                        variant: "destructive"
-                                                      });
-                                                    }
-                                                  },
-                                                }
-                                              );
-                                            }
-                                          }}
-                                        >
-                                          <FileDown className="mr-2 h-4 w-4" />
-                                          Download
-                                        </Button>
-                                      )}
-                                    </div>
-                                    <Textarea
-                                      value={mergedResult}
-                                      readOnly
-                                      className="h-40"
-                                    />
-                                  </div>
-                                )}
+                    ))}
+                    <TableCell className="whitespace-nowrap">
+                      {format(new Date(entry.createdAt), "PPp")}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              onClick={() => setSelectedEntry(entry.id)}
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              Merge
+                            </Button>
+                          </DialogTrigger>
+                            <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                              <DialogTitle>Mail Merge</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div className="grid gap-4 grid-cols-2">
+                                {documents?.map((doc: any) => (
+                                  <Card key={doc.id}>
+                                    <CardHeader>
+                                      <CardTitle>{doc.name}</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <Button
+                                        onClick={() => {
+                                          mergeMutation.mutate({
+                                            documentId: doc.id,
+                                            entryId: selectedEntry!,
+                                          });
+                                        }}
+                                        disabled={mergeMutation.isPending}
+                                      >
+                                        {mergeMutation.isPending ? (
+                                          <Spinner variant="bounce" size="sm" className="mr-2" />
+                                        ) : null}
+                                        Merge with this template
+                                      </Button>
+                                    </CardContent>
+                                  </Card>
+                                ))}
                               </div>
-                            </DialogContent>
-                          </Dialog>
-                          <Button
-                            variant="outline"
-                            className="text-red-500 hover:text-red-700"
-                            onClick={() => {
-                              if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
-                                deleteEntryMutation.mutate(entry.id);
-                              }
-                            }}
-                            disabled={deleteEntryMutation.isPending}
-                          >
-                            {deleteEntryMutation.isPending ? (
-                              <Spinner variant="pulse" size="sm" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                              {mergedResult && (
+                                <div className="space-y-4">
+                                  <div className="flex justify-between items-center">
+                                    <Label>Preview</Label>
+                                    {selectedTemplate && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          if (selectedTemplate && selectedEntry) {
+                                            // Primero realizar el merge para asegurarnos que todo está correcto
+                                            mergeMutation.mutate(
+                                              {
+                                                documentId: selectedTemplate.id,
+                                                entryId: selectedEntry,
+                                              },
+                                              {
+                                                onSuccess: async () => {
+                                                  try {
+                                                    // Realizar la descarga usando fetch
+                                                    const response = await fetch(
+                                                      `api/forms/${id}/documents/${selectedTemplate.id}/merge`,
+                                                      {
+                                                        method: 'POST',
+                                                        headers: {
+                                                          'Content-Type': 'application/json',
+                                                        },
+                                                        body: JSON.stringify({
+                                                          entryId: selectedEntry,
+                                                          download: true
+                                                        })
+                                                      }
+                                                    );
+                                                    if (!response.ok) {
+                                                      throw new Error('Error al descargar el documento');
+                                                    }
+
+                                                    const blob = await response.blob();
+                                                    const url = window.URL.createObjectURL(blob);
+                                                    const a = document.createElement('a');
+                                                    a.href = url;
+                                                    // Mantener la extensión original del archivo
+                                                    const extension = selectedTemplate.name.split('.').pop() || 'txt';
+                                                    a.download = `${selectedTemplate.name.split('.')[0]}.${extension}`;
+                                                    document.body.appendChild(a);
+                                                    a.click();
+                                                    window.URL.revokeObjectURL(url);
+                                                    document.body.removeChild(a);
+                                                  } catch (error) {
+                                                    toast({
+                                                      title: "Error",
+                                                      description: "No se pudo descargar el documento",
+                                                      variant: "destructive"
+                                                    });
+                                                  }
+                                                },
+                                              }
+                                            );
+                                          }
+                                        }}
+                                      >
+                                        <FileDown className="mr-2 h-4 w-4" />
+                                        Download
+                                      </Button>
+                                    )}
+                                  </div>
+                                  <Textarea
+                                    value={mergedResult}
+                                    readOnly
+                                    className="h-40"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                        <Button
+                          variant="outline"
+                          className="text-red-500 hover:text-red-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
+                              deleteEntryMutation.mutate(entry.id);
+                            }
+                          }}
+                          disabled={deleteEntryMutation.isPending}
+                        >
+                          {deleteEntryMutation.isPending ? (
+                            <Spinner variant="pulse" size="sm" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
             <div className="mt-4">
