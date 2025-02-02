@@ -747,49 +747,53 @@ export default function FormEntries() {
                     </CardContent>
                   </Card>
                 ) : (
-                  documents.map((doc) => (
-                    <Card key={doc.id}>
-                      <CardHeader>
-                        <div className="flex justify-between items-center">
-                          <CardTitle>{doc.name}</CardTitle>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="text-red-500 hover:text-red-700"
-                            onClick={() => {
-                              if (window.confirm("¿Estás seguro de que quieres eliminar esta plantilla?")) {
-                                deleteDocumentMutation.mutate(doc.id);
-                              }
-                            }}
-                            disabled={deleteDocumentMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          <div className="bg-muted p-4 rounded-md">
-                            <pre className="text-xs font-mono whitespace-pre-wrap line-clamp-3">
-                              {doc.preview || doc.template.slice(0, 200)}
-                            </pre>
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            Creada el {format(new Date(doc.createdAt), "PPp")}
-                          </div>
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedTemplate(doc);
-                              setShowTemplateDialog(true);
-                            }}
-                          >
-                            Ver Plantilla
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                   documents.map((doc) => (
+                     <Card key={doc.id}>
+                       <CardHeader>
+                         <div className="flex justify-between items-center">
+                           <CardTitle>{doc.name}</CardTitle>
+                           <Button
+                             variant="outline"
+                             size="icon"
+                             className="text-red-500 hover:text-red-700"
+                             onClick={() => {
+                               if (window.confirm("¿Estás seguro de que quieres eliminar esta plantilla?")) {
+                                 deleteDocumentMutation.mutate(doc.id);
+                               }
+                             }}
+                             disabled={deleteDocumentMutation.isPending}
+                           >
+                             {deleteDocumentMutation.isPending ? (
+                               <Spinner variant="pulse" size="sm" />
+                             ) : (
+                               <Trash2 className="h-4 w-4" />
+                             )}
+                           </Button>
+                         </div>
+                       </CardHeader>
+                       <CardContent>
+                         <div className="space-y-4">
+                           <div className="bg-muted p-4 rounded-md">
+                             <pre className="text-xs font-mono whitespace-pre-wrap line-clamp-3">
+                               {doc.preview || doc.template.slice(0, 200)}
+                             </pre>
+                           </div>
+                           <div className="text-sm text-muted-foreground">
+                             Creada el {format(new Date(doc.createdAt), "PPp")}
+                           </div>
+                           <Button
+                             variant="outline"
+                             onClick={() => {
+                               setSelectedTemplate(doc);
+                               setShowTemplateDialog(true);
+                             }}
+                           >
+                             Ver Plantilla
+                           </Button>
+                         </div>
+                       </CardContent>
+                     </Card>
+                   ))
                 )}
               </div>
             </div>
