@@ -519,7 +519,7 @@ export function registerRoutes(app: Express): Server {
     let [entry] = await db.select()
       .from(entries)
       .where(eq(entries.formId, formId))
-      .orderBy(desc(entries.updatedAt))
+      .orderBy(desc(entries.createdAt))
       .limit(1);
 
     if (!entry) {
@@ -534,8 +534,7 @@ export function registerRoutes(app: Express): Server {
       // Update existing entry
       [entry] = await db.update(entries)
         .set({
-          values: { ...entry.values, ...req.body },
-          updatedAt: new Date()
+          values: { ...entry.values as Record<string, unknown>, ...req.body }
         })
         .where(eq(entries.id, entry.id))
         .returning();
