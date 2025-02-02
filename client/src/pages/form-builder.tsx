@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Save, ArrowLeft, Upload } from "lucide-react";
+import { Plus, Save, ArrowLeft, Upload, Download } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formTemplates } from "@/lib/form-templates";
 import type { SelectVariable } from "@db/schema";
@@ -476,6 +476,23 @@ export default function FormBuilder() {
   const PreviewDialog = () => {
     if (!previewContent) return null;
 
+    const handleDownload = () => {
+      // Crear un blob con el contenido
+      const blob = new Blob([previewContent.template], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+
+      // Crear un elemento de enlace temporal
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${previewContent.name}.txt`;
+
+      // Simular clic y limpiar
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    };
+
     return (
       <Dialog open={!!previewContent} onOpenChange={() => setPreviewContent(null)}>
         <DialogContent className="max-w-4xl">
@@ -487,9 +504,15 @@ export default function FormBuilder() {
           </DialogHeader>
           <div className="grid gap-4">
             <div>
-              <h3 className="font-medium mb-2">Contenido del Documento</h3>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-medium">Contenido del Documento</h3>
+                <Button variant="outline" size="sm" onClick={handleDownload}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Descargar Documento
+                </Button>
+              </div>
               <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-                <pre className="whitespace-pre-wrap">{previewContent.preview}</pre>
+                <pre className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: previewContent.preview }} />
               </ScrollArea>
             </div>
             <div>
