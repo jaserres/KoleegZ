@@ -158,12 +158,22 @@ export default function FormEntries() {
         `/api/forms/${id}/documents/${documentId}/merge`,
         { entryId }
       );
+      if (!res.ok) {
+        throw new Error('Error al realizar el merge');
+      }
       return res.json();
     },
     onSuccess: (data, { documentId }) => {
       setMergedResult(data.result);
       const template = documents?.find((doc: any) => doc.id === documentId);
       setSelectedTemplate(template);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo realizar el merge del documento",
+        variant: "destructive",
+      });
     },
   });
 
@@ -740,54 +750,15 @@ export default function FormEntries() {
                                           size="sm"
                                           onClick={() => {
                                             if (selectedTemplate && selectedEntry) {
-                                              // Primero realizar el merge para asegurarnos que todo está correcto
-                                              mergeMutation.mutate(
-                                                {
-                                                  documentId: selectedTemplate.id,
-                                                  entryId: selectedEntry,
-                                                },
-                                                {
-                                                  onSuccess: async () => {
-                                                    try {
-                                                      // Realizar la descarga usando fetch
-                                                      const response = await fetch(
-                                                        `api/forms/${id}/documents/${selectedTemplate.id}/merge`,
-                                                        {
-                                                          method: 'POST',
-                                                          headers: {
-                                                            'Content-Type': 'application/json',
-                                                          },
-                                                          body: JSON.stringify({
-                                                            entryId: selectedEntry,
-                                                            download: true
-                                                          })
-                                                        }
-                                                      );
-                                                      if (!response.ok) {
-                                                        throw new Error('Error al descargar el documento');
-                                                      }
-
-                                                      const blob = await response.blob();
-                                                      const url = window.URL.createObjectURL(blob);
-                                                      const a = document.createElement('a');
-                                                      a.href = url;
-                                                      // Mantener la extensión original del archivo
-                                                      const extension = selectedTemplate.name.split('.').pop() || 'txt';
-                                                      a.download = `${selectedTemplate.name.split('.')[0]}.${extension}`;
-                                                      document.body.appendChild(a);
-                                                      a.click();
-                                                      window.URL.revokeObjectURL(url);
-                                                      document.body.removeChild(a);
-                                                    } catch (error) {
-                                                      toast({
-                                                        title: "Error",
-                                                        description: "No se pudo descargar el documento",
-                                                        variant: "destructive"
-                                                      });
-                                                    }
-                                                  },
-                                                }
-                                              );
+                                              try {
+                                                window.location.href = `/api/forms/${id}/documents/${selectedTemplate.id}/merge?entryId=${selectedEntry}&download=true`;
+                                              } catch (error) {
+                                                toast({
+                                                  title: "Error",
+                                                  description: "No se pudo descargar el documento",
+                                                  variant: "destructive"
+                                                });
+                                              }
                                             }
                                           }}
                                         >

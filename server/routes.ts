@@ -181,7 +181,7 @@ export function registerRoutes(app: Express): Server {
     res.status(201).json(entry);
   });
   
-    app.delete("/api/forms/:formId/entries/:entryId", async (req, res) => {
+  app.delete("/api/forms/:formId/entries/:entryId", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
     const entryId = parseInt(req.params.entryId);
@@ -345,72 +345,56 @@ export function registerRoutes(app: Express): Server {
     const entryId = parseInt(req.body.entryId);
     const isDownload = req.body.download === true;
 
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+    try {
+      // Verify ownership
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-    if (!form) {
-      return res.status(404).send("Form not found");
-    }
-
-    const [doc] = await db.select()
-      .from(documents)
-      .where(and(
-        eq(documents.id, documentId),
-        eq(documents.formId, formId)
-      ));
-
-    if (!doc) {
-      return res.status(404).send("Document not found");
-    }
-
-    // Verify entry exists and belongs to the form
-    const [entry] = await db.select()
-      .from(entries)
-      .where(and(
-        eq(entries.id, entryId),
-        eq(entries.formId, formId)
-      ));
-
-    if (!entry) {
-      return res.status(404).send("Entry not found");
-    }
-
-    // Perform mail merge
-    let result = doc.template;
-    for (const [key, value] of Object.entries(entry.values as Record<string, string>)) {
-      result = result.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
-    }
-
-    if (isDownload) {
-      // Determinar el tipo de archivo y los headers correctos
-      const fileExtension = doc.name.split('.').pop()?.toLowerCase() || 'txt';
-      let contentType = 'text/plain';
-
-      switch (fileExtension) {
-        case 'docx':
-          contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-          // Convertir el texto a formato DOCX
-          const workbook = XLSX.utils.book_new();
-          const worksheet = XLSX.utils.aoa_to_sheet([[result]]);
-          XLSX.utils.book_append_sheet(workbook, worksheet, "Document");
-          const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-          res.setHeader('Content-Type', contentType);
-          res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
-          return res.send(Buffer.from(buffer));
-
-        case 'txt':
-        default:
-          contentType = 'text/plain';
-          res.setHeader('Content-Type', contentType);
-          res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
-          return res.send(result);
+      if (!form) {
+        return res.status(404).send("Form not found");
       }
-    }
 
-    // Default: return preview as JSON
-    res.json({ result });
+      const [doc] = await db.select()
+        .from(documents)
+        .where(and(
+          eq(documents.id, documentId),
+          eq(documents.formId, formId)
+        ));
+
+      if (!doc) {
+        return res.status(404).send("Document not found");
+      }
+
+      // Verify entry exists and belongs to the form
+      const [entry] = await db.select()
+        .from(entries)
+        .where(and(
+          eq(entries.id, entryId),
+          eq(entries.formId, formId)
+        ));
+
+      if (!entry) {
+        return res.status(404).send("Entry not found");
+      }
+
+      // Perform mail merge
+      let result = doc.template;
+      for (const [key, value] of Object.entries(entry.values as Record<string, string>)) {
+        result = result.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
+      }
+
+      if (isDownload) {
+        res.setHeader('Content-Type', 'text/plain');
+        res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+        return res.send(result);
+      }
+
+      res.json({ result });
+    } catch (error) {
+      console.error('Error in merge operation:', error);
+      res.status(500).send("Error processing merge request");
+    }
   });
 
   // Export entries endpoints
