@@ -453,16 +453,20 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Entry not found");
       }
 
-      // Perform mail merge
+      // Perform mail merge on the template
       let result = doc.template;
       for (const [key, value] of Object.entries(entry.values as Record<string, string>)) {
         result = result.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
       }
 
       if (isDownload) {
-        res.setHeader('Content-Type', 'text/plain');
-        res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
-        return res.send(result);
+        // Para descargas, configurar headers para DOCX
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
+
+        // Convertir el texto a un documento DOCX usando mammoth
+        const docxBuffer = await mammoth.convertToDocx({ text: result });
+        return res.send(docxBuffer);
       }
 
       res.json({ result });

@@ -442,6 +442,42 @@ export default function FormEntries() {
       });
     }
   };
+  
+    const handleDownloadMerge = async (templateId: number, entryId: number) => {
+    try {
+      const response = await fetch(`/api/forms/${id}/documents/${templateId}/merge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          entryId,
+          download: true
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al descargar el documento');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${selectedTemplate.name}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo descargar el documento",
+        variant: "destructive"
+      });
+    }
+  };
 
 
   return (
@@ -772,46 +808,7 @@ export default function FormEntries() {
                                          <Button
                                           variant="outline"
                                           size="sm"
-                                          onClick={async () => {
-                                            if (selectedTemplate && selectedEntry) {
-                                              try {
-                                                // Hacer la solicitud de merge directamente
-                                                const response = await fetch(`/api/forms/${id}/documents/${selectedTemplate.id}/merge`, {
-                                                  method: 'POST',
-                                                  headers: {
-                                                    'Content-Type': 'application/json',
-                                                  },
-                                                  body: JSON.stringify({
-                                                    entryId: selectedEntry,
-                                                    download: true
-                                                  })
-                                                });
-
-                                                if (!response.ok) {
-                                                  throw new Error('Error al descargar el documento');
-                                                }
-
-                                                const text = await response.text();
-
-                                                // Crear blob y descargar
-                                                const blob = new Blob([text], { type: 'text/plain' });
-                                                const url = window.URL.createObjectURL(blob);
-                                                const link = document.createElement('a');
-                                                link.href = url;
-                                                link.download = `${selectedTemplate.name}.txt`;
-                                                document.body.appendChild(link);
-                                                link.click();
-                                                document.body.removeChild(link);
-                                                window.URL.revokeObjectURL(url);
-                                              } catch (error) {
-                                                toast({
-                                                  title: "Error",
-                                                  description: "No se pudo descargar el documento",
-                                                  variant: "destructive"
-                                                });
-                                              }
-                                            }
-                                          }}
+                                          onClick={() => handleDownloadMerge(selectedTemplate.id, selectedEntry)}
                                         >
                                           <FileDown className="mr-2 h-4 w-4" />
                                           Download
