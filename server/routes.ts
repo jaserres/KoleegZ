@@ -416,6 +416,7 @@ export function registerRoutes(app: Express): Server {
     res.sendStatus(200);
   });
 
+  // Mail merge endpoint
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -480,28 +481,45 @@ export function registerRoutes(app: Express): Server {
 
       console.log('Original document found, proceeding with formatted merge');
 
-      // Si tenemos el documento original, proceder con el merge manteniendo el formato
       try {
+        // Asegurarse de que el documento original es válido
+        if (!Buffer.isBuffer(Buffer.from(doc.originalDocument, 'base64'))) {
+          throw new Error('Invalid original document format');
+        }
+
+        // Crear una copia del buffer original para no modificarlo
         const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
 
         if (isDownload) {
           console.log('Generating formatted document for download');
+
+          // Crear el reporte con configuración más específica
           const buffer = await createReport({
             template: originalDocBuffer,
             data: entry.values || {},
             cmdDelimiter: ['{{', '}}'],
+            failFast: true, // Falla rápido si hay errores
+            rejectNullish: false, // No rechazar valores nulos/undefined
+            fixSmartQuotes: true, // Arreglar comillas inteligentes
           });
+
+          // Verificar que el buffer resultante es válido
+          if (!Buffer.isBuffer(buffer)) {
+            throw new Error('Invalid generated document format');
+          }
 
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
           res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
           return res.send(buffer);
         } else {
           console.log('Generating preview with formatting');
-          // Para preview, primero hacer el merge y luego convertir a HTML
           const mergedBuffer = await createReport({
             template: originalDocBuffer,
             data: entry.values || {},
             cmdDelimiter: ['{{', '}}'],
+            failFast: true,
+            rejectNullish: false,
+            fixSmartQuotes: true,
           });
 
           const options = {
@@ -510,7 +528,10 @@ export function registerRoutes(app: Express): Server {
               "p[style-name='Heading 2'] => h2:fresh",
               "p[style-name='Heading 3'] => h3:fresh",
               "r[style-name='Strong'] => strong",
-              "r[style-name='Emphasis'] => em"
+              "r[style-name='Emphasis'] => em",
+              "table => table",
+              "p => p",
+              "br => br"
             ]
           };
 
