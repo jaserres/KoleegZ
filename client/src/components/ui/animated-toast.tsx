@@ -1,7 +1,8 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Toast } from "@/components/ui/toast";
+import { Toast, ToastProps } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { AlertCircle, XCircle, CheckCircle } from "lucide-react";
+import { VariantProps } from "class-variance-authority";
 
 const variants = {
   initial: { 
@@ -44,9 +45,9 @@ const iconVariants = {
   }
 };
 
-interface AnimatedToastProps extends React.ComponentProps<typeof Toast> {
+type AnimatedToastProps = Omit<ToastProps, "variant"> & {
   variant?: "default" | "destructive" | "success";
-}
+};
 
 export function AnimatedToast({ className, variant = "default", ...props }: AnimatedToastProps) {
   const Icon = variant === "destructive" ? XCircle :
@@ -64,7 +65,7 @@ export function AnimatedToast({ className, variant = "default", ...props }: Anim
         className={cn(
           "flex items-center gap-2",
           variant === "destructive" && "bg-destructive text-destructive-foreground",
-          variant === "success" && "bg-green-600 text-white",
+          variant === "success" && "bg-green-600 text-white dark:bg-green-500",
           className
         )}
         {...props}
