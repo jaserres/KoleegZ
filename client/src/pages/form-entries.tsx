@@ -133,15 +133,28 @@ export default function FormEntries() {
         name: documentName,
         template: documentTemplate,
       });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al crear el documento");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/documents`] });
+      setShowTemplateDialog(false);
       setDocumentName("");
       setDocumentTemplate("");
+      setDetectedVariables([]);
       toast({
-        title: "Success",
-        description: "Document template created successfully",
+        title: "Éxito",
+        description: "Plantilla guardada correctamente",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo guardar la plantilla",
+        variant: "destructive",
       });
     },
   });
@@ -349,21 +362,8 @@ export default function FormEntries() {
 
     try {
       await createDocumentMutation.mutateAsync();
-      toast({
-        title: "Éxito",
-        description: "Plantilla guardada correctamente"
-      });
-      // Reset form after successful creation
-      setDocumentName("");
-      setDocumentTemplate("");
-      setDetectedVariables([]);
-      setShowTemplateDialog(false);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "No se pudo guardar la plantilla",
-        variant: "destructive"
-      });
+    } catch (error) {
+      console.error('Error al crear documento:', error);
     }
   };
   
