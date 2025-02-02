@@ -405,7 +405,72 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
+  
+  // Add entries routes after form routes
+  app.post("/api/forms/:formId/entries", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
+      const { values } = req.body;
 
+      // Verificar que el formulario pertenece al usuario
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+      if (!form) {
+        return res.status(404).json({ error: "Formulario no encontrado" });
+      }
+
+      // Crear la entrada
+      const [entry] = await db.insert(entries)
+        .values({
+          formId: form.id,
+          values,
+          createdAt: new Date()
+        })
+        .returning();
+
+      return res.json(entry);
+    } catch (error: any) {
+      console.error('Error creating entry:', error);
+      return res.status(500).json({
+        error: "Error al crear la entrada",
+        details: error.message
+      });
+    }
+  });
+
+  // Get entries for a form
+  app.get("/api/forms/:formId/entries", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
+
+      // Verificar que el formulario pertenece al usuario
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+      if (!form) {
+        return res.status(404).json({ error: "Formulario no encontrado" });
+      }
+
+      // Obtener las entradas del formulario
+      const formEntries = await db.select()
+        .from(entries)
+        .where(eq(entries.formId, formId))
+        .orderBy(desc(entries.createdAt));
+
+      return res.json(formEntries);
+    } catch (error: any) {
+      console.error('Error fetching entries:', error);
+      return res.status(500).json({
+        error: "Error al obtener las entradas",
+        details: error.message
+      });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;
