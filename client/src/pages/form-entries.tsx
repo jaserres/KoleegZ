@@ -60,7 +60,8 @@ export default function FormEntries() {
   };
 
   const { saving } = useAutoSave(
-    currentEntryId ? `/api/forms/${id}/entries/${currentEntryId}` : null,
+    // Solo activar el autoguardado si hay un currentEntryId y NO hay un selectedRowId
+    currentEntryId && !selectedRowId ? `/api/forms/${id}/entries/${currentEntryId}` : null,
     formValues,
     {
       debounceMs: 1000,
@@ -311,8 +312,9 @@ export default function FormEntries() {
     };
 
     const handleRowClick = (entry: any) => {
+    // Al hacer click en una fila, establecemos los valores pero desactivamos el autoguardado
       setFormValues(entry.values);
-      setCurrentEntryId(entry.id);
+      setCurrentEntryId(null); // Desactivar autoguardado
       setSelectedRowId(entry.id);
     };
 
