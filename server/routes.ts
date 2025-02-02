@@ -174,27 +174,36 @@ export function registerRoutes(app: Express): Server {
       if (!req.file) {
         return res.status(400).json({ error: "No se ha proporcionado ningún archivo" });
       }
-
+  
+      // Generate a unique filename for the original document
+      const originalFileName = `original_${Date.now()}_${req.file.originalname}`;
+  
+      // Save the original file
+      await saveFile(originalFileName, req.file.buffer);
+  
       let template: string;
       let preview: string;
-
+  
       if (req.file.mimetype === 'text/plain') {
         template = req.file.buffer.toString('utf-8')
           .replace(/\0/g, '')
           .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
         preview = template;
       } else {
+        // Extract text for preview while keeping the original file
         const result = await mammoth.extractRawText({ buffer: req.file.buffer });
         template = result.value;
         preview = template;
       }
-
+  
       return res.json({
         name: req.file.originalname.split('.')[0],
         template,
-        preview
+        preview,
+        originalFile: originalFileName,
+        originalMimeType: req.file.mimetype
       });
-
+  
     } catch (error: any) {
       console.error('Error processing document:', error);
       return res.status(500).json({
@@ -204,29 +213,37 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Agregar la ruta para crear documentos
+  // Modificar la ruta para crear documentos
   app.post("/api/forms/:formId/documents", async (req, res) => {
     try {
       const user = ensureAuth(req);
       const formId = parseInt(req.params.formId);
-      const { name, template } = req.body;
-
+      const { name, template, originalFile, originalMimeType } = req.body;
+  
       if (!name || !template) {
         return res.status(400).json({ error: "Nombre y plantilla son requeridos" });
       }
-
+  
       // Verificar que el formulario pertenece al usuario
       const [form] = await db.select()
         .from(forms)
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
+  
       if (!form) {
         return res.status(404).json({ error: "Formulario no encontrado" });
       }
-
+  
       // Generar nombre de archivo único
       const fileName = `${form.id}_${Date.now()}.docx`;
-
+  
+      // Si hay un archivo original, copiarlo al nuevo nombre
+      if (originalFile) {
+        const originalContent = await readFile(originalFile);
+        await saveFile(fileName, originalContent);
+        // Limpiar el archivo temporal original
+        await deleteFile(originalFile);
+      }
+  
       // Crear el registro del documento en la base de datos
       const [document] = await db.insert(documents)
         .values({
@@ -234,9 +251,10 @@ export function registerRoutes(app: Express): Server {
           name,
           template,
           filePath: fileName,
+          mimeType: originalMimeType || 'text/plain'
         })
         .returning();
-
+  
       return res.json(document);
     } catch (error: any) {
       console.error('Error al crear documento:', error);

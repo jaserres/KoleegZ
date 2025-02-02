@@ -55,6 +55,8 @@ export default function FormEntries() {
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
+  const [originalFile, setOriginalFile] = useState<string | null>(null);
+  const [originalMimeType, setOriginalMimeType] = useState<string | null>(null);
   
     const user = {
     isPremium: true,
@@ -132,6 +134,8 @@ export default function FormEntries() {
       const res = await apiRequest("POST", `/api/forms/${id}/documents`, {
         name: documentName,
         template: documentTemplate,
+        originalFile,
+        originalMimeType
       });
       if (!res.ok) {
         const error = await res.text();
@@ -145,6 +149,8 @@ export default function FormEntries() {
       setDocumentName("");
       setDocumentTemplate("");
       setDetectedVariables([]);
+      setOriginalFile(null);
+      setOriginalMimeType(null);
       toast({
         title: "Éxito",
         description: "Plantilla guardada correctamente",
@@ -336,6 +342,8 @@ export default function FormEntries() {
         const doc = await response.json();
         setDocumentTemplate(doc.template);
         setDocumentName(doc.name || file.name.split('.')[0]);
+        setOriginalFile(doc.originalFile);
+        setOriginalMimeType(doc.originalMimeType);
 
         // Extract variables after setting the template
         const variables = extractVariables(doc.template);
