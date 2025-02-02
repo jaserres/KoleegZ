@@ -3,14 +3,12 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
 import { users, forms, variables, entries, documents } from "@db/schema";
-import { eq, and, desc, asc } from "drizzle-orm";
-import { Parser } from 'json2csv';
-import * as XLSX from 'xlsx';
+import { eq, and, desc } from "drizzle-orm";
 import multer from 'multer';
 import { createReport } from 'docx-templates';
 import { promises as fs } from 'fs';
 import mammoth from 'mammoth';
-import { saveFile, readFile, deleteFile } from './storage';
+import { saveFile, readFile, deleteFile, fileExists } from './storage';
 import { Document, Paragraph, TextRun, Packer } from 'docx';
 
 // Configurar multer para manejar archivos
@@ -248,51 +246,41 @@ export function registerRoutes(app: Express): Server {
       const user = ensureAuth(req);
       const formId = parseInt(req.params.formId);
       const { name, template, originalFile, originalMimeType } = req.body;
-  
+
       if (!name || !template) {
         return res.status(400).json({ error: "Nombre y plantilla son requeridos" });
       }
-  
+
       // Verificar que el formulario pertenece al usuario
       const [form] = await db.select()
         .from(forms)
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-  
+
       if (!form) {
         return res.status(404).json({ error: "Formulario no encontrado" });
       }
-  
+
       console.log('Creating document for form:', { formId, name, hasOriginalFile: !!originalFile });
-  
-      // Generar nombre de archivo único que incluya el ID del formulario
-      const fileName = `form_${form.id}_${Date.now()}.docx`;
-  
+
+      // Generar nombre de archivo único para el nuevo documento
+      const newFileName = `form_${formId}_${Date.now()}.docx`;
+
       try {
-        // Si hay un archivo original, verificar que existe y copiarlo
+        let finalBuffer: Buffer;
+
         if (originalFile) {
           console.log('Checking original file:', originalFile);
           const exists = await fileExists(originalFile);
-  
+
           if (!exists) {
             throw new Error(`Original file not found: ${originalFile}`);
           }
-  
-          console.log('Original file exists, copying to:', fileName);
-          const originalContent = await readFile(originalFile);
-          await saveFile(fileName, originalContent);
-          console.log('Original file copied successfully');
-  
-          // Limpiar el archivo temporal original
-          try {
-            await deleteFile(originalFile);
-            console.log('Temporary file cleaned up');
-          } catch (cleanupError) {
-            console.error('Error cleaning up temporary file:', cleanupError);
-            // Continue even if cleanup fails
-          }
+
+          console.log('Original file exists, reading content');
+          finalBuffer = await readFile(originalFile);
+          console.log('Original file content read successfully');
         } else {
-          // Si no hay archivo original, crear uno nuevo con el template
-          console.log('No original file, creating new document');
+          console.log('Creating new document from template');
           const doc = new Document({
             sections: [{
               properties: {},
@@ -303,31 +291,48 @@ export function registerRoutes(app: Express): Server {
               ]
             }]
           });
-  
-          const buffer = await Packer.toBuffer(doc);
-          await saveFile(fileName, buffer);
-          console.log('New document created successfully');
+
+          finalBuffer = await Packer.toBuffer(doc);
+          console.log('New document created from template');
         }
-  
-        // Crear el registro del documento en la base de datos
-        const [document] = await db.insert(documents)
+
+        // Guardar el nuevo archivo
+        console.log('Saving new document as:', newFileName);
+        await saveFile(newFileName, finalBuffer);
+        console.log('New document saved successfully');
+
+        // Si había un archivo original, eliminarlo
+        if (originalFile) {
+          try {
+            await deleteFile(originalFile);
+            console.log('Original file cleaned up');
+          } catch (cleanupError) {
+            console.error('Error cleaning up original file:', cleanupError);
+            // Continuar incluso si falla la limpieza
+          }
+        }
+
+        // Crear el registro en la base de datos
+        const document = await db
+          .insert(documents)
           .values({
-            formId: form.id,
+            formId,
             name,
             template,
-            filePath: fileName,
+            filePath: newFileName,
             mimeType: originalMimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           })
-          .returning();
-  
+          .returning()
+          .then(rows => rows[0]);
+
         console.log('Document record created:', document);
         return res.json(document);
-  
+
       } catch (fileError: any) {
         console.error('Error handling document file:', fileError);
         throw new Error(`Error processing document file: ${fileError.message}`);
       }
-  
+
     } catch (error: any) {
       console.error('Error creating document:', error);
       return res.status(500).json({
@@ -638,13 +643,4 @@ export function registerRoutes(app: Express): Server {
 
   const httpServer = createServer(app);
   return httpServer;
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await fs.access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
