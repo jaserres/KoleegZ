@@ -364,6 +364,11 @@ export function registerRoutes(app: Express): Server {
       return res.status(404).send("Form not found");
     }
 
+    // Si no hay archivo, crear un archivo temporal con el contenido del template
+    const buffer = Buffer.from(req.body.template, 'utf-8');
+    const fileName = `template-${Date.now()}.txt`;
+    const filePath = await saveFile(buffer, fileName);
+
     const preview = generatePreview(req.body.template);
 
     const [doc] = await db.insert(documents)
@@ -372,6 +377,7 @@ export function registerRoutes(app: Express): Server {
         name: req.body.name,
         template: req.body.template,
         preview,
+        filePath, // Ahora siempre proporcionamos un filePath
       })
       .returning();
 
