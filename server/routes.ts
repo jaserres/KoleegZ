@@ -361,15 +361,15 @@ export function registerRoutes(app: Express): Server {
 
         // Crear las variables si existen
         if (formVariables && Array.isArray(formVariables)) {
-          for (const variable of formVariables) {
-            await tx.insert(variables)
-              .values({
+          await tx.insert(variables)
+            .values(
+              formVariables.map(variable => ({
                 formId: form.id,
                 name: variable.name,
                 label: variable.label,
                 type: variable.type || 'text',
-              });
-          }
+              }))
+            );
         }
 
         return form;
