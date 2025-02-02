@@ -478,21 +478,29 @@ export default function FormBuilder() {
 
     const handleDownload = async () => {
       try {
-        const response = await fetch(`/api/forms/${id || 'temp'}/documents/preview/download?template=${encodeURIComponent(previewContent.template)}&filename=${encodeURIComponent(previewContent.name)}`);
+        const baseUrl = window.location.origin;
+        const endpoint = `api/forms/${id || 'temp'}/documents/preview/download`;
+        const params = new URLSearchParams({
+          template: previewContent.template,
+          filename: previewContent.name
+        });
+
+        const url = `${baseUrl}/${endpoint}?${params.toString()}`;
+        const response = await fetch(url);
 
         if (!response.ok) {
           throw new Error('Error al descargar el documento');
         }
 
         const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
+        const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = url;
+        link.href = downloadUrl;
         link.download = `${previewContent.name}.txt`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+        window.URL.revokeObjectURL(downloadUrl);
       } catch (error) {
         console.error('Error downloading document:', error);
         toast({
