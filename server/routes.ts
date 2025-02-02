@@ -520,7 +520,6 @@ export function registerRoutes(app: Express): Server {
     res.sendStatus(200);
   });
 
-  // Modificar solo la ruta de merge
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -571,16 +570,26 @@ export function registerRoutes(app: Express): Server {
       // Leer el archivo DOCX
       const documentBuffer = await readFile(doc.filePath);
 
-      console.log('Documento encontrado:', {
+      // Asegurarse de que entry.values sea un objeto válido y transformar los valores
+      const rawValues = entry.values || {};
+      const mergeData: Record<string, string> = {};
+
+      // Transformar todos los valores a string y validar que no sean undefined
+      Object.entries(rawValues).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          mergeData[key] = String(value);
+        } else {
+          mergeData[key] = ''; // Valor por defecto para campos vacíos
+        }
+      });
+
+      console.log('Datos preparados para merge:', {
         id: doc.id,
         name: doc.name,
         filePath: doc.filePath,
         bufferLength: documentBuffer.length,
-        entryValues: entry.values
+        mergeData
       });
-
-      // Asegurarse de que entry.values sea un objeto válido
-      const mergeData = entry.values || {};
 
       // Realizar el merge con manejo de errores más detallado
       try {
