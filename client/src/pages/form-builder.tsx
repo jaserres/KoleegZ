@@ -96,8 +96,16 @@ export default function FormBuilder() {
         for (const variable of variables) {
           await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
         }
+
+        // Si hay una plantilla cargada, crear el documento
+        if (templateContent) {
+          await apiRequest("POST", `/api/forms/${form.id}/documents`, {
+            name: formName,
+            template: templateContent,
+          });
+        }
       } catch (error) {
-        // If variable creation fails, delete the form to maintain consistency
+        // If variable or document creation fails, delete the form to maintain consistency
         await apiRequest("DELETE", `/api/forms/${form.id}`);
         throw error;
       }
@@ -108,7 +116,9 @@ export default function FormBuilder() {
       queryClient.invalidateQueries({ queryKey: ["/api/forms"] });
       toast({
         title: "Éxito",
-        description: "Formulario creado exitosamente",
+        description: templateContent 
+          ? "Formulario y plantilla creados exitosamente"
+          : "Formulario creado exitosamente",
       });
       setLocation("/");
     },
