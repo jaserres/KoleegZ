@@ -11,6 +11,7 @@ import { createReport } from 'docx-templates';
 import { promises as fs } from 'fs';
 import mammoth from 'mammoth';
 import { saveFile, readFile, deleteFile } from './storage';
+import { Document, Paragraph, TextRun } from 'docx';
 
 // Configurar multer para manejar archivos
 const upload = multer({
@@ -366,9 +367,6 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Crear un documento DOCX básico con el contenido del template
-      const docx = require('docx');
-      const { Document, Paragraph, TextRun } = docx;
-
       const doc = new Document({
         sections: [{
           properties: {},
