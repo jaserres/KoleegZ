@@ -291,39 +291,60 @@ export default function FormEntries() {
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-        // Verificar que sea un archivo .txt
-        if (!file.name.toLowerCase().endsWith('.txt')) {
+        // Verificar tipos de archivo permitidos
+        const allowedTypes = [
+          'text/plain',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ];
+
+        if (!allowedTypes.includes(file.type)) {
           toast({
             title: "Error al cargar archivo",
-            description: "Solo se permiten archivos .txt",
+            description: "Solo se permiten archivos .txt, .doc y .docx",
             variant: "destructive"
           });
           return;
         }
 
         try {
-          // Read file as text
-          const text = await file.text();
+          if (file.type === 'text/plain') {
+            // Procesar archivo .txt como antes
+            const text = await file.text();
+            const sanitizedText = text
+              .replace(/\0/g, '')
+              .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
 
-          // Sanitize text: remove null bytes and invalid UTF-8
-          const sanitizedText = text
-            .replace(/\0/g, '') // Remove null bytes
-            .replace(/[^\x20-\x7E\x0A\x0D]/g, ''); // Keep only printable ASCII, newlines and carriage returns
+            setDocumentTemplate(sanitizedText);
+          } else {
+            // Para archivos .doc y .docx, usar el nuevo endpoint
+            const formData = new FormData();
+            formData.append('file', file);
 
-          setDocumentTemplate(sanitizedText);
+            const response = await fetch(`/api/forms/${id}/documents/upload`, {
+              method: 'POST',
+              body: formData,
+            });
 
-          // Extract variables from template
-          const variables = extractVariables(sanitizedText);
+            if (!response.ok) {
+              throw new Error(await response.text());
+            }
+
+            const doc = await response.json();
+            setDocumentTemplate(doc.template);
+          }
+
+          // Extraer variables y usar el nombre del archivo
+          const variables = extractVariables(documentTemplate);
           setDetectedVariables(variables);
 
-          // Use filename as template name if not already set
           if (!documentName) {
             setDocumentName(file.name.split('.')[0]);
           }
         } catch (error) {
           toast({
             title: "Error al cargar archivo",
-            description: "El archivo debe ser un documento de texto válido",
+            description: error.message || "Error al procesar el archivo",
             variant: "destructive"
           });
         }
@@ -615,7 +636,7 @@ export default function FormEntries() {
                             <Input
                               id="file-upload"
                               type="file"
-                              accept=".txt"
+                              accept=".txt,.doc,.docx"
                               className="max-w-xs"
                               onChange={handleFileUpload}
                             />

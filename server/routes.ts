@@ -6,6 +6,22 @@ import { forms, variables, entries, documents, users } from "@db/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
+import multer from 'multer';
+import * as mammoth from 'mammoth';
+import { promises as fs } from 'fs';
+
+// Configurar multer para manejar archivos
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se permiten archivos .doc y .docx'));
+    }
+  }
+});
 
 function ensureAuth(req: Request) {
   if (!req.isAuthenticated()) {
@@ -211,6 +227,54 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Documents endpoints
+  app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).send("No se ha proporcionado ningún archivo");
+      }
+
+      // Verificar propiedad del formulario
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+      if (!form) {
+        return res.status(404).send("Form not found");
+      }
+
+      // Procesar el archivo .docx usando mammoth
+      let result;
+      try {
+        result = await mammoth.extractRawText({ buffer: file.buffer });
+      } catch (error) {
+        console.error('Error processing document:', error);
+        return res.status(400).send("Error al procesar el documento");
+      }
+
+      const template = result.value;
+      const preview = generatePreview(template);
+
+      // Crear el documento en la base de datos
+      const [doc] = await db.insert(documents)
+        .values({
+          formId,
+          name: file.originalname.replace(/\.[^/.]+$/, ""), // Eliminar extensión
+          template,
+          preview,
+        })
+        .returning();
+
+      res.status(201).json(doc);
+    } catch (error) {
+      console.error('Error in document upload:', error);
+      res.status(500).send("Error al subir el documento");
+    }
+  });
+
   app.post("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
