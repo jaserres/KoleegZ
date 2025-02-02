@@ -416,7 +416,6 @@ export function registerRoutes(app: Express): Server {
     res.sendStatus(200);
   });
 
-  // Mail merge endpoint
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -459,6 +458,7 @@ export function registerRoutes(app: Express): Server {
 
       // Para preview o descarga, primero verificar si tenemos el documento original
       if (!doc.originalDocument) {
+        console.log('No original document found, using plain text template');
         // Si no hay documento original, usar el template de texto plano
         const mergedText = doc.template.replace(/{{(\w+)}}/g, (match, variable) => {
           return entry.values[variable] || match;
@@ -471,45 +471,57 @@ export function registerRoutes(app: Express): Server {
           return res.send(mergedText);
         } else {
           // Para preview, enviar el texto con formato HTML básico
-          const htmlContent = mergedText
-            .split('\n')
-            .map(line => `<p>${line}</p>`)
-            .join('');
+          const htmlContent = `<div style="white-space: pre-wrap; font-family: monospace;">${
+            mergedText.split('\n').map(line => `<p>${line}</p>`).join('')
+          }</div>`;
           return res.json({ result: htmlContent });
         }
       }
 
-      // Si tenemos el documento original, proceder con el merge manteniendo el formato
-      const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
+      console.log('Original document found, proceeding with formatted merge');
 
-      if (isDownload) {
-        try {
+      // Si tenemos el documento original, proceder con el merge manteniendo el formato
+      try {
+        const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
+
+        if (isDownload) {
+          console.log('Generating formatted document for download');
           const buffer = await createReport({
             template: originalDocBuffer,
-            data: entry.values,
+            data: entry.values || {},
+            cmdDelimiter: ['{{', '}}'],
           });
 
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
           res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
           return res.send(buffer);
-        } catch (error) {
-          console.error('Error generating document:', error);
-          return res.status(500).send("Error al generar el documento con formato");
+        } else {
+          console.log('Generating preview with formatting');
+          // Para preview, primero hacer el merge y luego convertir a HTML
+          const mergedBuffer = await createReport({
+            template: originalDocBuffer,
+            data: entry.values || {},
+            cmdDelimiter: ['{{', '}}'],
+          });
+
+          const options = {
+            styleMap: [
+              "p[style-name='Heading 1'] => h1:fresh",
+              "p[style-name='Heading 2'] => h2:fresh",
+              "p[style-name='Heading 3'] => h3:fresh",
+              "r[style-name='Strong'] => strong",
+              "r[style-name='Emphasis'] => em"
+            ]
+          };
+
+          const result = await mammoth.convertToHtml({ buffer: mergedBuffer }, options);
+          return res.json({ 
+            result: `<div class="document-preview">${result.value}</div>` 
+          });
         }
-      }
-
-      // Para preview con formato
-      try {
-        const mergedBuffer = await createReport({
-          template: originalDocBuffer,
-          data: entry.values,
-        });
-
-        const result = await mammoth.convertToHtml({ buffer: mergedBuffer });
-        res.json({ result: result.value });
       } catch (error) {
-        console.error('Error generating preview:', error);
-        res.status(500).send("Error al generar la vista previa con formato");
+        console.error('Error in document processing:', error);
+        return res.status(500).send(`Error procesando el documento: ${error.message}`);
       }
     } catch (error) {
       console.error('Error in merge operation:', error);
