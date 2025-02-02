@@ -163,14 +163,19 @@ export default function FormBuilder() {
   const extractVariables = (template: string) => {
     const variableRegex = /{{([^}]+)}}/g;
     const matches = template.match(variableRegex) || [];
-    const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9]*$/;
+    const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
     const invalidVariables: string[] = [];
     const validVariables = new Set<string>();
 
     matches.forEach(match => {
       const varName = match.slice(2, -2).trim();
-      if (validVariableRegex.test(varName)) {
-        validVariables.add(varName);
+      // Convertir espacios y guiones a guiones bajos
+      const normalizedName = varName
+        .replace(/[\s-]+/g, '_')
+        .replace(/[^a-zA-Z0-9_]/g, '');
+
+      if (normalizedName && validVariableRegex.test(normalizedName)) {
+        validVariables.add(normalizedName);
       } else {
         invalidVariables.push(varName);
       }
@@ -179,7 +184,7 @@ export default function FormBuilder() {
     if (invalidVariables.length > 0) {
       toast({
         title: "Variables no válidas detectadas",
-        description: `Las siguientes variables contienen caracteres no permitidos: ${invalidVariables.join(", ")}. Use solo letras y números, comenzando con una letra.`,
+        description: `Las siguientes variables no pudieron ser normalizadas: ${invalidVariables.join(", ")}. Las variables deben comenzar con una letra y pueden contener letras, números y guiones bajos.`,
         variant: "destructive"
       });
       return [];
@@ -187,7 +192,10 @@ export default function FormBuilder() {
 
     const variables = Array.from(validVariables).map(varName => ({
       name: varName,
-      label: varName.split(/(?=[A-Z])/).join(' '), // Convert camelCase to spaces
+      label: varName
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' '), // Convert snake_case to Title Case
       type: 'text' // Default type
     }));
 
