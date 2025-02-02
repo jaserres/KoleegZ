@@ -89,6 +89,34 @@ export default function FormEntries() {
 
   const { trigger: triggerConfetti } = useConfetti();
 
+
+  const updateEntryMutation = useMutation({
+    mutationFn: async ({ entryId, values }: { entryId: number; values: Record<string, any> }) => {
+      const res = await apiRequest("PATCH", `/api/forms/${id}/entries/${entryId}`, {
+        values,
+      });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al actualizar la entrada");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
+      toast({
+        title: "Éxito",
+        description: "Entrada actualizada correctamente",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo actualizar la entrada",
+        variant: "destructive",
+      });
+    },
+  });
+
   const createEntryMutation = useMutation({
     mutationFn: async (values: Record<string, any>) => {
       const res = await apiRequest("POST", `/api/forms/${id}/entries`, {
@@ -107,14 +135,11 @@ export default function FormEntries() {
         title: "Éxito",
         description: "Entrada agregada correctamente",
       });
-      // Trigger confetti celebration
+      // Solo limpiar el formulario si es una nueva entrada
+      setFormValues({});
+      setSelectedRowId(null);
+      setCurrentEntryId(null);
       triggerConfetti();
-      // Solo limpiar el formulario después de confirmar que se guardó correctamente
-      setTimeout(() => {
-        setFormValues({});
-        setSelectedRowId(null);
-        setCurrentEntryId(null);
-      }, 1000);
     },
     onError: (error: Error) => {
       toast({
@@ -316,34 +341,6 @@ export default function FormEntries() {
     setSelectedRowId(entry.id);
   };
 
-  const updateEntryMutation = useMutation({
-    mutationFn: async ({ entryId, values }: { entryId: number; values: Record<string, any> }) => {
-      const res = await apiRequest("PATCH", `/api/forms/${id}/entries/${entryId}`, {
-        values,
-      });
-      if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error || "Error al actualizar la entrada");
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
-      toast({
-        title: "Éxito",
-        description: "Entrada actualizada correctamente",
-      });
-      // Mantener los valores actuales del formulario
-      setFormValues(data.values);
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "No se pudo actualizar la entrada",
-        variant: "destructive",
-      });
-    },
-  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -352,7 +349,6 @@ export default function FormEntries() {
 
     form?.variables?.forEach((variable: any) => {
       const value = formData.get(variable.name);
-      // Solo incluir el valor si no está vacío
       if (value) {
         values[variable.name] = variable.type === "number"
           ? Number(value)
