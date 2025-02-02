@@ -153,7 +153,7 @@ export function registerRoutes(app: Express): Server {
     const [form] = await db.select()
       .from(forms)
       .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-      
+
     if (!form) {
       return res.status(404).send("Form not found");
     }
@@ -162,16 +162,17 @@ export function registerRoutes(app: Express): Server {
     const entryCount = await db.select()
       .from(entries)
       .where(eq(entries.formId, formId));
-    
+
     const limit = user.isPremium ? 100 : 5;
     if (entryCount.length >= limit) {
       return res.status(403).send(`You can only create ${limit} entries per form`);
     }
 
+    // Accept any values object, even if incomplete
     const [entry] = await db.insert(entries)
       .values({
         formId,
-        values: req.body.values,
+        values: req.body.values || {}, // Allow empty object if no values provided
       })
       .returning();
 
