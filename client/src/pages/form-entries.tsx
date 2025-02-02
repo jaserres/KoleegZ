@@ -305,20 +305,18 @@ export default function FormEntries() {
   };
   
     const handleFieldChange = (name: string, value: any) => {
-      setFormValues((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
-    };
+    setFormValues((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
-    const handleRowClick = (entry: any) => {
-    // Al hacer click en una fila, establecemos los valores pero desactivamos el autoguardado
-      setFormValues(entry.values);
-      setCurrentEntryId(null); // Desactivar autoguardado
-      setSelectedRowId(entry.id);
-    };
+  const handleRowClick = (entry: any) => {
+    setFormValues(entry.values);
+    setSelectedRowId(entry.id);
+  };
 
-    const updateEntryMutation = useMutation({
+  const updateEntryMutation = useMutation({
     mutationFn: async ({ entryId, values }: { entryId: number; values: Record<string, any> }) => {
       const res = await apiRequest("PATCH", `/api/forms/${id}/entries/${entryId}`, {
         values,
@@ -460,22 +458,14 @@ export default function FormEntries() {
               <div className="flex flex-wrap gap-2">
                 <Button 
                   type="submit" 
-                  disabled={selectedRowId ? updateEntryMutation.isPending : createEntryMutation.isPending}
+                  disabled={createEntryMutation.isPending || updateEntryMutation.isPending}
                 >
-                  {selectedRowId ? (
-                    updateEntryMutation.isPending ? (
-                      <Spinner variant="dots" size="sm" className="mr-2" />
-                    ) : (
-                      <Save className="mr-2 h-4 w-4" />
-                    )
+                  {createEntryMutation.isPending || updateEntryMutation.isPending ? (
+                    <Spinner variant="dots" size="sm" className="mr-2" />
                   ) : (
-                    createEntryMutation.isPending ? (
-                      <Spinner variant="dots" size="sm" className="mr-2" />
-                    ) : (
-                      <Plus className="mr-2 h-4 w-4" />
-                    )
+                    <Plus className="mr-2 h-4 w-4" />
                   )}
-                  {selectedRowId ? "Guardar cambios" : "Agregar entrada"}
+                  Guardar
                 </Button>
                 {selectedRowId && (
                   <Button
@@ -803,7 +793,7 @@ export default function FormEntries() {
               </Table>
             </div>
           </CardContent>
-          <div className="mt-4">
+        <div className="mt-4">
             <h3 className="text-lg font-medium mb-2">Plantillas Disponibles</h3>
             <div className="grid gap-4 md:grid-cols-2">
               {documents.length === 0 ? (
