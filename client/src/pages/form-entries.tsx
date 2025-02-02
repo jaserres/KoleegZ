@@ -51,7 +51,7 @@ export default function FormEntries() {
   const [mergedResult, setMergedResult] = useState("");
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
-  const [detectedVariables, setDetectedVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
+    const [detectedVariables, setDetectedVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -769,20 +769,40 @@ export default function FormEntries() {
                                     <div className="flex justify-between items-center">
                                       <Label>Preview</Label>
                                       {selectedTemplate && (
-                                        <Button
+                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          onClick={() => {
+                                          onClick={async () => {
                                             if (selectedTemplate && selectedEntry) {
                                               try {
-                                                const baseUrl = window.location.origin.replace(/\/$/, '');
-                                                const endpoint = `api/forms/${id}/documents/${selectedTemplate.id}/merge`;
-                                                const params = new URLSearchParams({
-                                                  entryId: selectedEntry.toString(),
-                                                  download: 'true'
+                                                // Hacer la solicitud de merge directamente
+                                                const response = await fetch(`/api/forms/${id}/documents/${selectedTemplate.id}/merge`, {
+                                                  method: 'POST',
+                                                  headers: {
+                                                    'Content-Type': 'application/json',
+                                                  },
+                                                  body: JSON.stringify({
+                                                    entryId: selectedEntry,
+                                                    download: true
+                                                  })
                                                 });
 
-                                                window.location.href = `${baseUrl}/${endpoint}?${params.toString()}`;
+                                                if (!response.ok) {
+                                                  throw new Error('Error al descargar el documento');
+                                                }
+
+                                                const text = await response.text();
+
+                                                // Crear blob y descargar
+                                                const blob = new Blob([text], { type: 'text/plain' });
+                                                const url = window.URL.createObjectURL(blob);
+                                                const link = document.createElement('a');
+                                                link.href = url;
+                                                link.download = `${selectedTemplate.name}.txt`;
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                document.body.removeChild(link);
+                                                window.URL.revokeObjectURL(url);
                                               } catch (error) {
                                                 toast({
                                                   title: "Error",
@@ -809,10 +829,10 @@ export default function FormEntries() {
                             </DialogContent>
                           </Dialog>
                           <Button
-                            variant="outline"
-                            className="text-red-500 hover:text-red-700"
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                            onClick={() => {
                               if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
                                 deleteEntryMutation.mutate(entry.id);
                               }
