@@ -570,238 +570,240 @@ export default function FormEntries() {
             </div>
           </CardHeader>
           <CardContent>
-            <Table className="w-full overflow-auto">
-              <TableHeader>
-                <TableRow>
-                  {form?.variables?.map((variable: any) => (
-                    <TableHead key={variable.id} className="whitespace-nowrap">{variable.label}</TableHead>
-                  ))}
-                  <TableHead className="whitespace-nowrap">Created</TableHead>
-                  <TableHead className="whitespace-nowrap">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries?.map((entry: any) => (
-                  <TableRow 
-                    key={entry.id}
-                    className={cn(
-                      "cursor-pointer hover:bg-muted/50",
-                      selectedRowId === entry.id && "bg-muted"
-                    )}
-                    onClick={() => handleRowClick(entry)}
-                  >
+            <div className="w-full overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
                     {form?.variables?.map((variable: any) => (
-                      <TableCell key={variable.id} className="max-w-[200px] truncate">
-                        {entry.values[variable.name]}
-                      </TableCell>
+                      <TableHead key={variable.id} className="whitespace-nowrap">{variable.label}</TableHead>
                     ))}
-                    <TableCell className="whitespace-nowrap">
-                      {format(new Date(entry.createdAt), "PPp")}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              onClick={() => setSelectedEntry(entry.id)}
-                            >
-                              <FileText className="mr-2 h-4 w-4" />
-                              Merge
-                            </Button>
-                          </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                            <DialogHeader>
-                              <DialogTitle>Mail Merge</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="grid gap-4 grid-cols-2">
-                                {documents?.map((doc: any) => (
-                                  <Card key={doc.id}>
-                                    <CardHeader>
-                                      <CardTitle>{doc.name}</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                      <Button
-                                        onClick={() => {
-                                          mergeMutation.mutate({
-                                            documentId: doc.id,
-                                            entryId: selectedEntry!,
-                                          });
-                                        }}
-                                        disabled={mergeMutation.isPending}
-                                      >
-                                        {mergeMutation.isPending ? (
-                                          <Spinner variant="bounce" size="sm" className="mr-2" />
-                                        ) : null}
-                                        Merge with this template
-                                      </Button>
-                                    </CardContent>
-                                  </Card>
-                                ))}
-                              </div>
-                              {mergedResult && (
-                                <div className="space-y-4">
-                                  <div className="flex justify-between items-center">
-                                    <Label>Preview</Label>
-                                    {selectedTemplate && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                          if (selectedTemplate && selectedEntry) {
-                                            // Primero realizar el merge para asegurarnos que todo está correcto
-                                            mergeMutation.mutate(
-                                              {
-                                                documentId: selectedTemplate.id,
-                                                entryId: selectedEntry,
-                                              },
-                                              {
-                                                onSuccess: async () => {
-                                                  try {
-                                                    // Realizar la descarga usando fetch
-                                                    const response = await fetch(
-                                                      `api/forms/${id}/documents/${selectedTemplate.id}/merge`,
-                                                      {
-                                                        method: 'POST',
-                                                        headers: {
-                                                          'Content-Type': 'application/json',
-                                                        },
-                                                        body: JSON.stringify({
-                                                          entryId: selectedEntry,
-                                                          download: true
-                                                        })
-                                                      }
-                                                    );
-                                                    if (!response.ok) {
-                                                      throw new Error('Error al descargar el documento');
-                                                    }
-
-                                                    const blob = await response.blob();
-                                                    const url = window.URL.createObjectURL(blob);
-                                                    const a = document.createElement('a');
-                                                    a.href = url;
-                                                    // Mantener la extensión original del archivo
-                                                    const extension = selectedTemplate.name.split('.').pop() || 'txt';
-                                                    a.download = `${selectedTemplate.name.split('.')[0]}.${extension}`;
-                                                    document.body.appendChild(a);
-                                                    a.click();
-                                                    window.URL.revokeObjectURL(url);
-                                                    document.body.removeChild(a);
-                                                  } catch (error) {
-                                                    toast({
-                                                      title: "Error",
-                                                      description: "No se pudo descargar el documento",
-                                                      variant: "destructive"
-                                                    });
-                                                  }
-                                                },
-                                              }
-                                            );
-                                          }
-                                        }}
-                                      >
-                                        <FileDown className="mr-2 h-4 w-4" />
-                                        Download
-                                      </Button>
-                                    )}
-                                  </div>
-                                  <Textarea
-                                    value={mergedResult}
-                                    readOnly
-                                    className="h-40"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                        <Button
-                          variant="outline"
-                          className="text-red-500 hover:text-red-700"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
-                              deleteEntryMutation.mutate(entry.id);
-                            }
-                          }}
-                          disabled={deleteEntryMutation.isPending}
-                        >
-                          {deleteEntryMutation.isPending ? (
-                            <Spinner variant="pulse" size="sm" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </TableCell>
+                    <TableHead className="whitespace-nowrap">Created</TableHead>
+                    <TableHead className="whitespace-nowrap">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <div className="mt-4">
-              <h3 className="text-lg font-medium mb-2">Plantillas Disponibles</h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                {documents.length === 0 ? (
-                  <Card>
-                    <CardContent className="pt-6">
-                      <p className="text-muted-foreground text-center">
-                        No hay plantillas disponibles. Crea una nueva plantilla para comenzar.
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                   documents.map((doc) => (
-                     <Card key={doc.id}>
-                       <CardHeader>
-                         <div className="flex justify-between items-center">
-                           <CardTitle>{doc.name}</CardTitle>
-                           <Button
-                             variant="outline"
-                             size="icon"
-                             className="text-red-500 hover:text-red-700"
-                             onClick={() => {
-                               if (window.confirm("¿Estás seguro de que quieres eliminar esta plantilla?")) {
-                                 deleteDocumentMutation.mutate(doc.id);
-                               }
-                             }}
-                             disabled={deleteDocumentMutation.isPending}
-                           >
-                             {deleteDocumentMutation.isPending ? (
-                               <Spinner variant="pulse" size="sm" />
-                             ) : (
-                               <Trash2 className="h-4 w-4" />
-                             )}
-                           </Button>
-                         </div>
-                       </CardHeader>
-                       <CardContent>
-                         <div className="space-y-4">
-                           <div className="bg-muted p-4 rounded-md">
-                             <pre className="text-xs font-mono whitespace-pre-wrap line-clamp-3">
-                               {doc.preview || doc.template.slice(0, 200)}
-                             </pre>
-                           </div>
-                           <div className="text-sm text-muted-foreground">
-                             Creada el {format(new Date(doc.createdAt), "PPp")}
-                           </div>
-                           <Button
-                             variant="outline"
-                             onClick={() => {
-                               setSelectedTemplate(doc);
-                               setShowTemplateDialog(true);
-                             }}
-                           >
-                             Ver Plantilla
-                           </Button>
-                         </div>
-                       </CardContent>
-                     </Card>
-                   ))
-                )}
-              </div>
+                </TableHeader>
+                <TableBody>
+                  {entries?.map((entry: any) => (
+                    <TableRow 
+                      key={entry.id}
+                      className={cn(
+                        "cursor-pointer hover:bg-muted/50",
+                        selectedRowId === entry.id && "bg-muted"
+                      )}
+                      onClick={() => handleRowClick(entry)}
+                    >
+                      {form?.variables?.map((variable: any) => (
+                        <TableCell key={variable.id} className="whitespace-nowrap">
+                          {entry.values[variable.name]}
+                        </TableCell>
+                      ))}
+                      <TableCell className="whitespace-nowrap">
+                        {format(new Date(entry.createdAt), "PPp")}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <div className="flex gap-2">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                onClick={() => setSelectedEntry(entry.id)}
+                              >
+                                <FileText className="mr-2 h-4 w-4" />
+                                Merge
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl">
+                              <DialogHeader>
+                                <DialogTitle>Mail Merge</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div className="grid gap-4 grid-cols-2">
+                                  {documents?.map((doc: any) => (
+                                    <Card key={doc.id}>
+                                      <CardHeader>
+                                        <CardTitle>{doc.name}</CardTitle>
+                                      </CardHeader>
+                                      <CardContent>
+                                        <Button
+                                          onClick={() => {
+                                            mergeMutation.mutate({
+                                              documentId: doc.id,
+                                              entryId: selectedEntry!,
+                                            });
+                                          }}
+                                          disabled={mergeMutation.isPending}
+                                        >
+                                          {mergeMutation.isPending ? (
+                                            <Spinner variant="bounce" size="sm" className="mr-2" />
+                                          ) : null}
+                                          Merge with this template
+                                        </Button>
+                                      </CardContent>
+                                    </Card>
+                                  ))}
+                                </div>
+                                {mergedResult && (
+                                  <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                      <Label>Preview</Label>
+                                      {selectedTemplate && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            if (selectedTemplate && selectedEntry) {
+                                              // Primero realizar el merge para asegurarnos que todo está correcto
+                                              mergeMutation.mutate(
+                                                {
+                                                  documentId: selectedTemplate.id,
+                                                  entryId: selectedEntry,
+                                                },
+                                                {
+                                                  onSuccess: async () => {
+                                                    try {
+                                                      // Realizar la descarga usando fetch
+                                                      const response = await fetch(
+                                                        `api/forms/${id}/documents/${selectedTemplate.id}/merge`,
+                                                        {
+                                                          method: 'POST',
+                                                          headers: {
+                                                            'Content-Type': 'application/json',
+                                                          },
+                                                          body: JSON.stringify({
+                                                            entryId: selectedEntry,
+                                                            download: true
+                                                          })
+                                                        }
+                                                      );
+                                                      if (!response.ok) {
+                                                        throw new Error('Error al descargar el documento');
+                                                      }
+
+                                                      const blob = await response.blob();
+                                                      const url = window.URL.createObjectURL(blob);
+                                                      const a = document.createElement('a');
+                                                      a.href = url;
+                                                      // Mantener la extensión original del archivo
+                                                      const extension = selectedTemplate.name.split('.').pop() || 'txt';
+                                                      a.download = `${selectedTemplate.name.split('.')[0]}.${extension}`;
+                                                      document.body.appendChild(a);
+                                                      a.click();
+                                                      window.URL.revokeObjectURL(url);
+                                                      document.body.removeChild(a);
+                                                    } catch (error) {
+                                                      toast({
+                                                        title: "Error",
+                                                        description: "No se pudo descargar el documento",
+                                                        variant: "destructive"
+                                                      });
+                                                    }
+                                                  },
+                                                }
+                                              );
+                                            }
+                                          }}
+                                        >
+                                          <FileDown className="mr-2 h-4 w-4" />
+                                          Download
+                                        </Button>
+                                      )}
+                                    </div>
+                                    <Textarea
+                                      value={mergedResult}
+                                      readOnly
+                                      className="h-40"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                          <Button
+                            variant="outline"
+                            className="text-red-500 hover:text-red-700"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
+                                deleteEntryMutation.mutate(entry.id);
+                              }
+                            }}
+                            disabled={deleteEntryMutation.isPending}
+                          >
+                            {deleteEntryMutation.isPending ? (
+                              <Spinner variant="pulse" size="sm" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
+          <div className="mt-4">
+            <h3 className="text-lg font-medium mb-2">Plantillas Disponibles</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              {documents.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-muted-foreground text-center">
+                      No hay plantillas disponibles. Crea una nueva plantilla para comenzar.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                 documents.map((doc) => (
+                   <Card key={doc.id}>
+                     <CardHeader>
+                       <div className="flex justify-between items-center">
+                         <CardTitle>{doc.name}</CardTitle>
+                         <Button
+                           variant="outline"
+                           size="icon"
+                           className="text-red-500 hover:text-red-700"
+                           onClick={() => {
+                             if (window.confirm("¿Estás seguro de que quieres eliminar esta plantilla?")) {
+                               deleteDocumentMutation.mutate(doc.id);
+                             }
+                           }}
+                           disabled={deleteDocumentMutation.isPending}
+                         >
+                           {deleteDocumentMutation.isPending ? (
+                             <Spinner variant="pulse" size="sm" />
+                           ) : (
+                             <Trash2 className="h-4 w-4" />
+                           )}
+                         </Button>
+                       </div>
+                     </CardHeader>
+                     <CardContent>
+                       <div className="space-y-4">
+                         <div className="bg-muted p-4 rounded-md">
+                           <pre className="text-xs font-mono whitespace-pre-wrap line-clamp-3">
+                             {doc.preview || doc.template.slice(0, 200)}
+                           </pre>
+                         </div>
+                         <div className="text-sm text-muted-foreground">
+                           Creada el {format(new Date(doc.createdAt), "PPp")}
+                         </div>
+                         <Button
+                           variant="outline"
+                           onClick={() => {
+                             setSelectedTemplate(doc);
+                             setShowTemplateDialog(true);
+                           }}
+                         >
+                           Ver Plantilla
+                         </Button>
+                       </div>
+                     </CardContent>
+                   </Card>
+                 ))
+              )}
+            </div>
+          </div>
         </Card>
       </div>
         <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
