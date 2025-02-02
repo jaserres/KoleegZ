@@ -105,6 +105,7 @@ export default function FormEntries() {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
       // Mantener los valores actualizados y la selección
       setFormValues(data.values);
+      setSelectedRowId(data.id);
       toast({
         title: "Éxito",
         description: "Entrada actualizada correctamente",
@@ -130,16 +131,16 @@ export default function FormEntries() {
       }
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
-      toast({
-        title: "Éxito",
-        description: "Entrada agregada correctamente",
-      });
       // Solo limpiar el formulario si es una nueva entrada
       setFormValues({});
       setSelectedRowId(null);
       setCurrentEntryId(null);
+      toast({
+        title: "Éxito",
+        description: "Entrada agregada correctamente",
+      });
       triggerConfetti();
     },
     onError: (error: Error) => {
@@ -340,6 +341,7 @@ export default function FormEntries() {
   const handleRowClick = (entry: any) => {
     setFormValues(entry.values);
     setSelectedRowId(entry.id);
+    setCurrentEntryId(entry.id); // Set currentEntryId when a row is clicked
   };
 
 
