@@ -417,6 +417,7 @@ export default function FormBuilder() {
                         <SelectItem value="text">Texto</SelectItem>
                         <SelectItem value="number">Número</SelectItem>
                         <SelectItem value="date">Fecha</SelectItem>
+                        <SelectItem value="time">Hora</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
