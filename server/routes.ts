@@ -493,98 +493,103 @@ export function registerRoutes(app: Express): Server {
     res.sendStatus(200);
   });
 
-  // Merge endpoint
+  // Modificar solo la ruta de merge
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
-    const user = ensureAuth(req);
-    const formId = parseInt(req.params.formId);
-    const documentId = parseInt(req.params.documentId);
-    const entryId = parseInt(req.body.entryId);
-    const isDownload = req.body.download === true;
-
     try {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
+      const documentId = parseInt(req.params.documentId);
+      const entryId = parseInt(req.body.entryId);
+      const isDownload = req.body.download === true;
+  
       console.log('Iniciando operación de merge:', {
         formId,
         documentId,
         entryId,
         isDownload
       });
-
+  
       // Verificaciones de seguridad y existencia
       const [form] = await db.select()
         .from(forms)
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
+  
       if (!form) {
         return res.status(404).send("Form not found");
       }
-
+  
       const [doc] = await db.select()
         .from(documents)
         .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
-
+  
       if (!doc) {
         return res.status(404).send("Document not found");
       }
-
+  
       const [entry] = await db.select()
         .from(entries)
         .where(and(eq(entries.id, entryId), eq(entries.formId, formId)));
-
+  
       if (!entry) {
         return res.status(404).send("Entry not found");
       }
-
-      // Leer el archivo original
+  
+      // Verificar que el archivo existe y es un DOCX
+      if (!doc.filePath.toLowerCase().endsWith('.docx')) {
+        return res.status(400).json({
+          error: "El archivo debe ser un documento DOCX"
+        });
+      }
+  
+      // Leer el archivo DOCX
       const documentBuffer = await readFile(doc.filePath);
-
+  
       console.log('Documento encontrado:', {
         id: doc.id,
         name: doc.name,
-        filePath: doc.filePath
+        filePath: doc.filePath,
+        bufferLength: documentBuffer.length
       });
-
-      // Realizar el merge
-      const mergedBuffer = await createReport({
-        template: documentBuffer,
-        data: entry.values || {},
-        cmdDelimiter: ['{{', '}}'],
-        failFast: false,
-        rejectNullish: false,
-        fixSmartQuotes: true,
-        processLineBreaks: true
-      });
-
-      console.log('Merge completado exitosamente');
-
-      if (isDownload) {
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
-        return res.send(mergedBuffer);
-      } else {
-        const result = await mammoth.convertToHtml({
-          buffer: mergedBuffer,
-          options: {
-            styleMap: [
-              "p[style-name='Heading 1'] => h1:fresh",
-              "p[style-name='Heading 2'] => h2:fresh",
-              "p[style-name='Heading 3'] => h3:fresh",
-              "r[style-name='Strong'] => strong",
-              "r[style-name='Emphasis'] => em",
-              "table => table",
-              "p => p",
-              "br => br"
-            ]
-          }
+  
+      // Realizar el merge con manejo de errores más detallado
+      try {
+        const mergedBuffer = await createReport({
+          template: documentBuffer,
+          data: entry.values || {},
+          cmdDelimiter: ['{{', '}}'],
+          failFast: false,
+          rejectNullish: false,
+          fixSmartQuotes: true,
+          processLineBreaks: true
         });
-
-        return res.json({ 
-          result: `<div class="document-preview">${result.value}</div>` 
+  
+        console.log('Merge completado exitosamente');
+  
+        if (isDownload) {
+          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+          return res.send(mergedBuffer);
+        } else {
+          const result = await mammoth.convertToHtml({
+            buffer: mergedBuffer
+          });
+  
+          return res.json({ 
+            result: `<div class="document-preview">${result.value}</div>` 
+          });
+        }
+      } catch (mergeError) {
+        console.error('Error específico en el merge:', mergeError);
+        return res.status(500).json({
+          error: `Error en el proceso de merge: ${mergeError.message}`,
+          details: mergeError.stack
         });
       }
     } catch (error: any) {
       console.error('Error en el procesamiento del merge:', error);
       return res.status(500).json({
-        error: `Error procesando el documento: ${error.message}`
+        error: `Error procesando el documento: ${error.message}`,
+        details: error.stack
       });
     }
   });

@@ -15,7 +15,7 @@ async function ensureStorageDir() {
   }
 }
 
-// Generar un nombre de archivo único
+// Generar un nombre de archivo único manteniendo la extensión original
 function generateUniqueFileName(originalName: string): string {
   const timestamp = Date.now();
   const hash = crypto.createHash('md5').update(`${timestamp}-${originalName}`).digest('hex');
@@ -28,8 +28,9 @@ export async function saveFile(buffer: Buffer, originalName: string): Promise<st
   await ensureStorageDir();
   const fileName = generateUniqueFileName(originalName);
   const filePath = path.join(STORAGE_DIR, fileName);
-  
+
   try {
+    // Escribir el archivo en modo binario
     await fs.writeFile(filePath, buffer);
     return fileName;
   } catch (error) {
@@ -42,6 +43,7 @@ export async function saveFile(buffer: Buffer, originalName: string): Promise<st
 export async function readFile(fileName: string): Promise<Buffer> {
   const filePath = path.join(STORAGE_DIR, fileName);
   try {
+    // Leer el archivo en modo binario
     return await fs.readFile(filePath);
   } catch (error) {
     console.error('Error reading file:', error);
