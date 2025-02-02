@@ -381,20 +381,15 @@ export default function FormEntries() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
     const values: Record<string, any> = {};
 
     form?.variables?.forEach((variable: any) => {
-      const value = formData.get(variable.name);
-      // Solo incluir el valor si no está vacío
-      if (value) {
-        values[variable.name] = variable.type === "number"
-          ? Number(value)
-          : value;
+      const value = formValues[variable.name];
+      if (value !== undefined && value !== '') {
+        values[variable.name] = variable.type === "number" ? Number(value) : value;
       }
     });
 
-    // Create a new entry
     createEntryMutation.mutate(values);
   };
   
@@ -923,8 +918,7 @@ export default function FormEntries() {
         <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{selectedTemplate?.name}</DialogTitle>
-          </DialogHeader>
+            <DialogTitle>{selectedTemplate?.name}</DialogTitle>          </DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Contenido de la Plantilla</Label>

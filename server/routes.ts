@@ -40,6 +40,50 @@ function ensureAuth(req: Request) {
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
+  // Delete form route
+  app.delete("/api/forms/:formId", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
+
+      // Verify form ownership
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+      if (!form) {
+        return res.status(404).json({ error: "Form not found" });
+      }
+
+      // Delete form and related data
+      await db.transaction(async (tx) => {
+        // Delete entries
+        await tx.delete(entries)
+          .where(eq(entries.formId, formId));
+
+        // Delete variables
+        await tx.delete(variables)
+          .where(eq(variables.formId, formId));
+
+        // Delete documents
+        await tx.delete(documents)
+          .where(eq(documents.formId, formId));
+
+        // Delete form
+        await tx.delete(forms)
+          .where(eq(forms.id, formId));
+      });
+
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting form:', error);
+      return res.status(500).json({
+        error: "Error deleting form",
+        details: error.message
+      });
+    }
+  });
+  
   // Agregar la ruta GET /api/forms al inicio
   app.get("/api/forms", async (req, res) => {
     try {
