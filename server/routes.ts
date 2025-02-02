@@ -230,20 +230,22 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
       const user = ensureAuth(req);
-      const formId = parseInt(req.params.formId);
+      const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
       const file = req.file;
 
       if (!file) {
         return res.status(400).send("No se ha proporcionado ningún archivo");
       }
 
-      // Verificar propiedad del formulario
-      const [form] = await db.select()
-        .from(forms)
-        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+      // Solo verificar propiedad del formulario si no es una carga temporal
+      if (formId !== null) {
+        const [form] = await db.select()
+          .from(forms)
+          .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-      if (!form) {
-        return res.status(404).send("Form not found");
+        if (!form) {
+          return res.status(404).send("Form not found");
+        }
       }
 
       // Procesar el archivo .docx usando mammoth
@@ -258,11 +260,20 @@ export function registerRoutes(app: Express): Server {
       const template = result.value;
       const preview = generatePreview(template);
 
-      // Crear el documento en la base de datos
+      // Si es una carga temporal, solo devolver el contenido
+      if (formId === null) {
+        return res.status(200).json({
+          name: file.originalname.replace(/\.[^/.]+$/, ""),
+          template,
+          preview
+        });
+      }
+
+      // Crear el documento en la base de datos si tenemos un formId válido
       const [doc] = await db.insert(documents)
         .values({
           formId,
-          name: file.originalname.replace(/\.[^/.]+$/, ""), // Eliminar extensión
+          name: file.originalname.replace(/\.[^/.]+$/, ""),
           template,
           preview,
         })

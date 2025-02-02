@@ -245,8 +245,13 @@ export default function FormBuilder() {
             throw new Error(await response.text());
           }
 
-          const doc = await response.json();
-          text = doc.template;
+          const result = await response.json();
+          text = result.template;
+
+          if (!id) {
+            // Si estamos creando un nuevo formulario, usar el nombre del archivo
+            setFormName(result.name);
+          }
         }
 
         setTemplateContent(text);
@@ -270,6 +275,7 @@ export default function FormBuilder() {
           description: `Se detectaron ${detectedVariables.length} variables válidas en la plantilla`,
         });
       } catch (error) {
+        console.error('Error al cargar archivo:', error);
         toast({
           title: "Error al cargar archivo",
           description: error.message || "Error al procesar el archivo",
