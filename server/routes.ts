@@ -416,7 +416,6 @@ export function registerRoutes(app: Express): Server {
     res.sendStatus(200);
   });
 
-  // Mail merge endpoint
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -498,9 +497,21 @@ export function registerRoutes(app: Express): Server {
             template: originalDocBuffer,
             data: entry.values || {},
             cmdDelimiter: ['{{', '}}'],
-            failFast: true, // Falla rápido si hay errores
+            failFast: false, // Cambiar a false para evitar errores por variables faltantes
             rejectNullish: false, // No rechazar valores nulos/undefined
             fixSmartQuotes: true, // Arreglar comillas inteligentes
+            processLineBreaks: true, // Procesar saltos de línea
+            parser: {
+              delimiters: {
+                start: '{{',
+                end: '}}',
+              },
+            },
+            additionalJsContext: {
+              // Funciones auxiliares para procesamiento de texto
+              emptyIfNull: (value) => value || '',
+              formatDate: (value) => value ? new Date(value).toLocaleDateString() : '',
+            },
           });
 
           // Verificar que el buffer resultante es válido
@@ -517,9 +528,16 @@ export function registerRoutes(app: Express): Server {
             template: originalDocBuffer,
             data: entry.values || {},
             cmdDelimiter: ['{{', '}}'],
-            failFast: true,
+            failFast: false,
             rejectNullish: false,
             fixSmartQuotes: true,
+            processLineBreaks: true,
+            parser: {
+              delimiters: {
+                start: '{{',
+                end: '}}',
+              },
+            },
           });
 
           const options = {
