@@ -163,13 +163,46 @@ export default function FormBuilder() {
   const extractVariables = (template: string) => {
     const variableRegex = /{{([^}]+)}}/g;
     const matches = template.match(variableRegex) || [];
-    const uniqueVariables = new Set(matches.map(match => match.slice(2, -2)));
+    const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9]*$/;
+    const invalidVariables: string[] = [];
+    const validVariables = new Set<string>();
 
-    return Array.from(uniqueVariables).map(varName => ({
+    matches.forEach(match => {
+      const varName = match.slice(2, -2).trim();
+      if (validVariableRegex.test(varName)) {
+        validVariables.add(varName);
+      } else {
+        invalidVariables.push(varName);
+      }
+    });
+
+    if (invalidVariables.length > 0) {
+      toast({
+        title: "Variables no válidas detectadas",
+        description: `Las siguientes variables contienen caracteres no permitidos: ${invalidVariables.join(", ")}. Use solo letras y números, comenzando con una letra.`,
+        variant: "destructive"
+      });
+      return [];
+    }
+
+    const variables = Array.from(validVariables).map(varName => ({
       name: varName,
       label: varName.split(/(?=[A-Z])/).join(' '), // Convert camelCase to spaces
       type: 'text' // Default type
     }));
+
+    // Check variable limit
+    const variableLimit = user?.isPremium ? 50 : 10;
+    if (variables.length > variableLimit) {
+      const excess = variables.length - variableLimit;
+      toast({
+        title: "Demasiadas variables detectadas",
+        description: `El documento tiene ${variables.length} variables, pero su plan ${user?.isPremium ? 'premium' : 'gratuito'} permite hasta ${variableLimit}. Necesita eliminar ${excess} variable${excess > 1 ? 's' : ''} o actualizar a premium.`,
+        variant: "destructive"
+      });
+    }
+
+    return variables;
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -196,21 +229,25 @@ export default function FormBuilder() {
 
         if (detectedVariables.length === 0) {
           toast({
-            title: "No se encontraron variables",
-            description: "La plantilla no contiene variables en formato {{nombreVariable}}",
+            title: "No se encontraron variables válidas",
+            description: "La plantilla no contiene variables válidas en formato {{nombreVariable}}. Las variables deben contener solo letras y números, y comenzar con una letra.",
             variant: "destructive"
           });
           return;
         }
 
-        setFormName(file.name.split('.')[0]);
-        setVariables(detectedVariables);
-        setShowEditor(true);
+        // Only proceed if we're within limits
+        const variableLimit = user?.isPremium ? 50 : 10;
+        if (detectedVariables.length <= variableLimit) {
+          setFormName(file.name.split('.')[0]);
+          setVariables(detectedVariables);
+          setShowEditor(true);
 
-        toast({
-          title: "Plantilla cargada",
-          description: `Se detectaron ${detectedVariables.length} variables en la plantilla`,
-        });
+          toast({
+            title: "Plantilla cargada",
+            description: `Se detectaron ${detectedVariables.length} variables válidas en la plantilla`,
+          });
+        }
       } catch (error) {
         toast({
           title: "Error al cargar archivo",

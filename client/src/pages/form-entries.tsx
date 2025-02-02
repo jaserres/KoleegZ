@@ -185,17 +185,49 @@ export default function FormEntries() {
   });
 
 
-    // Función para extraer variables del template
     const extractVariables = (template: string) => {
       const variableRegex = /{{([^}]+)}}/g;
       const matches = template.match(variableRegex) || [];
-      const uniqueVariables = new Set(matches.map(match => match.slice(2, -2)));
-    
-      return Array.from(uniqueVariables).map(varName => ({
+      const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9]*$/;
+      const invalidVariables: string[] = [];
+      const validVariables = new Set<string>();
+  
+      matches.forEach(match => {
+        const varName = match.slice(2, -2).trim();
+        if (validVariableRegex.test(varName)) {
+          validVariables.add(varName);
+        } else {
+          invalidVariables.push(varName);
+        }
+      });
+  
+      if (invalidVariables.length > 0) {
+        toast({
+          title: "Variables no válidas detectadas",
+          description: `Las siguientes variables contienen caracteres no permitidos: ${invalidVariables.join(", ")}. Use solo letras y números, comenzando con una letra.`,
+          variant: "destructive"
+        });
+        return [];
+      }
+  
+      const variables = Array.from(validVariables).map(varName => ({
         name: varName,
         label: varName.split(/(?=[A-Z])/).join(' '), // Convert camelCase to spaces
         type: 'text' // Default type
       }));
+  
+      // Check variable limit
+      const variableLimit = user?.isPremium ? 50 : 10;
+      if (variables.length > variableLimit) {
+        const excess = variables.length - variableLimit;
+        toast({
+          title: "Demasiadas variables detectadas",
+          description: `El documento tiene ${variables.length} variables, pero su plan ${user?.isPremium ? 'premium' : 'gratuito'} permite hasta ${variableLimit}. Necesita eliminar ${excess} variable${excess > 1 ? 's' : ''} o actualizar a premium.`,
+          variant: "destructive"
+        });
+      }
+  
+      return variables;
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
