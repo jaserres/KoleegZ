@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Download, Upload, FileDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 export default function FormEntries() {
   const { id } = useParams();
@@ -317,7 +318,7 @@ export default function FormEntries() {
               </CardTitle>
               {saving && (
                 <div className="flex items-center text-muted-foreground text-sm">
-                  <Save className="w-4 h-4 mr-2 animate-spin" />
+                  <Spinner variant="dots" size="sm" className="mr-2" />
                   Guardando...
                 </div>
               )}
@@ -341,7 +342,11 @@ export default function FormEntries() {
               ))}
               <div className="flex gap-2">
                 <Button type="submit" disabled={createEntryMutation.isPending || saving}>
-                  <Plus className="mr-2 h-4 w-4" />
+                  {createEntryMutation.isPending ? (
+                    <Spinner variant="dots" size="sm" className="mr-2" />
+                  ) : (
+                    <Plus className="mr-2 h-4 w-4" />
+                  )}
                   {selectedRowId ? "Guardar como nueva entrada" : "Agregar entrada"}
                 </Button>
                   {selectedRowId && (
@@ -540,7 +545,11 @@ export default function FormEntries() {
                                               entryId: selectedEntry!,
                                             });
                                           }}
+                                          disabled={mergeMutation.isPending}
                                         >
+                                          {mergeMutation.isPending ? (
+                                            <Spinner variant="bounce" size="sm" className="mr-2" />
+                                          ) : null}
                                           Merge with this template
                                         </Button>
                                       </CardContent>
@@ -634,7 +643,11 @@ export default function FormEntries() {
                             }}
                             disabled={deleteEntryMutation.isPending}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {deleteEntryMutation.isPending ? (
+                              <Spinner variant="pulse" size="sm" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </Button>
                         </div>
                       </TableCell>

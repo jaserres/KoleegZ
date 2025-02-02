@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { PremiumToggle } from "./premium-toggle";
+import { Spinner } from "@/components/ui/spinner";
 
 export function Navbar() {
   const { user, logoutMutation } = useAuth();
@@ -31,7 +32,11 @@ export function Navbar() {
               onClick={() => logoutMutation.mutate()}
               disabled={logoutMutation.isPending}
             >
-              <LogOut className="h-4 w-4 mr-2" />
+              {logoutMutation.isPending ? (
+                <Spinner variant="dots" size="sm" className="mr-2" />
+              ) : (
+                <LogOut className="h-4 w-4 mr-2" />
+              )}
               Cerrar Sesión
             </Button>
           </div>
