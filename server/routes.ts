@@ -12,7 +12,7 @@ import { promises as fs } from 'fs';
 import mammoth from 'mammoth';
 
 // Configurar multer para manejar archivos
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
@@ -113,12 +113,12 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/forms/:formId/variables", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
-    
+
     // Verify ownership
     const [form] = await db.select()
       .from(forms)
       .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-      
+
     if (!form) {
       return res.status(404).send("Form not found");
     }
@@ -127,7 +127,7 @@ export function registerRoutes(app: Express): Server {
     const varCount = await db.select()
       .from(variables)
       .where(eq(variables.formId, formId));
-    
+
     const limit = user.isPremium ? 50 : 10;
     if (varCount.length >= limit) {
       return res.status(403).send(`You can only create ${limit} variables per form`);
@@ -200,7 +200,7 @@ export function registerRoutes(app: Express): Server {
 
     res.status(201).json(entry);
   });
-  
+
   app.delete("/api/forms/:formId/entries/:entryId", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -236,14 +236,14 @@ export function registerRoutes(app: Express): Server {
       const user = ensureAuth(req);
       const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
       const file = req.file;
-  
+
       if (!file) {
         console.error('No se proporcionó archivo');
         return res.status(400).json({
           error: "No se ha proporcionado ningún archivo"
         });
       }
-  
+
       // Log detallado del archivo recibido
       console.log('Archivo recibido:', {
         originalname: file.originalname,
@@ -252,13 +252,13 @@ export function registerRoutes(app: Express): Server {
         bufferLength: file.buffer.length,
         bufferSample: file.buffer.slice(0, 20).toString('hex')
       });
-  
+
       if (formId !== null) {
         // Verify ownership
         const [form] = await db.select()
           .from(forms)
           .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-  
+
         if (!form) {
           console.error('Formulario no encontrado:', { formId });
           return res.status(404).json({
@@ -267,29 +267,33 @@ export function registerRoutes(app: Express): Server {
           });
         }
       }
-  
+
       let template = '';
       let preview = '';
       let originalDocument = '';
-  
+
       // Si es un archivo .docx, mantener el documento original
       if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         console.log('Procesando archivo DOCX...');
-  
+
+        // Mantener la extensión .docx para documentos DOCX
+        const fileName = file.originalname;
+
         // Convertir el buffer a base64 para almacenar el documento original
         originalDocument = file.buffer.toString('base64');
-  
+
         try {
           // Extraer el texto para búsqueda y preview
           const [htmlResult, textResult] = await Promise.all([
             mammoth.convertToHtml({ buffer: file.buffer }),
             mammoth.extractRawText({ buffer: file.buffer })
           ]);
-  
+
           template = textResult.value;
           preview = htmlResult.value;
-  
+
           console.log('Documento DOCX procesado:', {
+            fileName,
             templateLength: template.length,
             previewLength: preview.length,
             originalDocumentLength: originalDocument.length
@@ -299,48 +303,48 @@ export function registerRoutes(app: Express): Server {
           throw new Error('Error al procesar el documento DOCX');
         }
       } else {
-        // Para archivos .txt, usar el contenido directamente
+        // Para archivos .txt, podemos eliminar la extensión
         template = file.buffer.toString('utf-8');
         preview = template;
         originalDocument = file.buffer.toString('base64');
       }
-  
+
       // Si es una carga temporal, solo devolver el contenido
       if (formId === null) {
         return res.status(200).json({
-          name: file.originalname.replace(/\.[^/.]+$/, ""),
+          name: file.mimetype.includes('document') ? file.originalname : file.originalname.replace(/\.[^/.]+$/, ""),
           template,
           preview,
           originalDocument // Incluir el documento original en la respuesta temporal
         });
       }
-  
+
       // Preparar los datos del documento
       const docData = {
         formId,
-        name: file.originalname.replace(/\.[^/.]+$/, ""),
+        name: file.mimetype.includes('document') ? file.originalname : file.originalname.replace(/\.[^/.]+$/, ""),
         template,
         preview,
         originalDocument
       };
-  
+
       console.log('Guardando documento en la base de datos:', {
         name: docData.name,
         templateLength: docData.template.length,
         previewLength: docData.preview.length,
         originalDocumentLength: docData.originalDocument.length
       });
-  
+
       // Insertar el documento en la base de datos
       const [doc] = await db.insert(documents)
         .values(docData)
         .returning();
-  
+
       // Verificar que el documento se guardó correctamente
       const [savedDoc] = await db.select()
         .from(documents)
         .where(eq(documents.id, doc.id));
-  
+
       if (!savedDoc || !savedDoc.originalDocument) {
         console.error('Error: Documento no guardado correctamente:', {
           savedDoc: savedDoc ? 'exists' : 'null',
@@ -348,14 +352,14 @@ export function registerRoutes(app: Express): Server {
         });
         throw new Error('El documento no se guardó correctamente en la base de datos');
       }
-  
+
       console.log('Documento guardado exitosamente:', {
         id: savedDoc.id,
         name: savedDoc.name,
         hasOriginalDoc: !!savedDoc.originalDocument,
         originalDocumentLength: savedDoc.originalDocument.length
       });
-  
+
       res.status(201).json(doc);
     } catch (error: any) {
       console.error('Error al procesar el documento:', {
@@ -367,7 +371,7 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
-  
+
   app.post("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -458,7 +462,7 @@ export function registerRoutes(app: Express): Server {
     }
 
     const [updatedForm] = await db.update(forms)
-      .set({ 
+      .set({
         name: req.body.name,
         theme: req.body.theme || form.theme,
         updatedAt: new Date()
@@ -468,7 +472,7 @@ export function registerRoutes(app: Express): Server {
 
     res.json(updatedForm);
   });
-  
+
   app.patch("/api/forms/:formId/variables/:variableId", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -484,7 +488,7 @@ export function registerRoutes(app: Express): Server {
     }
 
     await db.update(variables)
-      .set({ 
+      .set({
         name: req.body.name,
         label: req.body.label,
         type: req.body.type
@@ -594,8 +598,13 @@ export function registerRoutes(app: Express): Server {
         console.log('Merge completado exitosamente');
 
         if (isDownload) {
+          // Usar el nombre original del documento con la extensión
+          const fileName = doc.name.toLowerCase().endsWith('.docx') ? 
+            doc.name : 
+            `${doc.name}.docx`;
+
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-          res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
+          res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
           return res.send(mergedBuffer);
         } else {
           const result = await mammoth.convertToHtml({
@@ -743,7 +752,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).send("Formato no soportado");
     }
   });
-  
+
   app.patch("/api/forms/:formId/entries/:entryId", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -779,36 +788,36 @@ export function registerRoutes(app: Express): Server {
     app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
-  
+
       try {
         // Verify ownership
         const [form] = await db.select()
           .from(forms)
           .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-  
+
         if (!form) {
           return res.status(404).send("Form not found");
         }
-  
+
         // Delete all related records first
         await db.transaction(async (tx) => {
           // Delete entries
           await tx.delete(entries)
             .where(eq(entries.formId, formId));
-  
+
           // Delete variables
           await tx.delete(variables)
             .where(eq(variables.formId, formId));
-  
+
           // Delete documents
           await tx.delete(documents)
             .where(eq(documents.formId, formId));
-  
+
           // Finally delete the form
           await tx.delete(forms)
             .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
         });
-  
+
         res.sendStatus(200);
       } catch (error) {
         console.error('Error deleting form:', error);
