@@ -7,7 +7,7 @@ import { eq, and, desc, asc } from "drizzle-orm";
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
 import multer from 'multer';
-import * as mammoth from 'mammoth';
+import { Document, Paragraph, TextRun, Packer } from 'docx';
 import { promises as fs } from 'fs';
 
 // Configurar multer para manejar archivos
@@ -251,11 +251,13 @@ export function registerRoutes(app: Express): Server {
       // Procesar el archivo .docx usando mammoth
       let result;
       try {
-        result = await mammoth.extractRawText({ buffer: file.buffer });
+          const mammoth = require('mammoth');
+          result = await mammoth.extractRawText({ buffer: file.buffer });
       } catch (error) {
         console.error('Error processing document:', error);
         return res.status(400).send("Error al procesar el documento");
       }
+
 
       const template = result.value;
       const preview = generatePreview(template);
@@ -460,13 +462,30 @@ export function registerRoutes(app: Express): Server {
       }
 
       if (isDownload) {
-        // Para descargas, configurar headers para DOCX
+        // Crear un nuevo documento DOCX
+        const document = new Document({
+          sections: [{
+            properties: {},
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: result,
+                  }),
+                ],
+              }),
+            ],
+          }],
+        });
+
+        // Generar el buffer del documento
+        const buffer = await Packer.toBuffer(document);
+
+        // Configurar headers para DOCX
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Disposition', `attachment; filename="${doc.name}.docx"`);
 
-        // Convertir el texto a un documento DOCX usando mammoth
-        const docxBuffer = await mammoth.convertToDocx({ text: result });
-        return res.send(docxBuffer);
+        return res.send(buffer);
       }
 
       res.json({ result });
