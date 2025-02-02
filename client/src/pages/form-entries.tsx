@@ -89,37 +89,6 @@ export default function FormEntries() {
 
   const { trigger: triggerConfetti } = useConfetti();
 
-
-  const updateEntryMutation = useMutation({
-    mutationFn: async ({ entryId, values }: { entryId: number; values: Record<string, any> }) => {
-      const res = await apiRequest("PATCH", `/api/forms/${id}/entries/${entryId}`, {
-        values,
-      });
-      if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error || "Error al actualizar la entrada");
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
-      // Mantener los valores actualizados y la selección
-      setFormValues(data.values);
-      setSelectedRowId(data.id);
-      toast({
-        title: "Éxito",
-        description: "Entrada actualizada correctamente",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "No se pudo actualizar la entrada",
-        variant: "destructive",
-      });
-    },
-  });
-
   const createEntryMutation = useMutation({
     mutationFn: async (values: Record<string, any>) => {
       const res = await apiRequest("POST", `/api/forms/${id}/entries`, {
@@ -131,17 +100,21 @@ export default function FormEntries() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
-      // Solo limpiar el formulario si es una nueva entrada
-      setFormValues({});
-      setSelectedRowId(null);
-      setCurrentEntryId(null);
+      setCurrentEntryId(data.id);
       toast({
         title: "Éxito",
         description: "Entrada agregada correctamente",
       });
+      // Trigger confetti celebration
       triggerConfetti();
+      // Solo limpiar el formulario después de confirmar que se guardó correctamente
+      setTimeout(() => {
+        setFormValues({});
+        setSelectedRowId(null);
+        setCurrentEntryId(null);
+      }, 1000);
     },
     onError: (error: Error) => {
       toast({
@@ -332,18 +305,18 @@ export default function FormEntries() {
   };
   
     const handleFieldChange = (name: string, value: any) => {
-    setFormValues((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+      setFormValues((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    };
 
-  const handleRowClick = (entry: any) => {
-    setFormValues(entry.values);
-    setSelectedRowId(entry.id);
-    setCurrentEntryId(entry.id); // Set currentEntryId when a row is clicked
-  };
-
+    const handleRowClick = (entry: any) => {
+    // Al hacer click en una fila, establecemos los valores pero desactivamos el autoguardado
+      setFormValues(entry.values);
+      setCurrentEntryId(null); // Desactivar autoguardado
+      setSelectedRowId(entry.id);
+    };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -352,6 +325,7 @@ export default function FormEntries() {
 
     form?.variables?.forEach((variable: any) => {
       const value = formData.get(variable.name);
+      // Solo incluir el valor si no está vacío
       if (value) {
         values[variable.name] = variable.type === "number"
           ? Number(value)
@@ -359,16 +333,8 @@ export default function FormEntries() {
       }
     });
 
-    if (selectedRowId) {
-      // Actualizar entrada existente
-      updateEntryMutation.mutate({ 
-        entryId: selectedRowId, 
-        values 
-      });
-    } else {
-      // Crear nueva entrada
-      createEntryMutation.mutate(values);
-    }
+    // Create a new entry
+    createEntryMutation.mutate(values);
   };
   
   const handleCreateFormFromTemplate = () => {
@@ -458,30 +424,27 @@ export default function FormEntries() {
                 </div>
               ))}
               <div className="flex flex-wrap gap-2">
-                <Button 
-                  type="submit" 
-                  disabled={createEntryMutation.isPending || updateEntryMutation.isPending}
-                >
-                  {createEntryMutation.isPending || updateEntryMutation.isPending ? (
+                <Button type="submit" disabled={createEntryMutation.isPending}>
+                  {createEntryMutation.isPending ? (
                     <Spinner variant="dots" size="sm" className="mr-2" />
                   ) : (
                     <Plus className="mr-2 h-4 w-4" />
                   )}
-                  Guardar
+                  {selectedRowId ? "Guardar como nueva entrada" : "Agregar entrada"}
                 </Button>
-                {selectedRowId && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedRowId(null);
-                      setCurrentEntryId(null);
-                      setFormValues({});
-                    }}
-                  >
-                    Cancelar edición
-                  </Button>
-                )}
+                  {selectedRowId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedRowId(null);
+                        setCurrentEntryId(null);
+                        setFormValues({});
+                      }}
+                    >
+                      Cancelar edición
+                    </Button>
+                  )}
               </div>
             </form>
           </CardContent>
@@ -795,7 +758,7 @@ export default function FormEntries() {
               </Table>
             </div>
           </CardContent>
-        <div className="mt-4">
+          <div className="mt-4">
             <h3 className="text-lg font-medium mb-2">Plantillas Disponibles</h3>
             <div className="grid gap-4 md:grid-cols-2">
               {documents.length === 0 ? (
