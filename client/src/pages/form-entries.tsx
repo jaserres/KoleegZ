@@ -569,7 +569,7 @@ export default function FormEntries() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+           <CardContent>
             <div className="w-full overflow-x-auto">
               <Table>
                 <TableHeader>
