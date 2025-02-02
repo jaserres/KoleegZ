@@ -184,7 +184,7 @@ export function registerRoutes(app: Express): Server {
       });
 
       // Generate a unique filename for the original document
-      const originalFileName = `original_${Date.now()}_${req.file.originalname}`;
+      const originalFileName = `temp_${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       console.log('Generated original filename:', originalFileName);
 
       try {
@@ -264,25 +264,49 @@ export function registerRoutes(app: Express): Server {
   
       console.log('Creating document for form:', { formId, name, hasOriginalFile: !!originalFile });
   
-      // Generar nombre de archivo único
-      const fileName = `${form.id}_${Date.now()}.docx`;
+      // Generar nombre de archivo único que incluya el ID del formulario
+      const fileName = `form_${form.id}_${Date.now()}.docx`;
   
       try {
-        // Si hay un archivo original, copiarlo al nuevo nombre
+        // Si hay un archivo original, verificar que existe y copiarlo
         if (originalFile) {
-          console.log('Attempting to copy original file:', originalFile);
+          console.log('Checking original file:', originalFile);
+          const exists = await fileExists(originalFile);
+  
+          if (!exists) {
+            throw new Error(`Original file not found: ${originalFile}`);
+          }
+  
+          console.log('Original file exists, copying to:', fileName);
           const originalContent = await readFile(originalFile);
           await saveFile(fileName, originalContent);
-          console.log('Original file copied successfully to:', fileName);
+          console.log('Original file copied successfully');
   
           // Limpiar el archivo temporal original
           try {
             await deleteFile(originalFile);
-            console.log('Temporary file cleaned up:', originalFile);
+            console.log('Temporary file cleaned up');
           } catch (cleanupError) {
             console.error('Error cleaning up temporary file:', cleanupError);
             // Continue even if cleanup fails
           }
+        } else {
+          // Si no hay archivo original, crear uno nuevo con el template
+          console.log('No original file, creating new document');
+          const doc = new Document({
+            sections: [{
+              properties: {},
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: template })]
+                })
+              ]
+            }]
+          });
+  
+          const buffer = await Packer.toBuffer(doc);
+          await saveFile(fileName, buffer);
+          console.log('New document created successfully');
         }
   
         // Crear el registro del documento en la base de datos
@@ -292,14 +316,14 @@ export function registerRoutes(app: Express): Server {
             name,
             template,
             filePath: fileName,
-            mimeType: originalMimeType || 'text/plain'
+            mimeType: originalMimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           })
           .returning();
   
         console.log('Document record created:', document);
         return res.json(document);
   
-      } catch (fileError) {
+      } catch (fileError: any) {
         console.error('Error handling document file:', fileError);
         throw new Error(`Error processing document file: ${fileError.message}`);
       }
@@ -614,4 +638,13 @@ export function registerRoutes(app: Express): Server {
 
   const httpServer = createServer(app);
   return httpServer;
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await fs.access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }

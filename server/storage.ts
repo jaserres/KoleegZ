@@ -20,18 +20,9 @@ async function ensureStorageDir() {
   }
 }
 
-// Generar un nombre de archivo único manteniendo la extensión original
-function generateUniqueFileName(originalName: string): string {
-  const timestamp = Date.now();
-  const hash = crypto.createHash('md5').update(`${timestamp}-${originalName}`).digest('hex');
-  const ext = path.extname(originalName);
-  return `${hash}${ext}`;
-}
-
-// Guardar un archivo
-export async function saveFile(originalName: string, buffer: Buffer): Promise<string> {
+// Guardar un archivo usando el nombre proporcionado directamente
+export async function saveFile(fileName: string, buffer: Buffer): Promise<string> {
   await ensureStorageDir();
-  const fileName = generateUniqueFileName(originalName);
   const filePath = path.join(STORAGE_DIR, fileName);
 
   try {
@@ -75,6 +66,12 @@ export async function deleteFile(fileName: string): Promise<void> {
     console.error('Error deleting file:', error);
     throw error;
   }
+}
+
+// Verificar que el archivo existe
+export async function fileExists(fileName: string): Promise<boolean> {
+  const filePath = path.join(STORAGE_DIR, fileName);
+  return fs.access(filePath).then(() => true).catch(() => false);
 }
 
 // Inicializar el directorio de almacenamiento al importar el módulo
