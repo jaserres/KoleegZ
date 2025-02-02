@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx';
 import multer from 'multer';
 import { createReport } from 'docx-templates';
 import { promises as fs } from 'fs';
+import mammoth from 'mammoth';
 
 // Configurar multer para manejar archivos
 const upload = multer({ 
@@ -232,65 +233,60 @@ export function registerRoutes(app: Express): Server {
       const user = ensureAuth(req);
       const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
       const file = req.file;
-
+  
       if (!file) {
         return res.status(400).send("No se ha proporcionado ningún archivo");
       }
-
+  
       // Solo verificar propiedad del formulario si no es una carga temporal
       if (formId !== null) {
         const [form] = await db.select()
           .from(forms)
           .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
+  
         if (!form) {
           return res.status(404).send("Form not found");
         }
       }
-
+  
       // Procesar el archivo .docx usando mammoth para obtener HTML y texto
-      let previewHtml = '';
-      let previewText = '';
       try {
-        const mammoth = require('mammoth');
-        const results = await Promise.all([
+        const [htmlResult, textResult] = await Promise.all([
           mammoth.convertToHtml({ buffer: file.buffer }),
           mammoth.extractRawText({ buffer: file.buffer })
         ]);
-        previewHtml = results[0].value;
-        previewText = results[1].value;
+  
+        // Guardar el buffer original como base64
+        const originalDocBase64 = file.buffer.toString('base64');
+  
+        // Si es una carga temporal, solo devolver el contenido
+        if (formId === null) {
+          return res.status(200).json({
+            name: file.originalname.replace(/\.[^/.]+$/, ""),
+            template: textResult.value,
+            preview: htmlResult.value
+          });
+        }
+  
+        // Guardar en la base de datos
+        const [doc] = await db.insert(documents)
+          .values({
+            formId,
+            name: file.originalname.replace(/\.[^/.]+$/, ""),
+            template: textResult.value,
+            preview: htmlResult.value,
+            originalDocument: originalDocBase64
+          })
+          .returning();
+  
+        res.status(201).json(doc);
       } catch (error) {
         console.error('Error processing document:', error);
-        return res.status(400).send("Error al procesar el documento");
+        return res.status(400).send(`Error al procesar el documento: ${error.message}`);
       }
-
-      // Guardar el buffer original como base64
-      const originalDocBase64 = file.buffer.toString('base64');
-
-      // Si es una carga temporal, solo devolver el contenido
-      if (formId === null) {
-        return res.status(200).json({
-          name: file.originalname.replace(/\.[^/.]+$/, ""),
-          template: previewText,
-          preview: previewHtml
-        });
-      }
-
-      // Guardar en la base de datos
-      const [doc] = await db.insert(documents)
-        .values({
-          formId,
-          name: file.originalname.replace(/\.[^/.]+$/, ""),
-          template: previewText,
-          preview: previewHtml,
-          originalDocument: originalDocBase64
-        })
-        .returning();
-
-      res.status(201).json(doc);
     } catch (error) {
       console.error('Error in document upload:', error);
-      res.status(500).send("Error al subir el documento");
+      res.status(500).send(`Error al subir el documento: ${error.message}`);
     }
   });
 
@@ -489,7 +485,6 @@ export function registerRoutes(app: Express): Server {
 
       // Para preview, realizar el merge y convertir a HTML
       try {
-        const mammoth = require('mammoth');
         const originalDocBuffer = Buffer.from(doc.originalDocument, 'base64');
 
         // Realizar el merge primero
