@@ -185,6 +185,35 @@ export default function FormEntries() {
       });
     },
   });
+    
+  const updateEntryMutation = useMutation({
+    mutationFn: async (values: Record<string, any>) => {
+      const res = await apiRequest("PATCH", `/api/forms/${id}/entries/${selectedRowId}`, values);
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al actualizar la entrada");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/entries`] });
+      toast({
+        title: "Éxito",
+        description: "Entrada actualizada correctamente",
+      });
+      // Limpiar el formulario y la selección
+      setFormValues({});
+      setSelectedRowId(null);
+      setCurrentEntryId(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo actualizar la entrada",
+        variant: "destructive",
+      });
+    },
+  });
   
   const deleteDocumentMutation = useMutation({
     mutationFn: async (documentId: number) => {
@@ -432,7 +461,27 @@ export default function FormEntries() {
                   )}
                   {selectedRowId ? "Guardar como nueva entrada" : "Agregar entrada"}
                 </Button>
-                  {selectedRowId && (
+
+                {selectedRowId && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={updateEntryMutation.isPending}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (window.confirm("¿Estás seguro de que quieres sobrescribir los datos actuales?")) {
+                          updateEntryMutation.mutate(formValues);
+                        }
+                      }}
+                    >
+                      {updateEntryMutation.isPending ? (
+                        <Spinner variant="dots" size="sm" className="mr-2" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      Sobrescribir datos actuales
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -444,7 +493,8 @@ export default function FormEntries() {
                     >
                       Cancelar edición
                     </Button>
-                  )}
+                  </>
+                )}
               </div>
             </form>
           </CardContent>
