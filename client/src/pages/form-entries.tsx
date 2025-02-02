@@ -307,9 +307,12 @@ export default function FormEntries() {
 
     form?.variables?.forEach((variable: any) => {
       const value = formData.get(variable.name);
-      values[variable.name] = variable.type === "number"
-        ? Number(value)
-        : value;
+      // Solo incluir el valor si no está vacío
+      if (value) {
+        values[variable.name] = variable.type === "number"
+          ? Number(value)
+          : value;
+      }
     });
 
     // Create a new entry
@@ -401,14 +404,13 @@ export default function FormEntries() {
                             variable.type === "number" ? "number" : "text"}
                       value={formValues[variable.name] || ""}
                       onChange={(e) => handleFieldChange(variable.name, e.target.value)}
-                      required
                       className="w-full"
                     />
                   </div>
                 </div>
               ))}
               <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={createEntryMutation.isPending || saving}>
+                <Button type="submit" disabled={createEntryMutation.isPending}>
                   {createEntryMutation.isPending ? (
                     <Spinner variant="dots" size="sm" className="mr-2" />
                   ) : (
