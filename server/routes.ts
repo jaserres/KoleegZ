@@ -524,7 +524,7 @@ export function registerRoutes(app: Express): Server {
     res.sendStatus(200);
   });
 
-  // Modificar el endpoint de merge para preservar el formato
+  
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -572,43 +572,71 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Leer el archivo DOCX original
-      const templateBuffer = await readFile(doc.filePath);
-
-      // Preparar datos para el merge
-      const mergeData: Record<string, string> = {};
-      Object.entries(entry.values || {}).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          mergeData[key] = String(value);
-        } else {
-          mergeData[key] = '';
-        }
-      });
-
       try {
-        // Realizar el merge con configuración mejorada para preservar formato
+        // Leer el archivo DOCX original
+        const templateBuffer = await readFile(doc.filePath);
+
+        // Verificar que el buffer es un archivo DOCX válido (comienza con PK)
+        if (templateBuffer[0] !== 0x50 || templateBuffer[1] !== 0x4B) {
+          throw new Error('El archivo template no es un DOCX válido');
+        }
+
+        // Preparar datos para el merge
+        const mergeData: Record<string, any> = {};
+        Object.entries(entry.values || {}).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            // Mantener el tipo de dato original cuando sea posible
+            if (typeof value === 'number') {
+              mergeData[key] = value;
+            } else if (typeof value === 'boolean') {
+              mergeData[key] = value;
+            } else {
+              mergeData[key] = String(value);
+            }
+          } else {
+            mergeData[key] = '';
+          }
+        });
+
+        console.log('Realizando merge con datos:', {
+          templateSize: templateBuffer.length,
+          variables: Object.keys(mergeData)
+        });
+
+        // Realizar el merge preservando la estructura DOCX
         const mergedBuffer = await createReport({
           template: templateBuffer,
           data: mergeData,
           cmdDelimiter: ['{{', '}}'],
           failFast: false,
           rejectNullish: false,
-          lineBreaks: true,
-          fixSmartQuotes: true,
-          errorHandler: (error, cmdStr) => {
-            console.error('Error en comando:', { error, cmdStr });
-            return '';
-          },
           additionalJsContext: {
-            // Agregar funciones de utilidad si son necesarias
-            formatDate: (date: string) => new Date(date).toLocaleDateString(),
-            uppercase: (text: string) => text.toUpperCase(),
-            lowercase: (text: string) => text.toLowerCase(),
+            formatDate: (date: string) => {
+              try {
+                return new Date(date).toLocaleDateString();
+              } catch (e) {
+                return date;
+              }
+            },
+            uppercase: (text: string) => String(text).toUpperCase(),
+            lowercase: (text: string) => String(text).toLowerCase(),
+            formatNumber: (num: number) => {
+              try {
+                return new Intl.NumberFormat().format(num);
+              } catch (e) {
+                return String(num);
+              }
+            }
           }
         });
 
+        // Verificar que el resultado es un DOCX válido
+        if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
+          throw new Error('El documento generado no es un DOCX válido');
+        }
+
         if (isDownload) {
-          // Para descarga, enviar el archivo DOCX directamente
+          // Para descarga, enviar el archivo DOCX
           const baseName = doc.name.toLowerCase().endsWith('.docx') 
             ? doc.name.slice(0, -5) 
             : doc.name;
@@ -617,7 +645,7 @@ export function registerRoutes(app: Express): Server {
           res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
           return res.send(mergedBuffer);
         } else {
-          // Para vista previa, convertir a HTML manteniendo el formato
+          // Para vista previa, convertir a HTML
           const result = await mammoth.convertToHtml(
             { buffer: mergedBuffer },
             {
@@ -627,24 +655,16 @@ export function registerRoutes(app: Express): Server {
                 "p[style-name='Heading 2'] => h2:fresh",
                 "p[style-name='Heading 3'] => h3:fresh",
                 "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
-                "r[style-name='Strong'] => strong",
                 "b => strong",
                 "i => em",
                 "u => u",
                 "strike => s",
-                "tab => span.tab",
-                "br => br",
-                "table => table",
-                "tr => tr",
-                "td => td"
+                "tab => span.tab"
               ],
-              includeDefaultStyleMap: true,
-              preserveEmptyParagraphs: true,
-              ignoreEmptyParagraphs: false
+              includeDefaultStyleMap: true
             }
           );
 
-          // Aplicar estilos CSS mejorados para la vista previa
           const styledHtml = `
             <style>
               .document-preview {
@@ -670,7 +690,6 @@ export function registerRoutes(app: Express): Server {
                 border-collapse: collapse;
                 width: 100%;
                 margin: 1em 0;
-                page-break-inside: avoid;
               }
               .document-preview td, .document-preview th {
                 border: 1px solid #ddd;
@@ -678,13 +697,6 @@ export function registerRoutes(app: Express): Server {
                 vertical-align: top;
               }
               .document-preview .list-paragraph { margin-left: 24px; }
-              @media print {
-                .document-preview {
-                  box-shadow: none;
-                  margin: 0;
-                  padding: 0;
-                }
-              }
             </style>
             <div class="document-preview">
               ${result.value}
@@ -693,15 +705,14 @@ export function registerRoutes(app: Express): Server {
           return res.json({ result: styledHtml });
         }
       } catch (mergeError: any) {
-        console.error('Error específico en el merge:', mergeError);
+        console.error('Error en el merge:', mergeError);
         return res.status(500).json({
           error: `Error en el proceso de merge: ${mergeError.message}`,
-          details: mergeError.stack,
-          data: mergeData
+          details: mergeError.stack
         });
       }
     } catch (error: any) {
-      console.error('Error en el procesamiento del merge:', error);
+      console.error('Error en el procesamiento:', error);
       return res.status(500).json({
         error: `Error procesando el documento: ${error.message}`,
         details: error.stack
@@ -832,7 +843,7 @@ export function registerRoutes(app: Express): Server {
 
     res.json(entry);
   });
-
+  
     app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
