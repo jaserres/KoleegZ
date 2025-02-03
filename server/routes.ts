@@ -612,8 +612,12 @@ export function registerRoutes(app: Express): Server {
         // Realizar el merge preservando la estructura DOCX
         let mergedBuffer: Buffer;
         try {
-          mergedBuffer = await createReport({
-            template: templateBuffer,
+          // Asegurarnos de que el template es un Buffer válido
+          const validTemplateBuffer = Buffer.from(templateBuffer);
+
+          // Realizar el merge con el buffer validado
+          const result = await createReport({
+            template: validTemplateBuffer,
             data: mergeData,
             cmdDelimiter: ['{{', '}}'],
             failFast: false,
@@ -623,6 +627,9 @@ export function registerRoutes(app: Express): Server {
               return '';
             }
           });
+
+          // Asegurarnos de que el resultado es un Buffer válido
+          mergedBuffer = Buffer.from(result);
 
           console.log('Merge completado:', {
             resultSize: mergedBuffer.length,
@@ -639,11 +646,12 @@ export function registerRoutes(app: Express): Server {
           throw new Error(`Error en createReport: ${createReportError.message}`);
         }
 
-        // Verificar que el resultado es un DOCX válido
+        // Verificar que el resultado es un buffer válido
         if (!Buffer.isBuffer(mergedBuffer) || mergedBuffer.length === 0) {
           throw new Error('El resultado del merge no es un buffer válido');
         }
 
+        // Verificar que el resultado es un DOCX válido
         if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
           throw new Error('El documento generado no es un DOCX válido');
         }
