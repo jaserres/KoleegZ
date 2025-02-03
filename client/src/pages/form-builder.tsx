@@ -14,21 +14,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Save, ArrowLeft, Upload, Download } from "lucide-react";
+import { Plus, Save, ArrowLeft, Upload, Download, Wand2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { formTemplates } from "@/lib/form-templates";
 import type { SelectVariable } from "@db/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Trash2 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function FormBuilder() {
   const { id } = useParams();
@@ -36,7 +26,6 @@ export default function FormBuilder() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [showEditor, setShowEditor] = useState(false);
-  const [templateContent, setTemplateContent] = useState("");
   const [previewContent, setPreviewContent] = useState<{
     name: string;
     template: string;
@@ -44,8 +33,10 @@ export default function FormBuilder() {
     variables: Array<Partial<SelectVariable>>;
     filePath?: string;
     thumbnailPath?: string;
-    extractedVariables?: string[];
   } | null>(null);
+
+  const [formName, setFormName] = useState("");
+  const [variables, setVariables] = useState<Array<Partial<SelectVariable>>>([]);
 
   const variableLimit = user?.isPremium ? 50 : 10;
 
@@ -53,9 +44,6 @@ export default function FormBuilder() {
     queryKey: [`/api/forms/${id}`],
     enabled: !!id,
   });
-
-  const [formName, setFormName] = useState("");
-  const [variables, setVariables] = useState<Array<Partial<SelectVariable>>>([]);
 
   useEffect(() => {
     if (form) {
@@ -72,14 +60,14 @@ export default function FormBuilder() {
         if (template.variables.length > variableLimit) {
           toast({
             title: "Límite de variables excedido",
-            description: `Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario. Actualiza a premium para aumentar este límite.`,
+            description: `Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`,
             variant: "destructive"
           });
           return;
         }
         setFormName(template.name);
         setVariables(template.variables);
-        setTemplateContent(template.template || "");
+        setPreviewContent(template);
         setShowEditor(true);
         sessionStorage.removeItem("selectedTemplate");
       } catch (error) {
@@ -87,6 +75,165 @@ export default function FormBuilder() {
       }
     }
   }, [id, variableLimit, user?.isPremium]);
+
+  const extractVariables = (template: string) => {
+    const variableRegex = /{{([^}]+)}}/g;
+    const matches = template.match(variableRegex) || [];
+    const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+    const invalidVariables: string[] = [];
+    const validVariables = new Set<string>();
+
+    matches.forEach(match => {
+      const varName = match.slice(2, -2).trim();
+      const normalizedName = varName
+        .replace(/[\s-]+/g, '_')
+        .replace(/[^a-zA-Z0-9_]/g, '');
+
+      if (normalizedName && validVariableRegex.test(normalizedName)) {
+        validVariables.add(normalizedName);
+      } else {
+        invalidVariables.push(varName);
+      }
+    });
+
+    if (invalidVariables.length > 0) {
+      toast({
+        title: "Variables no válidas detectadas",
+        description: `Las siguientes variables no pudieron ser normalizadas: ${invalidVariables.join(", ")}. Las variables deben comenzar con una letra y pueden contener letras, números y guiones bajos.`,
+        variant: "destructive"
+      });
+      return [];
+    }
+
+    return Array.from(validVariables).map(varName => ({
+      name: varName,
+      label: varName
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' '),
+      type: 'text'
+    }));
+  };
+
+  const handleOCRExtraction = async () => {
+    if (!previewContent?.thumbnailPath) return;
+
+    try {
+      const response = await fetch(`/api/forms/${id || 'temp'}/documents/extract-ocr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          thumbnailPath: previewContent.thumbnailPath
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al procesar OCR');
+      }
+
+      const result = await response.json();
+
+      if (result.extractedVariables && result.extractedVariables.length > 0) {
+        // Convertir variables OCR al formato correcto
+        const newVariables = result.extractedVariables
+          .filter((varName: string) => !variables.some(v => v.name === varName))
+          .map((varName: string) => ({
+            name: varName,
+            label: varName
+              .split('_')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' '),
+            type: 'text'
+          }));
+
+        if (newVariables.length > 0) {
+          // Combinar con las variables existentes
+          const updatedVariables = [...variables, ...newVariables];
+          setVariables(updatedVariables);
+
+          toast({
+            title: "Variables Detectadas",
+            description: `Se encontraron ${newVariables.length} nuevas variables.`
+          });
+        } else {
+          toast({
+            title: "OCR Completado",
+            description: "No se detectaron nuevas variables en el documento.",
+            variant: "default"
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error en OCR:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo completar el proceso de OCR",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = [
+      'text/plain',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Error al cargar archivo",
+        description: "Solo se permiten archivos .txt, .doc y .docx",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`/api/forms/${id || 'temp'}/documents/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const result = await response.json();
+
+      // Detectar variables del template
+      const templateVariables = extractVariables(result.template);
+
+      setFormName(result.name);
+      setVariables(templateVariables);
+      setPreviewContent({
+        name: result.name,
+        template: result.template,
+        preview: result.preview,
+        variables: templateVariables,
+        filePath: result.filePath,
+        thumbnailPath: result.thumbnailPath,
+      });
+
+      setShowEditor(true);
+
+    } catch (error) {
+      console.error('Error al cargar archivo:', error);
+      toast({
+        title: "Error al cargar archivo",
+        description: error.message || "Error al procesar el archivo",
+        variant: "destructive"
+      });
+    }
+  };
 
   const createFormMutation = useMutation({
     mutationFn: async () => {
@@ -105,7 +252,6 @@ export default function FormBuilder() {
           preview: parsedTemplate.preview,
           filePath: parsedTemplate.filePath,
           thumbnailPath: parsedTemplate.thumbnailPath,
-           extractedVariables: parsedTemplate.extractedVariables,
         };
       }
 
@@ -181,579 +327,233 @@ export default function FormBuilder() {
     }
   });
 
-    const extractVariables = (template: string) => {
-    const variableRegex = /{{([^}]+)}}/g;
-    const matches = template.match(variableRegex) || [];
-    const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
-    const invalidVariables: string[] = [];
-    const validVariables = new Set<string>();
-
-    matches.forEach(match => {
-      const varName = match.slice(2, -2).trim();
-      const normalizedName = varName
-        .replace(/[\s-]+/g, '_')
-        .replace(/[^a-zA-Z0-9_]/g, '');
-
-      if (normalizedName && validVariableRegex.test(normalizedName)) {
-        validVariables.add(normalizedName);
-      } else {
-        invalidVariables.push(varName);
-      }
-    });
-
-    if (invalidVariables.length > 0) {
-      toast({
-        title: "Variables no válidas detectadas",
-        description: `Las siguientes variables no pudieron ser normalizadas: ${invalidVariables.join(", ")}. Las variables deben comenzar con una letra y pueden contener letras, números y guiones bajos.`,
-        variant: "destructive"
-      });
-      return [];
-    }
-
-    const variables = Array.from(validVariables).map(varName => ({
-      name: varName,
-      label: varName
-        .split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' '),
-      type: 'text'
-    }));
-
-    return variables;
-  };
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const allowedTypes = [
-        'text/plain',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ];
-
-      if (!allowedTypes.includes(file.type)) {
-        toast({
-          title: "Error al cargar archivo",
-          description: "Solo se permiten archivos .txt, .doc y .docx",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`/api/forms/${id || 'temp'}/documents/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          throw new Error(await response.text());
-        }
-
-        const result = await response.json();
-
-        let detectedVariables: Array<Partial<SelectVariable>> = [];
-        let extractedVariables: string[] = [];
-        if (result.template && !result.template.includes("Documento complejo")) {
-          detectedVariables = extractVariables(result.template);
-           extractedVariables = detectedVariables.map(variable => variable.name || '')
-        }
-
-        const previewData = {
-          name: result.name,
-          template: result.template,
-          preview: result.preview,
-          variables: detectedVariables,
-          filePath: result.filePath,
-          thumbnailPath: result.thumbnailPath,
-          extractedVariables: extractedVariables
-        };
-
-        setPreviewContent(previewData);
-
-        if (result.template.includes("Documento complejo")) {
-          toast({
-            title: "Documento Complejo Detectado",
-            description: "Este documento contiene elementos avanzados. Por favor, agregue las variables manualmente.",
-            duration: 6000
-          });
-        } else if (detectedVariables.length > 0) {
-          toast({
-            title: "Variables Detectadas",
-            description: `Se encontraron ${detectedVariables.length} variables en el documento.`,
-            duration: 3000
-          });
-        }
-
-        sessionStorage.setItem("selectedTemplate", JSON.stringify(previewData));
-
-      } catch (error: any) {
-        console.error('Error al cargar archivo:', error);
-        toast({
-          title: "Error al cargar archivo",
-          description: error.message || "Error al procesar el archivo",
-          variant: "destructive"
-        });
-      }
-    }
-  };
-
-  const generatePreview = (template: string) => {
-    const variableRegex = /{{([^}]+)}}/g;
-    return template.replace(variableRegex, (match, variable) => {
-      return `<span class='bg-yellow-100 px-1 rounded'>${match}</span>`;
-    });
-  };
-
-
-    const removeExcessVariables = () => {
-    const excess = variables.length - variableLimit;
-    if (excess > 0) {
-      setVariables(variables.slice(0, variableLimit));
-      toast({
-        title: "Variables eliminadas",
-        description: `Se han eliminado ${excess} variables para cumplir con el límite del plan.`,
-      });
-    }
-  };
-
-// Modificar el renderFormEditor para siempre mostrar el thumbnail
-const renderFormEditor = () => (
-  <Card>
-    <CardHeader>
-      <CardTitle>Configurar Formulario</CardTitle>
-    </CardHeader>
-    <CardContent className="space-y-8">
-      {variables.length > variableLimit && (
-        <Alert>
-          <AlertDescription className="flex items-center justify-between">
-            <span>
-              Su formulario tiene {variables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
-              Necesita eliminar {variables.length - variableLimit} variable(s).
-            </span>
-            <Button
-              variant="outline"
-              onClick={removeExcessVariables}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Eliminar variables excedentes
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div>
-        <Label htmlFor="formName">Nombre del Formulario</Label>
-        <Input
-          id="formName"
-          value={formName}
-          onChange={(e) => setFormName(e.target.value)}
-          className="max-w-md"
-          placeholder="Ingrese el nombre del formulario"
-          required
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Columna de variables */}
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium">Variables del Formulario</h3>
-            <Button
-              onClick={() =>
-                setVariables([
-                  ...variables,
-                  { name: "", label: "", type: "text" },
-                ])
-              }
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Agregar Variable
-            </Button>
-          </div>
-
-          <div className="space-y-4">
-            {variables.map((variable, index) => (
-              <Card key={variable.id || index}>
-                <CardContent className="pt-6 space-y-4">
-                  <div className="grid gap-4">
-                    <div>
-                      <Label>Nombre Interno</Label>
-                      <Input
-                        value={variable.name}
-                        onChange={(e) =>
-                          setVariables(
-                            variables.map((v, i) =>
-                              i === index
-                                ? { ...v, name: e.target.value }
-                                : v
-                            )
-                          )
-                        }
-                        placeholder="nombreVariable"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label>Etiqueta</Label>
-                      <Input
-                        value={variable.label}
-                        onChange={(e) =>
-                          setVariables(
-                            variables.map((v, i) =>
-                              i === index
-                                ? { ...v, label: e.target.value }
-                                : v
-                            )
-                          )
-                        }
-                        placeholder="Nombre de la Variable"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label>Tipo</Label>
-                      <Select
-                        value={variable.type}
-                        onValueChange={(value) =>
-                          setVariables(
-                            variables.map((v, i) =>
-                              i === index
-                                ? { ...v, type: value }
-                                : v
-                            )
-                          )
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="text">Texto</SelectItem>
-                          <SelectItem value="number">Número</SelectItem>
-                          <SelectItem value="date">Fecha</SelectItem>
-                          <SelectItem value="time">Hora</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                    onClick={() => {
-                      setVariables(variables.filter((_, i) => i !== index));
-                      toast({
-                        title: "Variable eliminada",
-                        description: "La variable ha sido eliminada correctamente",
-                      });
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        {/* Columna del thumbnail */}
-        {previewContent?.thumbnailPath && (
-          <div className="space-y-4 lg:sticky lg:top-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Documento de Referencia</CardTitle>
-                <CardDescription>
-                  Use esta vista previa como guía para identificar las variables en el documento
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-auto max-h-[calc(100vh-16rem)]">
-                  <img 
-                    src={`/thumbnails/${previewContent.thumbnailPath}`}
-                    alt="Vista previa del documento"
-                    className="w-full rounded-lg shadow-lg"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </div>
-
-      <Button
-        size="lg"
-        onClick={() => id ? updateFormMutation.mutate() : createFormMutation.mutate()}
-        disabled={createFormMutation.isPending || updateFormMutation.isPending || !formName}
-      >
-        <Save className="mr-2 h-4 w-4" />
-        {id ? "Actualizar Formulario" : "Guardar Formulario"}
-      </Button>
-    </CardContent>
-  </Card>
-);
-
-// Modificar el renderPreview para incluir el botón de OCR
-const renderPreview = () => {
-  const handleOCRExtraction = async () => {
-    if (!previewContent?.thumbnailPath) return;
-
-    try {
-      const response = await fetch(`/api/forms/${id || 'temp'}/documents/extract-ocr`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          thumbnailPath: previewContent.thumbnailPath
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al procesar OCR');
-      }
-
-      const result = await response.json();
-
-      if (result.extractedVariables && result.extractedVariables.length > 0) {
-        setPreviewContent({
-          ...previewContent,
-          extractedVariables: [
-            ...(previewContent.extractedVariables || []),
-            ...result.extractedVariables.filter(
-              (v: string) => !(previewContent.extractedVariables || []).includes(v)
-            )
-          ]
-        });
-        toast({
-          title: "Variables Detectadas",
-          description: `Se encontraron ${result.extractedVariables.length} nuevas variables.`
-        });
-      } else {
-        toast({
-          title: "OCR Completado",
-          description: "No se detectaron nuevas variables en el documento.",
-          variant: "default"
-        });
-      }
-    } catch (error) {
-      console.error('Error en OCR:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo completar el proceso de OCR",
-        variant: "destructive"
-      });
-    }
-  };
-
-  return (
-    <div className="flex flex-col items-center gap-4 p-4">
-      {previewContent?.thumbnailPath && (
-        <>
-          <img 
-            src={`/thumbnails/${previewContent.thumbnailPath}`}
-            alt="Vista previa del documento"
-            className="max-w-md shadow-lg rounded-lg"
-          />
-          <Button 
-            variant="secondary"
-            onClick={handleOCRExtraction}
-            className="mt-2"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Intentar extraer más variables con OCR
-          </Button>
-          {previewContent.extractedVariables && previewContent.extractedVariables.length > 0 ? (
-            <div className="mt-4 w-full max-w-md">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="text-green-700 font-medium mb-2">Variables Detectadas:</p>
-                <div className="grid gap-2">
-                  {previewContent.extractedVariables.map((variable, index) => (
-                    <div key={index} className="flex items-center gap-2 text-sm">
-                      <code className="bg-green-100 px-2 py-1 rounded text-green-800">
-                        {'{{' + variable + '}}'}</code>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 w-full max-w-md">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <p className="text-yellow-800 font-medium">No se detectaron variables</p>
-                <p className="text-sm text-yellow-600 mt-1">
-                  Por favor, agregue las variables manualmente basándose en el documento original.
-                </p>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-};
-
-  const PreviewDialog = () => {
-    if (!previewContent) return null;
-
-    return (
-      <Dialog open={!!previewContent && !showEditor} onOpenChange={() => setPreviewContent(null)}>
-        <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0">
-          <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle>Vista Previa del Documento</DialogTitle>
-            <DialogDescription>
-              Revise el documento y las variables detectadas antes de crear el formulario
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="p-6 space-y-6">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-medium">Vista Previa del Documento</h3>
-                  </div>
-                  <div className="bg-muted rounded-md p-4">
-                    {renderPreview()}
-                  </div>
-                </div>
-              </div>
-            </ScrollArea>
-          </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t bg-background">
-            <Button variant="outline" onClick={() => setPreviewContent(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={() => {
-              setFormName(previewContent.name);
-              setVariables(previewContent.variables);
-              setTemplateContent(previewContent.template);
-              setShowEditor(true);
-              toast({
-                title: "Plantilla cargada",
-                description: previewContent.variables.length > 0
-                  ? `Se detectaron ${previewContent.variables.length} variables en el documento`
-                  : "No se detectaron variables. Por favor, agrégalas manualmente.",
-              });
-            }}>
-              Crear Formulario
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  };
-
   return (
     <div className="container mx-auto py-8">
-      <Button
-        variant="ghost"
-        className="mb-8"
-        onClick={() => setLocation("/")}
-      >
+      <Button variant="ghost" className="mb-8" onClick={() => setLocation("/")}>
         <ArrowLeft className="mr-2 h-4 w-4" />
         Volver a Formularios
       </Button>
 
       <div className="space-y-8">
-        {!id && (
+        {!id && !showEditor ? (
           <>
-            {!showEditor ? (
-              <>
-                <h1 className="text-3xl font-bold">Crear Nuevo Formulario</h1>
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {formTemplates.map((template) => (
-                    <Card
-                      key={template.name}
-                      className="cursor-pointer hover:bg-accent transition-colors"
-                      onClick={() => {
-                        setFormName(template.name);
-                        setVariables(template.variables);
-                        setShowEditor(true);
-                      }}
+            <h1 className="text-3xl font-bold">Crear Nuevo Formulario</h1>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <Card className="cursor-pointer hover:bg-accent transition-colors">
+                <CardHeader>
+                  <CardTitle>Cargar Documento</CardTitle>
+                  <CardDescription>Crear formulario desde un documento existente</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <Input
+                      type="file"
+                      accept=".txt,.doc,.docx"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      id="document-upload"
+                    />
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => document.getElementById('document-upload')?.click()}
                     >
-                      <CardHeader>
-                        <CardTitle>{template.name}</CardTitle>
-                        <CardDescription>{template.description}</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground">
-                          {template.variables.length} variables predefinidas
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                  <Card
-                    className="cursor-pointer hover:bg-accent transition-colors"
-                    onClick={() => {
-                      setFormName("");
-                      setVariables([]);
-                      setShowEditor(true);
-                    }}
-                  >
-                    <CardHeader>
-                      <CardTitle>Formulario en Blanco</CardTitle>
-                      <CardDescription>Crear un formulario desde cero</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <Plus className="h-8 w-8 text-muted-foreground" />
-                    </CardContent>
-                  </Card>
-                  <Card className="cursor-pointer hover:bg-accent transition-colors">
-                    <CardHeader>
-                      <CardTitle>Cargar Plantilla</CardTitle>
-                      <CardDescription>Crear formulario desde una plantilla de texto</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <Input
-                          type="file"
-                          accept=".txt,.doc,.docx"
-                          onChange={handleFileUpload}
-                          className="hidden"
-                          id="template-upload"
-                        />
+                      <Upload className="mr-2 h-4 w-4" />
+                      Subir Documento (.txt, .doc, .docx)
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card
+                className="cursor-pointer hover:bg-accent transition-colors"
+                onClick={() => {
+                  setFormName("");
+                  setVariables([]);
+                  setShowEditor(true);
+                }}
+              >
+                <CardHeader>
+                  <CardTitle>Formulario en Blanco</CardTitle>
+                  <CardDescription>Crear un formulario desde cero</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Plus className="h-8 w-8 text-muted-foreground" />
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex justify-between items-center">
+              <h1 className="text-3xl font-bold">
+                {id ? `Editar ${formName || "Formulario"}` : formName || "Nuevo Formulario"}
+              </h1>
+              {!id && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowEditor(false);
+                    setFormName("");
+                    setVariables([]);
+                    setPreviewContent(null);
+                  }}
+                >
+                  Cambiar Documento
+                </Button>
+              )}
+            </div>
+
+            <div className="grid gap-8 lg:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configuración del Formulario</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-8">
+                  {variables.length > variableLimit && (
+                    <Alert>
+                      <AlertDescription className="flex items-center justify-between">
+                        <span>
+                          Su formulario tiene {variables.length} variables, pero su plan permite hasta {variableLimit}.
+                          Necesita eliminar {variables.length - variableLimit} variable(s).
+                        </span>
                         <Button
                           variant="outline"
-                          className="w-full"
-                          onClick={() => document.getElementById('template-upload')?.click()}
+                          onClick={() => setVariables(variables.slice(0, variableLimit))}
                         >
-                          <Upload className="mr-2 h-4 w-4" />
-                          Subir Plantilla (.txt, .doc, .docx)
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Eliminar variables excedentes
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div>
+                    <Label htmlFor="formName">Nombre del Formulario</Label>
+                    <Input
+                      id="formName"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      className="max-w-md"
+                      placeholder="Ingrese el nombre del formulario"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-medium">Variables del Formulario</h3>
+                      <Button
+                        onClick={() => setVariables([...variables, { name: "", label: "", type: "text" }])}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Agregar Variable
+                      </Button>
+                    </div>
+
+                    {variables.map((variable, index) => (
+                      <Card key={index}>
+                        <CardContent className="pt-6 space-y-4">
+                          <div className="grid gap-4">
+                            <div>
+                              <Label>Nombre Interno</Label>
+                              <Input
+                                value={variable.name}
+                                onChange={(e) =>
+                                  setVariables(
+                                    variables.map((v, i) =>
+                                      i === index ? { ...v, name: e.target.value } : v
+                                    )
+                                  )
+                                }
+                                placeholder="nombreVariable"
+                              />
+                            </div>
+                            <div>
+                              <Label>Etiqueta</Label>
+                              <Input
+                                value={variable.label}
+                                onChange={(e) =>
+                                  setVariables(
+                                    variables.map((v, i) =>
+                                      i === index ? { ...v, label: e.target.value } : v
+                                    )
+                                  )
+                                }
+                                placeholder="Nombre de la Variable"
+                              />
+                            </div>
+                            <div>
+                              <Label>Tipo</Label>
+                              <Select
+                                value={variable.type}
+                                onValueChange={(value) =>
+                                  setVariables(
+                                    variables.map((v, i) =>
+                                      i === index ? { ...v, type: value } : v
+                                    )
+                                  )
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="text">Texto</SelectItem>
+                                  <SelectItem value="number">Número</SelectItem>
+                                  <SelectItem value="date">Fecha</SelectItem>
+                                  <SelectItem value="time">Hora</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                            onClick={() => setVariables(variables.filter((_, i) => i !== index))}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {previewContent?.thumbnailPath && (
+                <div className="lg:sticky lg:top-4 space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Documento de Referencia</CardTitle>
+                      <CardDescription>
+                        Use esta vista previa como guía para identificar las variables
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-auto max-h-[calc(100vh-16rem)] space-y-4">
+                        <img
+                          src={`/thumbnails/${previewContent.thumbnailPath}`}
+                          alt="Vista previa del documento"
+                          className="w-full rounded-lg shadow-lg"
+                        />
+                        <Button
+                          variant="secondary"
+                          onClick={handleOCRExtraction}
+                          className="w-full"
+                        >
+                          <Wand2 className="mr-2 h-4 w-4" />
+                          Detectar Variables con OCR
                         </Button>
                       </div>
                     </CardContent>
                   </Card>
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="flex justify-between items-center">
-                  <h1 className="text-3xl font-bold">
-                    {formName || "Nuevo Formulario"}
-                  </h1>
-                  <Button 
-                    variant="outline"
-                    onClick={() => {
-                      setShowEditor(false);
-                      setFormName("");
-                      setVariables([]);
-                      setTemplateContent("");
-                      setPreviewContent(null);
-                    }}
-                  >
-                    Cambiar Plantilla
-                  </Button>
-                </div>
-                {renderFormEditor()}
-              </>
-            )}
+              )}
+            </div>
           </>
         )}
-
-        {id && renderFormEditor()}
-        <PreviewDialog />
       </div>
     </div>
   );
