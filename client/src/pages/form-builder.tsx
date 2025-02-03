@@ -39,10 +39,9 @@ export default function FormBuilder() {
 
   const [formName, setFormName] = useState("");
   const [variables, setVariables] = useState<Array<Partial<SelectVariable>>>([]);
-  const [documentName, setDocumentName] = useState(""); //New State
-  const [documentTemplate, setDocumentTemplate] = useState(""); //New State
-  const [allVariables, setAllVariables] = useState<Array<Partial<SelectVariable>>>([]); //New State
-
+  const [documentName, setDocumentName] = useState("");
+  const [documentTemplate, setDocumentTemplate] = useState("");
+  const [allVariables, setAllVariables] = useState<Array<Partial<SelectVariable>>>([]);
 
   const variableLimit = user?.isPremium ? 50 : 10;
 
@@ -81,6 +80,89 @@ export default function FormBuilder() {
       }
     }
   }, [id, variableLimit, user?.isPremium]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = [
+      'text/plain',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Error al cargar archivo",
+        description: "Solo se permiten archivos .txt, .doc y .docx",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Usamos una ruta temporal para subir documentos cuando no hay ID
+      const uploadUrl = id ? 
+        `/api/forms/${id}/documents/upload` : 
+        `/api/forms/temp/documents/upload`;
+
+      console.log('Uploading to:', uploadUrl); // Debug log
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server response:', errorText);
+        throw new Error(errorText);
+      }
+
+      const doc = await response.json();
+      console.log('Upload response:', doc);
+
+      const templateVariables = extractVariables(doc.template);
+      const ocrVariables = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
+        name: varName,
+        label: varName
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' '),
+        type: 'text'
+      })) : [];
+
+      const combinedVariables = [...templateVariables, ...ocrVariables];
+      const uniqueVariables = Array.from(
+        new Map(combinedVariables.map(v => [v.name, v])).values()
+      );
+
+      setAllVariables(uniqueVariables);
+      setVariables(uniqueVariables);
+      setPreviewContent({
+        ...doc,
+        name: file.name.split('.')[0],
+        variables: uniqueVariables,
+        extractedVariables: uniqueVariables.map(v => v.name),
+        originalTemplate: doc.template 
+      });
+
+      setDocumentTemplate(doc.template);
+      setDocumentName(file.name.split('.')[0]);
+      setShowEditor(true);
+
+    } catch (error) {
+      console.error('Error al cargar archivo:', error);
+      toast({
+        title: "Error al cargar archivo",
+        description: error instanceof Error ? error.message : "Error al procesar el archivo",
+        variant: "destructive"
+      });
+    }
+  };
 
   const extractVariables = (template: string) => {
     const variableRegex = /{{([^}]+)}}/g;
@@ -179,80 +261,6 @@ export default function FormBuilder() {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const allowedTypes = [
-      'text/plain',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      toast({
-        title: "Error al cargar archivo",
-        description: "Solo se permiten archivos .txt, .doc y .docx",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      // Si estamos editando un formulario existente, usamos su ID
-      const uploadUrl = `/api/forms/${id}/documents/upload`;
-
-      console.log('Uploading to:', uploadUrl); // Debug log
-
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
-      const doc = await response.json();
-
-      const templateVariables = extractVariables(doc.template);
-      const ocrVariables = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
-        name: varName,
-        label: varName
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' '),
-        type: 'text'
-      })) : [];
-
-      const combinedVariables = [...templateVariables, ...ocrVariables];
-      const uniqueVariables = Array.from(
-        new Map(combinedVariables.map(v => [v.name, v])).values()
-      );
-
-      setAllVariables(uniqueVariables);
-      setPreviewContent({
-        ...doc,
-        variables: uniqueVariables,
-        extractedVariables: uniqueVariables.map(v => v.name),
-        originalTemplate: doc.template 
-      });
-
-      setDocumentTemplate(doc.template);
-      setDocumentName(documentName || file.name.split('.')[0]);
-
-    } catch (error) {
-      console.error('Error al cargar archivo:', error);
-      toast({
-        title: "Error al cargar archivo",
-        description: error instanceof Error ? error.message : "Error al procesar el archivo",
-        variant: "destructive"
-      });
-    }
-  };
 
   const createFormMutation = useMutation({
     mutationFn: async () => {
