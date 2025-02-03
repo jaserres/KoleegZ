@@ -240,58 +240,49 @@ export default function FormBuilder() {
         throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
       }
 
-      const templateData = sessionStorage.getItem("selectedTemplate");
-      let documentData = null;
-
-      if (templateData) {
-        const parsedTemplate = JSON.parse(templateData);
-        documentData = {
-          name: formName || parsedTemplate.name,
-          template: parsedTemplate.template,
-          preview: parsedTemplate.preview,
-          filePath: parsedTemplate.filePath,
-          thumbnailPath: parsedTemplate.thumbnailPath,
-          originalTemplate: parsedTemplate.originalTemplate,
-          variables: parsedTemplate.variables
-        };
-      }
-
-      console.log('Creating form with document:', documentData);
-
-      const res = await apiRequest("POST", "/api/forms", {
+      // First create the form
+      const formRes = await apiRequest("POST", "/api/forms", {
         name: formName,
-        document: documentData
       });
 
-      if (!res.ok) {
-        const error = await res.text();
+      if (!formRes.ok) {
+        const error = await formRes.text();
         throw new Error(error || "Error al crear el formulario");
       }
 
-      const form = await res.json();
+      const form = await formRes.json();
 
       try {
-        if (documentData) {
-          await apiRequest("POST", `/api/forms/${form.id}/documents`, {
-            name: documentData.name,
-            template: documentData.template,
-            originalTemplate: documentData.originalTemplate,
-            preview: documentData.preview,
-            filePath: documentData.filePath,
-            thumbnailPath: documentData.thumbnailPath
+        // If we have a template, create it first
+        if (previewContent) {
+          const documentRes = await apiRequest("POST", `/api/forms/${form.id}/documents`, {
+            name: previewContent.name,
+            template: previewContent.template,
+            originalTemplate: previewContent.originalTemplate,
+            preview: previewContent.preview,
+            filePath: previewContent.filePath,
+            thumbnailPath: previewContent.thumbnailPath
           });
+
+          if (!documentRes.ok) {
+            throw new Error("Error al crear la plantilla");
+          }
         }
 
+        // Then create all variables
         for (const variable of variables) {
-          await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
+          const variableRes = await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
+          if (!variableRes.ok) {
+            throw new Error("Error al crear las variables");
+          }
         }
+
+        return form;
       } catch (error) {
+        // If anything fails, delete the form to maintain consistency
         await apiRequest("DELETE", `/api/forms/${form.id}`);
         throw error;
       }
-
-      sessionStorage.removeItem("selectedTemplate");
-      return form;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/forms"] });
