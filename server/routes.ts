@@ -798,14 +798,20 @@ export function registerRoutes(app: Express): Server {
 
         // Crear una copia temporal del documento original para el merge
         const tempFileName = `merge-${Date.now()}-${doc.name}`;
-        await saveFile(originalBuffer, tempFileName);
+        const tempFilePath = await saveFile(originalBuffer, tempFileName);
+
+        console.log('Archivo temporal creado:', {
+          tempFileName,
+          tempFilePath,
+          originalSize: originalBuffer.length
+        });
 
         // Leer la copia temporal para el merge
-        const workingBuffer = await readFile(tempFileName);
-        console.log('Copia de trabajo creada:', {
+        const workingBuffer = await readFile(tempFilePath);
+        console.log('Copia de trabajo leída:', {
           originalSize: originalBuffer.length,
           workingSize: workingBuffer.length,
-          tempFile: tempFileName
+          tempPath: tempFilePath
         });
 
         // Preparar datos para el merge
@@ -948,17 +954,14 @@ export function registerRoutes(app: Express): Server {
           });
         }
       } finally {
-        // Limpiar el archivo temporal si existe
+        // Limpiar el archivo temporal
         try {
-          const tempFiles = await fs.readdir('.');
-          for (const file of tempFiles) {
-            if (file.startsWith('merge-') && file.includes(doc.name)) {
-              await deleteFile(file);
-              console.log('Archivo temporal eliminado:', file);
-            }
+          if (tempFilePath) {
+            await deleteFile(tempFilePath);
+            console.log('Archivo temporal eliminado:', tempFilePath);
           }
         } catch (cleanupError) {
-          console.error('Error limpiando archivos temporales:', cleanupError);
+          console.error('Error limpiando archivo temporal:', cleanupError);
         }
       }
     } catch (error: any) {
