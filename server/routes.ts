@@ -824,7 +824,7 @@ export function registerRoutes(app: Express): Server {
           // Asegurarnos de que el template es un Buffer válido
           const validTemplateBuffer = Buffer.from(templateBuffer);
 
-          // Realizar el merge con el buffer validado y opciones para preservar formato
+          // Realizar el merge con opciones extendidas para preservar formato
           const result = await createReport({
             template: validTemplateBuffer,
             data: mergeData,
@@ -836,40 +836,82 @@ export function registerRoutes(app: Express): Server {
             processImages: true,
             processHeadersAndFooters: true,
             processHyperlinks: true,
-              processTables: true,
-              processListItems: true,
-              processPageBreaks: true,
-              preserveQuickStyles: true,
-              preserveNumbering: true,
-              preserveOutline: true,
-              processContentControls: true,
-              processSmartTags: true,
-            errorHandler: (error, cmdStr) => {
-              console.error('Error en comando durante merge:', { error, cmdStr });
-              return '';
+            processTables: true,
+            processListItems: true,
+            processPageBreaks: true,
+            preserveQuickStyles: true,
+            preserveNumbering: true,
+            preserveOutline: true,
+            preserveTabStops: true,
+            preserveTrackedChanges: true,
+            preserveTextBoxes: true,
+            preserveFields: true,
+            preserveMailMergeFields: true,
+            preserveWatermarks: true,
+            preserveTheme: true,
+            preserveContentControls: true,
+            preserveSmartTags: true,
+            preserveDrawings: true,
+            preserveShapes: true,
+            preserveObjects: true,
+            preserveOleObjects: true,
+            preserveFrames: true,
+            preserveSections: true,
+            preserveLanguage: true,
+            preserveStyles: {
+              paragraph: true,
+              character: true,
+              numbering: true,
+              table: true,
+              section: true
             },
-              additionalJsContext: {
-                  formatDate: (date: string) => {
-                      try {
-                          return new Date(date).toLocaleDateString();
-                      } catch (e) {
-                          return date;
-                      }
-                  },
-                  uppercase: (text: string) => String(text).toUpperCase(),
-                  lowercase: (text: string) => String(text).toLowerCase(),
-                formatNumber: (num: number) => {
-                  try {
-                    return new Intl.NumberFormat().format(num);
-                  } catch (e) {
-                    return String(num);
-                  }
+            additionalJsContext: {
+              formatDate: (date: string) => {
+                try {
+                  return new Date(date).toLocaleDateString();
+                } catch (e) {
+                  return date;
                 }
+              },
+              uppercase: (text: string) => String(text).toUpperCase(),
+              lowercase: (text: string) => String(text).toLowerCase(),
+              formatNumber: (num: number) => {
+                try {
+                  return new Intl.NumberFormat().format(num);
+                } catch (e) {
+                  return String(num);                }
+              },
+              // Funciones adicionales para formato
+              bold: (text: string) => `<w:b/>${text}`,
+              italic: (text: string) => `<w:i/>${text}`,
+              underline: (text: string) => `<w:u w:val="single"/>${text}`,
+              color: (text: string, color: string) => `<w:color w:val="${color}"/>${text}`,
+              size: (text: string, size: number) => `<w:sz w:val="${size * 2}"/>${text}`,
+              spacing: (text: string, spacing: number) => `<w:spacing w:line="${spacing * 240}"/>${text}`,
+              indent: (text: string, left: number, right: number = 0) => 
+                `<w:ind w:left="${left * 720}" w:right="${right * 720}"/>${text}`
+            },
+            renderElementFunction: (element: any) => {
+              // Preservar estilos específicos de Word
+              if (element.type === 'paragraph') {
+                return {
+                  ...element,
+                  properties: {
+                    ...element.properties,
+                    keepNext: element.keepNext,
+                    keepLines: element.keepLines,
+                    pageBreakBefore: element.pageBreakBefore,
+                    widowControl: element.widowControl,
+                    suppressLineNumbers: element.suppressLineNumbers,
+                    suppressAutoHyphens: element.suppressAutoHyphens
+                  }
+                };
               }
+              return element;
+            }
           });
 
-          // Asegurarnos de que el resultado es un Buffer válido
-            mergedBuffer = Buffer.from(result);
+          mergedBuffer = Buffer.from(result);
 
           console.log('Merge completado:', {
             resultSize: mergedBuffer.length,
@@ -878,7 +920,7 @@ export function registerRoutes(app: Express): Server {
           });
 
         } catch (createReportError: any) {
-          console.error('Errordetallado en createReport:', {
+          console.error('Error detallado en createReport:', {
             error: createReportError,
             message: createReportError.message,
             stack: createReportError.stack
@@ -903,31 +945,29 @@ export function registerRoutes(app: Express): Server {
             : doc.name;
 
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-          res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
+          res.setHeader('Content-Disposition', `attachment; filename="${baseName}-merged.docx"`);
           return res.send(mergedBuffer);
         } else {
           // Para vista previa, convertir a HTML preservando todos los estilos
           const result = await mammoth.convertToHtml(
-              { buffer: mergedBuffer },
-              mammothOptions
+            { buffer: mergedBuffer },
+            mammothOptions
           );
 
-            return res.json({
-                result: `${previewStyles}<div class="document-preview">${result.value}</div>`
-            });
+          return res.json({
+            result: `${previewStyles}<div class="document-preview">${result.value}</div>`
+          });
         }
       } catch (mergeError: any) {
         console.error('Error en el merge:', {
           error: mergeError,
           message: mergeError.message,
-          stack: mergeError.stack,
-          name: mergeError.name
+          stack: mergeError.stack
         });
 
         return res.status(500).json({
           error: `Error en el proceso de merge: ${mergeError.message}`,
-          details: mergeError.stack,
-          name: mergeError.name
+          details: mergeError.stack
         });
       }
     } catch (error: any) {
