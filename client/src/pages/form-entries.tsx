@@ -63,7 +63,6 @@ export default function FormEntries() {
   };
 
   const { saving } = useAutoSave(
-    // Solo activar el autoguardado si hay un currentEntryId y NO hay un selectedRowId
     currentEntryId && !selectedRowId ? `/api/forms/${id}/entries/${currentEntryId}` : null,
     formValues,
     {
@@ -111,9 +110,7 @@ export default function FormEntries() {
         title: "Éxito",
         description: "Entrada agregada correctamente",
       });
-      // Trigger confetti celebration
       triggerConfetti();
-      // Solo limpiar el formulario después de confirmar que se guardó correctamente
       setTimeout(() => {
         setFormValues({});
         setSelectedRowId(null);
@@ -134,6 +131,7 @@ export default function FormEntries() {
       const res = await apiRequest("POST", `/api/forms/${id}/documents`, {
         name: documentName,
         template: documentTemplate,
+        originalTemplate: previewContent?.originalTemplate || documentTemplate, 
       });
       return res.json();
     },
@@ -159,7 +157,10 @@ export default function FormEntries() {
       const res = await apiRequest(
         "POST",
         `/api/forms/${id}/documents/${documentId}/merge`,
-        { entryId }
+        { 
+          entryId,
+          useOriginalTemplate: true 
+        }
       );
       if (!res.ok) {
         throw new Error('Error al realizar el merge');
@@ -215,7 +216,6 @@ export default function FormEntries() {
         title: "Éxito",
         description: "Entrada actualizada correctamente",
       });
-      // Limpiar el formulario y la selección
       setFormValues({});
       setSelectedRowId(null);
       setCurrentEntryId(null);
@@ -290,11 +290,10 @@ export default function FormEntries() {
       return variables;
     };
 
-    // Función auxiliar para unificar variables
-  const unifyVariables = (initial: Array<{name: string, label: string, type: string}>, ocr: Array<{name: string, label: string, type: string}> = []) => {
-    const combined = [...initial, ...ocr];
-    return Array.from(new Map(combined.map(v => [v.name, v])).values());
-  };
+    const unifyVariables = (initial: Array<{name: string, label: string, type: string}>, ocr: Array<{name: string, label: string, type: string}> = []) => {
+      const combined = [...initial, ...ocr];
+      return Array.from(new Map(combined.map(v => [v.name, v])).values());
+    };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -329,7 +328,6 @@ export default function FormEntries() {
 
         const doc = await response.json();
 
-        // Detectar todas las variables (tanto del template como del OCR)
         const templateVariables = extractVariables(doc.template);
         const ocrVariables = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
           name: varName,
@@ -340,33 +338,27 @@ export default function FormEntries() {
           type: 'text'
         })) : [];
 
-        // Combinar todas las variables en un solo array
         const combinedVariables = [...templateVariables, ...ocrVariables];
         const uniqueVariables = Array.from(
           new Map(combinedVariables.map(v => [v.name, v])).values()
         );
 
-        // Actualizar el estado con todas las variables unificadas
         setAllVariables(uniqueVariables);
         setPreviewContent({
           ...doc,
           variables: uniqueVariables,
-          extractedVariables: uniqueVariables.map(v => v.name)
+          extractedVariables: uniqueVariables.map(v => v.name),
+          originalTemplate: doc.template 
         });
 
         setDocumentTemplate(doc.template);
         setDocumentName(documentName || file.name.split('.')[0]);
 
-        console.log('Variables detectadas:', {
-          template: templateVariables.length,
-          ocr: ocrVariables.length,
-          total: uniqueVariables.length
-        });
       } catch (error) {
         console.error('Error al cargar archivo:', error);
         toast({
           title: "Error al cargar archivo",
-          description: error.message || "Error al procesar el archivo",
+          description: error instanceof Error ? error.message : "Error al procesar el archivo",
           variant: "destructive"
         });
       }
@@ -394,9 +386,8 @@ export default function FormEntries() {
     };
 
     const handleRowClick = (entry: any) => {
-    // Al hacer click en una fila, establecemos los valores pero desactivamos el autoguardado
       setFormValues(entry.values);
-      setCurrentEntryId(null); // Desactivar autoguardado
+      setCurrentEntryId(null); 
       setSelectedRowId(entry.id);
     };
 
@@ -407,7 +398,6 @@ export default function FormEntries() {
 
     form?.variables?.forEach((variable: any) => {
       const value = formData.get(variable.name);
-      // Solo incluir el valor si no está vacío
       if (value) {
         values[variable.name] = variable.type === "number"
           ? Number(value)
@@ -415,7 +405,6 @@ export default function FormEntries() {
       }
     });
 
-    // Create a new entry
     createEntryMutation.mutate(values);
   };
   
@@ -440,7 +429,6 @@ export default function FormEntries() {
         const result = await response.json();
 
         if (result.extractedVariables && result.extractedVariables.length > 0) {
-          // Convertir las nuevas variables OCR al formato correcto
           const newOCRVariables = result.extractedVariables.map((varName: string) => ({
             name: varName,
             label: varName
@@ -450,13 +438,11 @@ export default function FormEntries() {
             type: 'text'
           }));
 
-          // Combinar con las variables existentes
           const combinedVariables = [...allVariables, ...newOCRVariables];
           const uniqueVariables = Array.from(
             new Map(combinedVariables.map(v => [v.name, v])).values()
           );
 
-          // Actualizar el estado con las nuevas variables
           setAllVariables(uniqueVariables);
           setPreviewContent({
             ...previewContent,
@@ -495,7 +481,6 @@ export default function FormEntries() {
       return;
     }
 
-    // Verificar límite de variables
     if (allVariables.length > variableLimit) {
       toast({
         title: "Límite de variables excedido",
@@ -505,7 +490,6 @@ export default function FormEntries() {
       return;
     }
 
-    // Almacenar los datos de la plantilla en sessionStorage
     const templateData = {
       name: documentName,
       variables: allVariables,
@@ -515,12 +499,6 @@ export default function FormEntries() {
       thumbnailPath: previewContent?.thumbnailPath || null,
       extractedVariables: allVariables.map(v => v.name)
     };
-
-    console.log('Guardando datos de plantilla:', {
-      name: templateData.name,
-      variablesCount: templateData.variables.length,
-      variables: templateData.variables
-    });
 
     sessionStorage.setItem("selectedTemplate", JSON.stringify(templateData));
     setLocation("/forms/new");
@@ -541,43 +519,41 @@ export default function FormEntries() {
   };
   
     const handleDownloadMerge = async (templateId: number, entryId: number) => {
-    try {
-      const response = await fetch(`/api/forms/${id}/documents/${templateId}/merge`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          entryId,
-          download: true
-        })
-      });
+      try {
+        const response = await fetch(`/api/forms/${id}/documents/${templateId}/merge`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            entryId,
+            download: true
+          })
+        });
 
-      if (!response.ok) {
-        throw new Error('Error al descargar el documento');
+        if (!response.ok) {
+          throw new Error('Error al descargar el documento');
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const fileName = selectedTemplate.name.replace(/\.docx/gi, '');
+        link.download = `${fileName}.docx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Error downloading document:', error);
+        toast({
+          title: "Error",
+          description: "No se pudo descargar el documento",
+          variant: "destructive"
+        });
       }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      // Asegurar que el nombre del archivo tenga solo una extensión .docx
-      const fileName = selectedTemplate.name.replace(/\.docx/gi, '');
-      link.download = `${fileName}.docx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error downloading document:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo descargar el documento",
-        variant: "destructive"
-      });
-    }
-  };
-
+    };
 
   return (
     <div className="container mx-auto py-8" style={form?.theme ? {
@@ -951,7 +927,7 @@ export default function FormEntries() {
                                   <div 
                                     className="p-4 border rounded-md bg-white"
                                     style={{ 
-                                      minHeight: "200px",
+                                      minHeight:"200px",
                                       maxHeight: "400px",
                                       overflowY: "auto",
                                       whiteSpace: "pre-wrap"
@@ -1052,25 +1028,25 @@ export default function FormEntries() {
         </Card>
       </div>
         <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>{selectedTemplate?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Contenido de la Plantilla</Label>
-              <Textarea
-                value={selectedTemplate?.template || ""}
-                readOnly
-                className="h-40 font-mono"
-              />
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>{selectedTemplate?.name}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Contenido de la Plantilla</Label>
+                <Textarea
+                  value={selectedTemplate?.template || ""}
+                  readOnly
+                  className="h-40 font-mono"
+                />
+              </div>
+              <Button variant="outline" onClick={() => setShowTemplateDialog(false)}>
+                Cerrar
+              </Button>
             </div>
-            <Button variant="outline" onClick={() => setShowTemplateDialog(false)}>
-              Cerrar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 }
