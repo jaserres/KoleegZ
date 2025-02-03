@@ -781,6 +781,8 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
+      let tempFilePath;
+
       try {
         // Leer el archivo DOCX original
         const originalBuffer = await readFile(doc.filePath);
@@ -788,7 +790,8 @@ export function registerRoutes(app: Express): Server {
         console.log('Archivo original leído:', {
           size: originalBuffer.length,
           isBuffer: Buffer.isBuffer(originalBuffer),
-          firstBytes: originalBuffer.slice(0, 4).toString('hex')
+          firstBytes: originalBuffer.slice(0, 4).toString('hex'),
+          filePath: doc.filePath
         });
 
         // Verificar que el buffer es un archivo DOCX válido (comienza con PK)
@@ -796,23 +799,24 @@ export function registerRoutes(app: Express): Server {
           throw new Error('El archivo template no es un DOCX válido');
         }
 
-        // Crear una copia temporal del documento original para el merge
+        // Crear una copia temporal del documento original
         const tempFileName = `merge-${Date.now()}-${doc.name}`;
-        const tempFilePath = await saveFile(originalBuffer, tempFileName);
+        tempFilePath = await saveFile(Buffer.from(originalBuffer), tempFileName);
 
-        console.log('Archivo temporal creado:', {
-          tempFileName,
-          tempFilePath,
-          originalSize: originalBuffer.length
-        });
-
-        // Leer la copia temporal para el merge
-        const workingBuffer = await readFile(tempFilePath);
-        console.log('Copia de trabajo leída:', {
+        // Verificar que la copia se creó correctamente
+        const copiedBuffer = await readFile(tempFilePath);
+        console.log('Verificación de copia temporal:', {
           originalSize: originalBuffer.length,
-          workingSize: workingBuffer.length,
+          copiedSize: copiedBuffer.length,
+          isSameSize: originalBuffer.length === copiedBuffer.length,
+          firstBytesOriginal: originalBuffer.slice(0, 10).toString('hex'),
+          firstBytesCopy: copiedBuffer.slice(0, 10).toString('hex'),
           tempPath: tempFilePath
         });
+
+        if (copiedBuffer.length !== originalBuffer.length) {
+          throw new Error('La copia temporal no coincide con el archivo original');
+        }
 
         // Preparar datos para el merge
         const mergeData: Record<string, any> = {};
@@ -830,16 +834,13 @@ export function registerRoutes(app: Express): Server {
           }
         });
 
-        console.log('Realizando merge con datos:', {
-          originalSize: originalBuffer.length,
-          variables: Object.keys(mergeData)
-        });
-
         // Realizar el merge sobre la copia temporal
         let mergedBuffer: Buffer;
         try {
+          console.log('Iniciando merge con buffer de tamaño:', copiedBuffer.length);
+
           const result = await createReport({
-            template: workingBuffer,
+            template: copiedBuffer,
             data: mergeData,
             cmdDelimiter: ['{{', '}}'],
             failFast: false,
@@ -854,52 +855,33 @@ export function registerRoutes(app: Express): Server {
             preserveNumbering: true,
             preserveOutline: true,
             processContentControls: true,
-            processSmartTags: true,
-            preprocessTemplate: (template) => {
-              return template;
-            },
-            postprocessTemplate: (template) => {
-              return template;
-            },
-            errorHandler: (error, cmdStr) => {
-              console.error('Error en comando durante merge:', { error, cmdStr });
-              return cmdStr;
-            },
-            additionalJsContext: {
-              formatDate: (date: string) => {
-                try {
-                  return new Date(date).toLocaleDateString();
-                } catch (e) {
-                  console.error('Error formateando fecha:', e);
-                  return date;
-                }
-              },
-              uppercase: (text: string) => String(text).toUpperCase(),
-              lowercase: (text: string) => String(text).toLowerCase(),
-              formatNumber: (num: number) => {
-                try {
-                  return new Intl.NumberFormat().format(num);
-                } catch (e) {
-                  console.error('Error formateando número:', e);
-                  return String(num);
-                }
-              }
-            }
+            processSmartTags: true
           });
 
           mergedBuffer = Buffer.from(result);
 
-          // Validar pérdida significativa de datos
+          console.log('Resultado del merge:', {
+            originalSize: originalBuffer.length,
+            copiedSize: copiedBuffer.length,
+            mergedSize: mergedBuffer.length,
+            ratio: (mergedBuffer.length / originalBuffer.length).toFixed(4)
+          });
+
+          // Si el archivo merged es significativamente más pequeño, usar la copia temporal
           if (mergedBuffer.length < originalBuffer.length * 0.8) {
-            console.warn('Advertencia: Pérdida significativa de datos en el merge', {
+            console.warn('El archivo merged es demasiado pequeño, usando copia temporal:', {
               originalSize: originalBuffer.length,
               mergedSize: mergedBuffer.length,
               ratio: mergedBuffer.length / originalBuffer.length
             });
 
-            // Si hay pérdida significativa, usar la copia temporal
-            console.log('Pérdida de datos detectada, usando copia temporal...');
-            mergedBuffer = workingBuffer;
+            // Usar la copia temporal en lugar del resultado del merge
+            mergedBuffer = Buffer.from(copiedBuffer);
+
+            console.log('Usando copia temporal como respaldo:', {
+              finalSize: mergedBuffer.length,
+              ratio: (mergedBuffer.length / originalBuffer.length).toFixed(4)
+            });
           }
 
         } catch (createReportError: any) {
@@ -908,29 +890,30 @@ export function registerRoutes(app: Express): Server {
             message: createReportError.message,
             stack: createReportError.stack
           });
-          throw new Error(`Error en createReport: ${createReportError.message}`);
+
+          // En caso de error en el merge, usar la copia temporal
+          mergedBuffer = Buffer.from(copiedBuffer);
+          console.log('Error en merge, usando copia temporal:', {
+            finalSize: mergedBuffer.length
+          });
         }
 
-        // Verificar que el resultado es un buffer válido
+        // Verificaciones finales
         if (!Buffer.isBuffer(mergedBuffer) || mergedBuffer.length === 0) {
-          throw new Error('El resultado del merge no es un buffer válido');
+          throw new Error('El resultado final no es un buffer válido');
         }
 
-        // Verificar que el resultado es un DOCX válido
         if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
-          throw new Error('El documento generado no es un DOCX válido');
+          throw new Error('El documento final no es un DOCX válido');
         }
 
-        // Log final antes de enviar
-        console.log('Enviando archivo merged:', {
-          filename: `${doc.name}-merged.docx`,
-          size: mergedBuffer.length,
+        console.log('Documento final preparado:', {
           originalSize: originalBuffer.length,
-          ratio: (mergedBuffer.length / originalBuffer.length).toFixed(2)
+          finalSize: mergedBuffer.length,
+          ratio: (mergedBuffer.length / originalBuffer.length).toFixed(4)
         });
 
         if (isDownload) {
-          // Para descarga, enviar el archivo DOCX
           const baseName = doc.name.toLowerCase().endsWith('.docx')
             ? doc.name.slice(0, -5)
             : doc.name;
@@ -939,7 +922,6 @@ export function registerRoutes(app: Express): Server {
           res.setHeader('Content-Disposition', `attachment; filename="${baseName}-merged.docx"`);
           return res.send(mergedBuffer);
         } else {
-          // Para vista previa, convertir a HTML preservando todos los estilos
           const result = await mammoth.convertToHtml(
             { buffer: mergedBuffer },
             mammothOptions
@@ -953,15 +935,16 @@ export function registerRoutes(app: Express): Server {
             result: `${previewStyles}<div class="document-preview">${result.value}</div>`
           });
         }
+
       } finally {
-        // Limpiar el archivo temporal
-        try {
-          if (tempFilePath) {
+        // Limpiar archivo temporal
+        if (tempFilePath) {
+          try {
             await deleteFile(tempFilePath);
             console.log('Archivo temporal eliminado:', tempFilePath);
+          } catch (cleanupError) {
+            console.error('Error limpiando archivo temporal:', cleanupError);
           }
-        } catch (cleanupError) {
-          console.error('Error limpiando archivo temporal:', cleanupError);
         }
       }
     } catch (error: any) {
