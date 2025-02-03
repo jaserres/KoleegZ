@@ -348,20 +348,6 @@ export default function FormBuilder() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Columna del thumbnail */}
-          {previewContent?.preview.includes('/thumbnails/') && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Vista Previa del Documento</h3>
-              <div className="border rounded-lg p-4 bg-muted/50 sticky top-4">
-                <img 
-                  src={`/thumbnails/${previewContent.preview.match(/\/thumbnails\/([^"]+)/)?.[1]}`}
-                  alt="Vista previa del documento"
-                  className="w-full shadow-lg rounded-lg"
-                />
-              </div>
-            </div>
-          )}
-
           {/* Columna de variables */}
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -463,6 +449,29 @@ export default function FormBuilder() {
               ))}
             </div>
           </div>
+
+          {/* Columna del thumbnail */}
+          {previewContent?.preview.includes('/thumbnails/') && (
+            <div className="space-y-4 lg:sticky lg:top-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Documento de Referencia</CardTitle>
+                  <CardDescription>
+                    Use esta vista previa como guía para identificar las variables en el documento
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-auto max-h-[calc(100vh-16rem)]">
+                    <img 
+                      src={`/thumbnails/${previewContent.preview.match(/\/thumbnails\/([^"]+)/)?.[1]}`}
+                      alt="Vista previa del documento"
+                      className="w-full rounded-lg shadow-lg"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
 
         <Button
