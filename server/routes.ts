@@ -742,6 +742,13 @@ export function registerRoutes(app: Express): Server {
       const entryId = parseInt(req.body.entryId);
       const isDownload = req.body.download === true;
 
+      console.log('Iniciando operación de merge:', {
+        formId,
+        documentId,
+        entryId,
+        isDownload
+      });
+
       // Verificaciones de seguridad y existencia
       const [form] = await db.select()
         .from(forms)
@@ -767,77 +774,206 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Entry not found");
       }
 
-      console.log('Iniciando merge con datos:', {
-        documentId,
-        entryId,
-        values: entry.values
-      });
-
-      // Leer el documento original
-      const buffer = await readFile(doc.filePath);
-
-      // Verificar que es un DOCX válido
-      if (buffer[0] !== 0x50 || buffer[1] !== 0x4B) {
-        throw new Error('El archivo no es un DOCX válido');
+      // Verificar que el archivo existe y es un DOCX
+      if (!doc.filePath.toLowerCase().endsWith('.docx')) {
+        return res.status(400).json({
+          error: "El archivo debe ser un documento DOCX"
+        });
       }
 
-      console.log('Documento leído correctamente:', {
-        size: buffer.length,
-        isBuffer: Buffer.isBuffer(buffer)
-      });
+      let tempFilePath;
 
-      // Realizar el merge
-      let mergedBuffer: Buffer;
       try {
-        const result = await createReport({
-          template: buffer,
-          data: entry.values || {},
-          cmdDelimiter: ['{{', '}}'],
-          failFast: true
+        // Leer el archivo DOCX original
+        const originalBuffer = await readFile(doc.filePath);
+
+        console.log('Archivo original leído:', {
+          size: originalBuffer.length,
+          isBuffer: Buffer.isBuffer(originalBuffer),
+          firstBytes: originalBuffer.slice(0, 4).toString('hex'),
+          filePath: doc.filePath
         });
 
-        if (!result) {
-          throw new Error('createReport devolvió un resultado vacío');
+        // Verificar que el buffer es un archivo DOCX válido (comienza con PK)
+        if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
+          throw new Error('El archivo template no es un DOCX válido');
         }
 
-        mergedBuffer = Buffer.from(result);
+        // Crear una copia temporal del documento original
+        const tempFileName = `merge-${Date.now()}-${doc.name}`;
+        tempFilePath = await saveFile(Buffer.from(originalBuffer), tempFileName);
 
-        console.log('Merge completado:', {
-          inputSize: buffer.length,
-          outputSize: mergedBuffer.length
+        // Verificar que la copia se creó correctamente
+        const copiedBuffer = await readFile(tempFilePath);
+        console.log('Verificación de copia temporal:', {
+          originalSize: originalBuffer.length,
+          copiedSize: copiedBuffer.length,
+          isSameSize: originalBuffer.length === copiedBuffer.length,
+          firstBytesOriginal: originalBuffer.slice(0, 10).toString('hex'),
+          firstBytesCopy: copiedBuffer.slice(0, 10).toString('hex'),
+          tempPath: tempFilePath
         });
-      } catch (mergeError: any) {
-        console.error('Error detallado en createReport:', {
-          error: mergeError,
-          message: mergeError.message,
-          stack: mergeError.stack,
-          data: entry.values
+
+        if (copiedBuffer.length !== originalBuffer.length) {
+          throw new Error('La copia temporal no coincide con el archivo original');
+        }
+
+        // Preparar datos para el merge verificando tipos
+        const mergeData: Record<string, any> = {};
+        Object.entries(entry.values || {}).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            if (typeof value === 'number') {
+              mergeData[key] = value.toString(); // Convertir números a strings para el merge
+            } else if (typeof value === 'boolean') {
+              mergeData[key] = value.toString(); // Convertir booleanos a strings
+            } else {
+              mergeData[key] = String(value); // Asegurar que todo sea string
+            }
+          } else {
+            mergeData[key] = ''; // Valor vacío para null/undefined
+          }
         });
-        throw new Error(`Error en el merge: ${mergeError.message}`);
-      }
 
-      // Verificar que el resultado es un DOCX válido
-      if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
-        throw new Error('El resultado no es un DOCX válido');
-      }
-
-      if (isDownload) {
-        const baseName = doc.name.toLowerCase().endsWith('.docx') 
-          ? doc.name.slice(0, -5)
-          : doc.name;
-
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        res.setHeader('Content-Disposition', `attachment; filename="${baseName}-merged.docx"`);
-        return res.send(mergedBuffer);
-      } else {
-        const result = await mammoth.convertToHtml(
-          { buffer: mergedBuffer },
-          mammothOptions
-        );
-
-        return res.json({
-          result: `${previewStyles}<div class="document-preview">${result.value}</div>`
+        console.log('Datos preparados para merge:', {
+          variables: Object.keys(mergeData).length,
+          exampleValues: Object.entries(mergeData).slice(0, 3)
         });
+
+        // Realizar el merge sobre la copia temporal
+        let mergedBuffer: Buffer;
+        try {
+          const result = await createReport({
+            template: copiedBuffer,
+            data: mergeData,
+            cmdDelimiter: ['{{', '}}'],
+            failFast: false,
+            rejectNullish: false,
+            processLineBreaks: true,
+            processImages: true,
+            processHeadersAndFooters: true,
+            processHyperlinks: true,
+            processTables: true,
+            processStyles: true,
+            processTheme: true,
+            processVariables: true,
+            processNumbering: true,
+            preserveQuickStyles: true,
+            preserveNumbering: true,
+            preserveOutline: true,
+            preserveStaticContent: true,
+            preprocessTemplate: (template: any) => {
+              // Preserve original XML structure
+              return template;
+            },
+            postprocessTemplate: (template: any) => {
+              // Ensure XML structure is maintained
+              return template;
+            },
+            errorHandler: (error: any, cmdStr: string) => {
+              console.error('Error en comando durante merge:', { error, cmdStr });
+              // Keep original text if there's an error
+              return cmdStr;
+            },
+            additionalJsContext: {
+              formatDate: (date: string) => {
+                try {
+                  return new Date(date).toLocaleDateString();
+                } catch (e) {
+                  console.error('Error formateando fecha:', e);
+                  return date;
+                }
+              },
+              uppercase: (text: string) => `<w:r><w:rPr><w:b/><w:caps w:val="true"/></w:rPr><w:t>${String(text).toUpperCase()}</w:t></w:r>`,
+              lowercase: (text: string) => `<w:r><w:rPr><w:b/><w:smallCaps w:val="true"/></w:rPr><w:t>${String(text).toLowerCase()}</w:t></w:r>`,
+              bold: (text: string) => `<w:r><w:rPr><w:b/></w:rPr><w:t>${text}</w:t></w:r>`,
+              italic: (text: string) => `<w:r><w:rPr><w:i/></w:rPr><w:t>${text}</w:t></w:r>`,
+              underline: (text: string) => `<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>${text}</w:t></w:r>`,
+              paragraph: (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`,
+              pageBreak: () => '<w:p><w:r><w:br w:type="page"/></w:r></w:p>',
+              indent: (text: string, level: number = 1) => `<w:p><w:pPr><w:ind w:left="${level * 720}"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`,
+              center: (text: string) => `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`,
+              right: (text: string) => `<w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`,
+              formatNumber: (num: number) => {
+                try {
+                  return new Intl.NumberFormat().format(num);
+                } catch (e) {
+                  console.error('Error formateando número:', e);
+                  return String(num);
+                }
+              }
+            }
+          });
+
+          mergedBuffer = Buffer.from(result);
+
+          // Validar que el merge se realizó correctamente
+          const textResult = await mammoth.extractRawText({ buffer: mergedBuffer });
+          const mergedText = textResult.value;
+
+          // Verificar que las variables fueron reemplazadas
+          const anyVariableNotReplaced = Object.keys(mergeData).some(key => 
+            mergedText.includes(`{{${key}}}`)
+          );
+
+          if (anyVariableNotReplaced) {
+            console.error('Algunas variables no fueron reemplazadas');
+            throw new Error('El merge no reemplazó todas las variables');
+          }
+
+          // Verificar tamaño y estructura
+          if (mergedBuffer.length < originalBuffer.length * 0.8) {
+            console.error('El archivo merged es demasiado pequeño:', {
+              originalSize: originalBuffer.length,
+              mergedSize: mergedBuffer.length,
+              ratio: mergedBuffer.length / originalBuffer.length
+            });
+            throw new Error('El merge generó un archivo demasiado pequeño');
+          }
+
+          // Verificar que es un DOCX válido
+          if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
+            throw new Error('El resultado del merge no es un DOCX válido');
+          }
+
+        } catch (mergeError: any) {
+          console.error('Error en merge, usando copia sin procesar:', mergeError);
+          // Si falla el merge, usar la copia sin procesar
+          mergedBuffer = copiedBuffer;
+        }
+
+        if (isDownload) {
+          const baseName = doc.name.toLowerCase().endsWith('.docx')
+            ? doc.name.slice(0, -5)
+            : doc.name;
+
+          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          res.setHeader('Content-Disposition', `attachment; filename="${baseName}-merged.docx"`);
+          return res.send(mergedBuffer);
+        } else {
+          const result = await mammoth.convertToHtml(
+            { buffer: mergedBuffer },
+            mammothOptions
+          );
+
+          if (result.messages && result.messages.length > 0) {
+            console.log('Mensajes de conversión HTML:', result.messages);
+          }
+
+          return res.json({
+            result: `${previewStyles}<div class="document-preview">${result.value}</div>`
+          });
+        }
+
+      } finally {
+        // Limpiar archivo temporal
+        if (tempFilePath) {
+          try {
+            await deleteFile(tempFilePath);
+            console.log('Archivo temporal eliminado:', tempFilePath);
+          } catch (cleanupError) {
+            console.error('Error limpiando archivo temporal:', cleanupError);
+          }
+        }
       }
     } catch (error: any) {
       console.error('Error en el procesamiento:', {
