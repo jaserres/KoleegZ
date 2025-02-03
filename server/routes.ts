@@ -287,7 +287,7 @@ export function registerRoutes(app: Express): Server {
                 "p[style-name='Heading 1'] => h1:fresh",
                 "p[style-name='Heading 2'] => h2:fresh",
                 "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
-                 "r[style-name='Strong'] => strong",
+                "r[style-name='Strong'] => strong",
                 "r[style-name='Emphasis'] => em",
                  "r[style-name='style1'] => strong",
                 "r[style-name='style2'] => em",
@@ -710,7 +710,7 @@ export function registerRoutes(app: Express): Server {
           res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
           return res.send(mergedBuffer);
         } else {
-          // Para vista previa, convertir a HTML
+          // Para vista previa, convertir a HTML preservando todos los estilos
           const result = await mammoth.convertToHtml(
             { buffer: mergedBuffer },
             {
@@ -737,10 +737,22 @@ export function registerRoutes(app: Express): Server {
                 "p[style-name='Header'] => div.header > p:fresh"
               ],
               includeDefaultStyleMap: true,
-              preserveEmptyParagraphs: true,
-              ignoreEmptyParagraphs: false,
               transformDocument: (element) => {
-                // Preservar todos los estilos originales
+                // Preservar los estilos originales del documento
+                if (element.type === 'paragraph' && element.styleId) {
+                  element.alignment = element.styleId.alignment;
+                  element.indent = element.styleId.indent;
+                  element.numbering = element.styleId.numbering;
+                  element.styleId = element.styleId.name;
+                }
+                if (element.type === 'run' && element.styleId) {
+                  element.isBold = element.styleId.bold;
+                  element.isItalic = element.styleId.italic;
+                  element.isUnderline = element.styleId.underline;
+                  element.font = element.styleId.font;
+                  element.size = element.styleId.size;
+                  element.color = element.styleId.color;
+                }
                 return element;
               }
             }
@@ -790,6 +802,18 @@ export function registerRoutes(app: Express): Server {
                 padding-top: 10px;
                 border-top: 1px solid #eee;
               }
+              /* Estilos adicionales para preservar formato */
+              .document-preview [style*="text-align:"] { text-align: inherit; }
+              .document-preview [style*="margin-left:"] { margin-left: inherit; }
+              .document-preview [style*="text-indent:"] { text-indent: inherit; }
+              .document-preview [style*="font-family:"] { font-family: inherit; }
+              .document-preview [style*="font-size:"] { font-size: inherit; }
+              .document-preview [style*="color:"] { color: inherit; }
+              .document-preview [style*="background-color:"] { background-color: inherit; }
+              .document-preview strong { font-weight: bold; }
+              .document-preview em { font-style: italic; }
+              .document-preview u { text-decoration: underline; }
+              .document-preview s { text-decoration: line-through; }
             </style>
             <div class="document-preview">
               ${result.value}
@@ -862,7 +886,7 @@ export function registerRoutes(app: Express): Server {
         }));
         fields.push({
           label: 'Fecha de Creación',
-          value: 'createdAt'
+value: 'createdAt'
         });
 
         const parser = new Parser({ fields });
