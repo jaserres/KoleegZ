@@ -464,7 +464,9 @@ export default function FormEntries() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${selectedTemplate.name}.docx`;
+      // Asegurar que el nombre del archivo tenga solo una extensión .docx
+      const fileName = selectedTemplate.name.replace(/\.docx/gi, '');
+      link.download = `${fileName}.docx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
