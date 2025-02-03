@@ -612,7 +612,6 @@ export default function FormBuilder() {
               setVariables(previewContent.variables);
               setTemplateContent(previewContent.template);
               setShowEditor(true);
-              setPreviewContent(null);
               toast({
                 title: "Plantilla cargada",
                 description: previewContent.variables.length > 0
