@@ -15,6 +15,27 @@ import { Document, Paragraph, TextRun, Packer } from 'docx';
 import { Buffer } from 'buffer';
 import path from 'path';
 import express from 'express';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+const execAsync = promisify(exec);
+
+// Función para extraer texto de imagen usando Tesseract OCR
+async function extractTextFromImage(imagePath: string): Promise<string> {
+  try {
+    const { stdout } = await execAsync(`tesseract "${imagePath}" stdout`);
+    return stdout;
+  } catch (error) {
+    console.error('Error running OCR:', error);
+    return '';
+  }
+}
+
+// Función para detectar variables en texto
+function detectVariables(text: string): string[] {
+  const variablePattern = /{{([^}]+)}}/g;
+  const matches = text.match(variablePattern) || [];
+  return matches.map(match => match.slice(2, -2).trim());
+}
 
 // Configurar multer para manejar archivos
 const upload = multer({
@@ -245,25 +266,20 @@ async function ensureThumbnailDir() {
   }
 }
 
-// En la función generateThumbnail, reemplazar require con import dinámico
-async function generateThumbnail(buffer: Buffer): Promise<string> {
+// En la función generateThumbnail, actualizar para incluir OCR
+async function generateThumbnail(buffer: Buffer): Promise<{thumbnailPath: string, extractedVariables: string[]}> {
   try {
     const thumbnailFileName = `thumb_${Date.now()}.png`;
     const thumbnailPath = path.join(THUMBNAIL_DIR, thumbnailFileName);
-
-    // Usar import dinámico para child_process
-    const { exec } = await import('child_process');
-    const { promisify } = await import('util');
-    const execAsync = promisify(exec);
 
     // Guardar el buffer temporalmente
     const tempDocxPath = path.join(THUMBNAIL_DIR, `temp_${Date.now()}.docx`);
     await fs.writeFile(tempDocxPath, buffer);
 
-    // Usar libreoffice para convertir a PNG (solo la primera página)
+    // Usar libreoffice para convertir a PNG
     await execAsync(`libreoffice --headless --convert-to png --outdir "${THUMBNAIL_DIR}" "${tempDocxPath}"`);
 
-    // Limpiar archivos temporales
+    // Limpiar archivo temporal DOCX
     await fs.unlink(tempDocxPath);
 
     // Obtener el nombre del archivo PNG generado
@@ -273,15 +289,32 @@ async function generateThumbnail(buffer: Buffer): Promise<string> {
     // Verificar si el archivo existe
     try {
       await fs.access(pngFilePath);
-      return pngFileName; // Retornar solo el nombre del archivo
-    } catch {
-      console.error('Thumbnail file was not created');
-      return '';
-    }
 
+      // Extraer texto usando OCR
+      const extractedText = await extractTextFromImage(pngFilePath);
+      console.log('OCR Text extracted:', extractedText);
+
+      // Detectar variables en el texto extraído
+      const extractedVariables = detectVariables(extractedText);
+      console.log('Variables detected from OCR:', extractedVariables);
+
+      return {
+        thumbnailPath: pngFileName,
+        extractedVariables
+      };
+    } catch (error) {
+      console.error('Error processing thumbnail:', error);
+      return {
+        thumbnailPath: '',
+        extractedVariables: []
+      };
+    }
   } catch (error) {
     console.error('Error generating thumbnail:', error);
-    return '';
+    return {
+      thumbnailPath: '',
+      extractedVariables: []
+    };
   }
 }
 
@@ -619,6 +652,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
         let preview = '';
         let filePath = '';
         let thumbnailPath = '';
+        let extractedVariables: string[] = [];
 
         try {
             console.log('Procesando documento Word...');
@@ -647,24 +681,45 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
                     );
                     preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
                 } else {
-                    // Si no se puede extraer texto, generar thumbnail
-                    thumbnailPath = await generateThumbnail(validBuffer);
-                    template = "Documento complejo - Las variables deben ser agregadas manualmente";
+                    // Si no se puede extraer texto, generar thumbnail y usar OCR
+                    const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
+                    thumbnailPath = thumbPath;
+                    extractedVariables = vars;
+                    template = "Documento complejo - Variables detectadas por OCR";
+
+                    // Crear plantilla con variables detectadas
+                    if (extractedVariables.length > 0) {
+                        template = `Documento complejo - Variables detectadas:\n${
+                            extractedVariables.map(v => `{{${v}}}`).join('\n')
+                        }`;
+                    }
+
                     preview = `${previewStyles}<div class="document-preview">
                         <div class="flex flex-col items-center gap-4 p-4">
                             <p class="text-amber-500 font-semibold">Documento Complejo</p>
-                            ${thumbnailPath ? `<img src="/thumbnails/${path.basename(thumbnailPath)}" 
+                            ${thumbnailPath ? `<img src="/thumbnails/${thumbnailPath}" 
                                 alt="Vista previa del documento" 
                                 class="max-w-md shadow-lg rounded-lg"/>` : ''}
-                            <p>Este documento contiene elementos avanzados que no pueden ser mostrados como texto.</p>
-                            <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
+                            ${extractedVariables.length > 0 ? `
+                                <div class="mt-4">
+                                    <p class="font-semibold">Variables Detectadas por OCR:</p>
+                                    <ul class="list-disc pl-5 mt-2">
+                                        ${extractedVariables.map(v => `<li>{{${v}}}</li>`).join('\n')}
+                                    </ul>
+                                </div>
+                            ` : `
+                                <p>No se detectaron variables en el documento.</p>
+                                <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
+                            `}
                         </div>
                     </div>`;
                 }
             } catch (error) {
                 console.error('Error procesando documento:', error);
                 // Si falla todo, intentar generar al menos el thumbnail
-                thumbnailPath = await generateThumbnail(validBuffer);
+                 const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
+                    thumbnailPath = thumbPath;
+                     extractedVariables = vars;
                 template = "Documento complejo - Las variables deben ser agregadas manualmente";
                 preview = `${previewStyles}<div class="document-preview">
                     <div class="flex flex-col items-center gap-4 p-4">
@@ -794,9 +849,8 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
       // Eliminar el archivo físico primero
       await deleteFile(doc.filePath);
         if (doc.thumbnailPath) {
-            await deleteFile(path.join(THUMBNAIL_DIR, doc.thumbnailPath));
+            awaitdeleteFile(path.join(THUMBNAIL_DIR, doc.thumbnailPath));
         }
-
 
       // Luego eliminar el registro de la base de datos
       await db.delete(documents)
