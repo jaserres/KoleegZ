@@ -571,27 +571,20 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Form not found");
       }
 
-      // Guardar el documento
-      const [document] = await db.insert(documents)
-        .values({
-          formId,
-          name: req.body.name,
-          template: req.body.template,
-          preview: generatePreview(req.body.template || ''),
-          filePath: req.body.filePath // Usar el path del archivo original
-        })
-        .returning();
-
-      res.status(201).json(document);
+      // Redirigir al endpoint de upload para la creación de documentos
+      return res.status(400).json({
+        error: "Los documentos solo pueden ser creados a través del endpoint /upload",
+        message: "Por favor usa el endpoint /api/forms/:formId/documents/upload para subir documentos"
+      });
 
     } catch (error: any) {
-      console.error('Error creating document:', {
+      console.error('Error handling document request:', {
         error,
         message: error.message,
         stack: error.stack
       });
       res.status(500).json({
-        error: `Error creating document: ${error.message}`,
+        error: `Error handling document request: ${error.message}`,
         details: error.stack
       });
     }
