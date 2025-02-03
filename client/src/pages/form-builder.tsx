@@ -18,7 +18,6 @@ import { Plus, Save, ArrowLeft, Upload, Download } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formTemplates } from "@/lib/form-templates";
 import type { SelectVariable } from "@db/schema";
-import { ThemeSelector } from "@/components/theme-selector";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Trash2 } from "lucide-react";
 import {
@@ -38,10 +37,6 @@ export default function FormBuilder() {
   const { user } = useAuth();
   const [showEditor, setShowEditor] = useState(false);
   const [templateContent, setTemplateContent] = useState("");
-  const [formTheme, setFormTheme] = useState<{ primary: string; variant: string }>({
-    primary: "#64748b",
-    variant: "default",
-  });
   const [previewContent, setPreviewContent] = useState<{
     name: string;
     template: string;
@@ -60,7 +55,6 @@ export default function FormBuilder() {
   const [formName, setFormName] = useState("");
   const [variables, setVariables] = useState<Array<Partial<SelectVariable>>>([]);
 
-  // Effect to load form data when obtained
   useEffect(() => {
     if (form) {
       setFormName(form.name);
@@ -68,13 +62,11 @@ export default function FormBuilder() {
     }
   }, [form]);
 
-  // Effect to load selected template
   useEffect(() => {
     const templateData = sessionStorage.getItem("selectedTemplate");
     if (templateData && !id) {
       try {
         const template = JSON.parse(templateData);
-        // Check variable limit before loading template
         if (template.variables.length > variableLimit) {
           toast({
             title: "Límite de variables excedido",
@@ -96,14 +88,13 @@ export default function FormBuilder() {
 
   const createFormMutation = useMutation({
     mutationFn: async () => {
-      // Check variable limit before creating form
       if (variables.length > variableLimit) {
         throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
       }
-  
+
       const templateData = sessionStorage.getItem("selectedTemplate");
       let documentData = null;
-  
+
       if (templateData) {
         const parsedTemplate = JSON.parse(templateData);
         documentData = {
@@ -113,26 +104,22 @@ export default function FormBuilder() {
           filePath: parsedTemplate.filePath
         };
       }
-  
+
       const res = await apiRequest("POST", "/api/forms", {
         name: formName,
-        theme: formTheme,
         document: documentData
       });
       const form = await res.json();
-  
-      // Create variables
+
       try {
         for (const variable of variables) {
           await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
         }
       } catch (error) {
-        // If variable creation fails, delete the form to maintain consistency
         await apiRequest("DELETE", `/api/forms/${form.id}`);
         throw error;
       }
-  
-      // Limpiar datos de la plantilla temporal
+
       sessionStorage.removeItem("selectedTemplate");
       return form;
     },
@@ -157,18 +144,14 @@ export default function FormBuilder() {
     mutationFn: async () => {
       if (!id) return;
 
-      // Check variable limit before updating
       if (variables.length > variableLimit) {
         throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
       }
 
-      // Update form name and theme
       await apiRequest("PATCH", `/api/forms/${id}`, {
-        name: formName,
-        theme: formTheme
+        name: formName
       });
 
-      // Update variables
       for (const variable of variables) {
         if (variable.id) {
           await apiRequest("PATCH", `/api/forms/${id}/variables/${variable.id}`, variable);
@@ -194,16 +177,15 @@ export default function FormBuilder() {
     }
   });
 
-  const extractVariables = (template: string) => {
+    const extractVariables = (template: string) => {
     const variableRegex = /{{([^}]+)}}/g;
     const matches = template.match(variableRegex) || [];
-    const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
+    const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
     const invalidVariables: string[] = [];
     const validVariables = new Set<string>();
 
     matches.forEach(match => {
       const varName = match.slice(2, -2).trim();
-      // Convertir espacios y guiones a guiones bajos
       const normalizedName = varName
         .replace(/[\s-]+/g, '_')
         .replace(/[^a-zA-Z0-9_]/g, '');
@@ -229,15 +211,13 @@ export default function FormBuilder() {
       label: varName
         .split('_')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' '), // Convert snake_case to Title Case
-      type: 'text' // Default type
+        .join(' '),
+      type: 'text'
     }));
 
     return variables;
   };
-
-  // Modificar la función handleFileUpload para manejar documentos complejos
-const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const allowedTypes = [
@@ -270,13 +250,11 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 
         const result = await response.json();
 
-        // Intentar extraer variables del template si existe
         let detectedVariables: Array<Partial<SelectVariable>> = [];
         if (result.template && !result.template.includes("Documento complejo")) {
           detectedVariables = extractVariables(result.template);
         }
 
-        // Guardar toda la información incluyendo el filePath
         const previewData = {
           name: result.name,
           template: result.template,
@@ -287,7 +265,6 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 
         setPreviewContent(previewData);
 
-        // Si es un documento complejo, mostrar un mensaje específico
         if (result.template.includes("Documento complejo")) {
           toast({
             title: "Documento Complejo Detectado",
@@ -302,7 +279,6 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           });
         }
 
-        // Guardar en sessionStorage para uso posterior
         sessionStorage.setItem("selectedTemplate", JSON.stringify(previewData));
 
       } catch (error: any) {
@@ -324,7 +300,7 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
 
-  const removeExcessVariables = () => {
+    const removeExcessVariables = () => {
     const excess = variables.length - variableLimit;
     if (excess > 0) {
       setVariables(variables.slice(0, variableLimit));
@@ -359,20 +335,6 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           </Alert>
         )}
 
-        {/* Mostrar el thumbnail si existe */}
-        {previewContent?.preview.includes('/thumbnails/') && (
-          <div className="border rounded-lg p-4 bg-muted/50">
-            <h3 className="text-lg font-medium mb-4">Vista Previa del Documento</h3>
-            <div className="flex justify-center">
-              <img 
-                src={`/thumbnails/${previewContent.preview.match(/\/thumbnails\/([^"]+)/)?.[1]}`}
-                alt="Vista previa del documento"
-                className="max-w-md shadow-lg rounded-lg"
-              />
-            </div>
-          </div>
-        )}
-
         <div>
           <Label htmlFor="formName">Nombre del Formulario</Label>
           <Input
@@ -384,98 +346,104 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
             required
           />
         </div>
-        <div className="space-y-4">
-          <Label>Tema del Formulario</Label>
-          <Card>
-            <CardContent className="pt-6">
-              <ThemeSelector
-                onThemeChange={setFormTheme}
-                defaultColor={form?.theme?.primary}
-                defaultVariant={form?.theme?.variant}
-              />
-            </CardContent>
-          </Card>
-        </div>
-        <div>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Variables</h2>
-            <Button
-              onClick={() =>
-                setVariables([
-                  ...variables,
-                  { name: "", label: "", type: "text" },
-                ])
-              }
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Agregar Variable
-            </Button>
-          </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Columna del thumbnail */}
+          {previewContent?.preview.includes('/thumbnails/') && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Vista Previa del Documento</h3>
+              <div className="border rounded-lg p-4 bg-muted/50 sticky top-4">
+                <img 
+                  src={`/thumbnails/${previewContent.preview.match(/\/thumbnails\/([^"]+)/)?.[1]}`}
+                  alt="Vista previa del documento"
+                  className="w-full shadow-lg rounded-lg"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Columna de variables */}
           <div className="space-y-4">
-            {variables.map((variable, index) => (
-              <Card key={variable.id || index}>
-                <CardContent className="pt-6 grid gap-4 md:grid-cols-4">
-                  <div>
-                    <Label>Nombre Interno (camelCase)</Label>
-                    <Input
-                      value={variable.name}
-                      onChange={(e) =>
-                        setVariables(
-                          variables.map((v, i) =>
-                            i === index
-                              ? { ...v, name: e.target.value }
-                              : v
-                          )
-                        )
-                      }
-                      placeholder="nombreVariable"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label>Etiqueta</Label>
-                    <Input
-                      value={variable.label}
-                      onChange={(e) =>
-                        setVariables(
-                          variables.map((v, i) =>
-                            i === index
-                              ? { ...v, label: e.target.value }
-                              : v
-                          )
-                        )
-                      }
-                      placeholder="Nombre de la Variable"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label>Tipo</Label>
-                    <Select
-                      value={variable.type}
-                      onValueChange={(value) =>
-                        setVariables(
-                          variables.map((v, i) =>
-                            i === index
-                              ? { ...v, type: value }
-                              : v
-                          )
-                        )
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="text">Texto</SelectItem>
-                        <SelectItem value="number">Número</SelectItem>
-                        <SelectItem value="date">Fecha</SelectItem>
-                        <SelectItem value="time">Hora</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-end">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium">Variables del Formulario</h3>
+              <Button
+                onClick={() =>
+                  setVariables([
+                    ...variables,
+                    { name: "", label: "", type: "text" },
+                  ])
+                }
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Agregar Variable
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {variables.map((variable, index) => (
+                <Card key={variable.id || index}>
+                  <CardContent className="pt-6 space-y-4">
+                    <div className="grid gap-4">
+                      <div>
+                        <Label>Nombre Interno</Label>
+                        <Input
+                          value={variable.name}
+                          onChange={(e) =>
+                            setVariables(
+                              variables.map((v, i) =>
+                                i === index
+                                  ? { ...v, name: e.target.value }
+                                  : v
+                              )
+                            )
+                          }
+                          placeholder="nombreVariable"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label>Etiqueta</Label>
+                        <Input
+                          value={variable.label}
+                          onChange={(e) =>
+                            setVariables(
+                              variables.map((v, i) =>
+                                i === index
+                                  ? { ...v, label: e.target.value }
+                                  : v
+                              )
+                            )
+                          }
+                          placeholder="Nombre de la Variable"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label>Tipo</Label>
+                        <Select
+                          value={variable.type}
+                          onValueChange={(value) =>
+                            setVariables(
+                              variables.map((v, i) =>
+                                i === index
+                                  ? { ...v, type: value }
+                                  : v
+                              )
+                            )
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="text">Texto</SelectItem>
+                            <SelectItem value="number">Número</SelectItem>
+                            <SelectItem value="date">Fecha</SelectItem>
+                            <SelectItem value="time">Hora</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -490,10 +458,10 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -559,8 +527,7 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     return <div dangerouslySetInnerHTML={{ __html: previewContent.preview }} />;
   };
 
-  // Update PreviewDialog to handle OCR status
-  const PreviewDialog = () => {
+    const PreviewDialog = () => {
     if (!previewContent) return null;
 
     const handleDownload = async () => {
