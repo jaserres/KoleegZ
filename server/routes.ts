@@ -800,14 +800,7 @@ export function registerRoutes(app: Express): Server {
         const mergeData: Record<string, any> = {};
         Object.entries(entry.values || {}).forEach(([key, value]) => {
           if (value !== undefined && value !== null) {
-            // Mantener el tipo de dato original cuando sea posible
-            if (typeof value === 'number') {
-              mergeData[key] = value;
-            } else if (typeof value === 'boolean') {
-              mergeData[key] = value;
-            } else {
-              mergeData[key] = String(value);
-            }
+            mergeData[key] = String(value);
           } else {
             mergeData[key] = '';
           }
@@ -818,117 +811,42 @@ export function registerRoutes(app: Express): Server {
           variables: Object.keys(mergeData)
         });
 
-        // Realizar el merge preservando la estructura DOCX
-        let mergedBuffer: Buffer;
-        try {
-          // Asegurarnos de que el template es un Buffer válido
-          const validTemplateBuffer = Buffer.from(templateBuffer);
-
-          // Realizar el merge con opciones extendidas para preservar formato
-          const result = await createReport({
-            template: validTemplateBuffer,
-            data: mergeData,
-            cmdDelimiter: ['{{', '}}'],
-            failFast: false,
-            rejectNullish: false,
-            processLineBreaks: true,
-            processStyles: true,
-            processImages: true,
-            processHeadersAndFooters: true,
-            processHyperlinks: true,
-            processTables: true,
-            processListItems: true,
-            processPageBreaks: true,
-            preserveQuickStyles: true,
-            preserveNumbering: true,
-            preserveOutline: true,
-            preserveTabStops: true,
-            preserveTrackedChanges: true,
-            preserveTextBoxes: true,
-            preserveFields: true,
-            preserveMailMergeFields: true,
-            preserveWatermarks: true,
-            preserveTheme: true,
-            preserveContentControls: true,
-            preserveSmartTags: true,
-            preserveDrawings: true,
-            preserveShapes: true,
-            preserveObjects: true,
-            preserveOleObjects: true,
-            preserveFrames: true,
-            preserveSections: true,
-            preserveLanguage: true,
-            preserveStyles: {
-              paragraph: true,
-              character: true,
-              numbering: true,
-              table: true,
-              section: true
-            },
-            additionalJsContext: {
-              formatDate: (date: string) => {
-                try {
-                  return new Date(date).toLocaleDateString();
-                } catch (e) {
-                  return date;
-                }
-              },
-              uppercase: (text: string) => String(text).toUpperCase(),
-              lowercase: (text: string) => String(text).toLowerCase(),
-              formatNumber: (num: number) => {
-                try {
-                  return new Intl.NumberFormat().format(num);
-                } catch (e) {
-                  return String(num);                }
-              },
-              // Funciones adicionales para formato
-              bold: (text: string) => `<w:b/>${text}`,
-              italic: (text: string) => `<w:i/>${text}`,
-              underline: (text: string) => `<w:u w:val="single"/>${text}`,
-              color: (text: string, color: string) => `<w:color w:val="${color}"/>${text}`,
-              size: (text: string, size: number) => `<w:sz w:val="${size * 2}"/>${text}`,
-              spacing: (text: string, spacing: number) => `<w:spacing w:line="${spacing * 240}"/>${text}`,
-              indent: (text: string, left: number, right: number = 0) => 
-                `<w:ind w:left="${left * 720}" w:right="${right * 720}"/>${text}`
-            },
-            renderElementFunction: (element: any) => {
-              // Preservar estilos específicos de Word
-              if (element.type === 'paragraph') {
-                return {
-                  ...element,
-                  properties: {
-                    ...element.properties,
-                    keepNext: element.keepNext,
-                    keepLines: element.keepLines,
-                    pageBreakBefore: element.pageBreakBefore,
-                    widowControl: element.widowControl,
-                    suppressLineNumbers: element.suppressLineNumbers,
-                    suppressAutoHyphens: element.suppressAutoHyphens
-                  }
-                };
+        // Realizar el merge
+        const result = await createReport({
+          template: templateBuffer,
+          data: mergeData,
+          cmdDelimiter: ['{{', '}}'],
+          failFast: false,
+          rejectNullish: false,
+          processLineBreaks: true,
+          processHeadersAndFooters: true,
+          cmdLineBreaks: true,
+          literalXmlDelimiter: '||',
+          // Opciones simplificadas para el manejo de formato
+          additionalJsContext: {
+            formatDate: (date: string) => {
+              try {
+                return new Date(date).toLocaleDateString();
+              } catch (e) {
+                return date;
               }
-              return element;
-            }
-          });
+            },
+            formatNumber: (num: number) => {
+              try {
+                return new Intl.NumberFormat().format(num);
+              } catch (e) {
+                return String(num);
+              }
+            },
+            bold: (text: string) => `||<w:r><w:rPr><w:b/></w:rPr><w:t>${text}</w:t></w:r>||`,
+            italic: (text: string) => `||<w:r><w:rPr><w:i/></w:rPr><w:t>${text}</w:t></w:r>||`,
+            underline: (text: string) => `||<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>${text}</w:t></w:r>||`,
+            color: (text: string, color: string) => `||<w:r><w:rPr><w:color w:val="${color}"/></w:rPr><w:t>${text}</w:t></w:r>||`
+          }
+        });
 
-          mergedBuffer = Buffer.from(result);
+        const mergedBuffer = Buffer.from(result);
 
-          console.log('Merge completado:', {
-            resultSize: mergedBuffer.length,
-            isBuffer: Buffer.isBuffer(mergedBuffer),
-            firstBytes: mergedBuffer.slice(0, 4).toString('hex')
-          });
-
-        } catch (createReportError: any) {
-          console.error('Error detallado en createReport:', {
-            error: createReportError,
-            message: createReportError.message,
-            stack: createReportError.stack
-          });
-          throw new Error(`Error en createReport: ${createReportError.message}`);
-        }
-
-        // Verificar que el resultado es un buffer válido
         if (!Buffer.isBuffer(mergedBuffer) || mergedBuffer.length === 0) {
           throw new Error('El resultado del merge no es un buffer válido');
         }
@@ -958,8 +876,9 @@ export function registerRoutes(app: Express): Server {
             result: `${previewStyles}<div class="document-preview">${result.value}</div>`
           });
         }
+
       } catch (mergeError: any) {
-        console.error('Error en el merge:', {
+        console.error('Error detallado en el merge:', {
           error: mergeError,
           message: mergeError.message,
           stack: mergeError.stack
@@ -971,13 +890,13 @@ export function registerRoutes(app: Express): Server {
         });
       }
     } catch (error: any) {
-      console.error('Error en el procesamiento:', {
+      console.error('Error general:', {
         error,
         message: error.message,
         stack: error.stack
       });
       return res.status(500).json({
-        error: `Error procesando el documento: ${error.message}`,
+        error: `Error en el proceso: ${error.message}`,
         details: error.stack
       });
     }
