@@ -12,6 +12,7 @@ import { promises as fs } from 'fs';
 import mammoth from 'mammoth';
 import { saveFile, readFile, deleteFile } from './storage';
 import { Document, Paragraph, TextRun, Packer } from 'docx';
+import { Buffer } from 'buffer';
 
 // Configurar multer para manejar archivos
 const upload = multer({
@@ -274,7 +275,7 @@ export function registerRoutes(app: Express): Server {
       if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         console.log('Procesando archivo DOCX...');
 
-        // Guardar el archivo DOCX original
+        // Guardar el archivo DOCX original asegurando que es un buffer válido
         filePath = await saveFile(Buffer.from(file.buffer), file.originalname);
 
         try {
@@ -306,26 +307,62 @@ export function registerRoutes(app: Express): Server {
               includeDefaultStyleMap: true,
               transformDocument: (element) => {
                 // Preservar todos los estilos originales
+                 if (element.type === 'paragraph' && element.styleId) {
+                  element.alignment = element.styleId.alignment;
+                  element.indent = element.styleId.indent;
+                  element.numbering = element.styleId.numbering;
+                  element.styleId = element.styleId.name;
+                }
+                if (element.type === 'run' && element.styleId) {
+                  element.isBold = element.styleId.bold;
+                  element.isItalic = element.styleId.italic;
+                  element.isUnderline = element.styleId.underline;
+                  element.font = element.styleId.font;
+                  element.size = element.styleId.size;
+                  element.color = element.styleId.color;
+                }
                 return element;
-              }
+              },
+              convertImage: mammoth.images.imgElement((image) => {
+                return image.read("base64").then((imageData) => {
+                  const contentType = image.contentType || 'image/png';
+                  return {
+                    src: `data:${contentType};base64,${imageData}`,
+                    alt: image.altText || ''
+                  };
+                });
+              })
             }
           );
 
           // Extraer texto para búsqueda de variables manteniendo el formato
-          const textResult = await mammoth.extractRawText({ buffer: file.buffer });
+          const textResult = await mammoth.extractRawText({ 
+            buffer: file.buffer,
+            defaultCharacterEncoding: 'utf-8'
+          });
 
           template = textResult.value;
           preview = htmlResult.value;
+
+          // Registrar cualquier warning durante el proceso
+          if (htmlResult.messages.length > 0) {
+            console.log('Warnings durante la conversión:', htmlResult.messages);
+          }
 
           console.log('Documento DOCX procesado:', {
             originalName: file.originalname,
             filePath,
             templateLength: template.length,
-            previewLength: preview.length
+            previewLength: preview.length,
+            warnings: htmlResult.messages
           });
         } catch (error) {
-          console.error('Error al procesar el documento DOCX:', error);
-          throw new Error('Error al procesar el documento DOCX');
+          console.error('Error detallado al procesar el documento DOCX:', {
+            error,
+            message: error.message,
+            stack: error.stack
+          });
+          throw new Error(`Error al procesar el documento DOCX: ${error.message}`);
         }
       } else {
         // Para archivos .txt (mantenemos este caso por compatibilidad)
@@ -354,7 +391,8 @@ export function registerRoutes(app: Express): Server {
 
       console.log('Guardando documento en la base de datos:', {
         name: docData.name,
-        filePath: docData.filePath
+        filePath: docData.filePath,
+        previewLength: docData.preview.length
       });
 
       const [doc] = await db.insert(documents)
@@ -363,9 +401,14 @@ export function registerRoutes(app: Express): Server {
 
       res.status(201).json(doc);
     } catch (error: any) {
-      console.error('Error al procesar el documento:', error);
+      console.error('Error detallado al procesar el documento:', {
+        error,
+        message: error.message,
+        stack: error.stack
+      });
       return res.status(400).json({
-        error: `Error al procesar el documento: ${error.message}`
+        error: `Error al procesar el documento: ${error.message}`,
+        details: error.stack
       });
     }
   });
@@ -886,7 +929,7 @@ export function registerRoutes(app: Express): Server {
         }));
         fields.push({
           label: 'Fecha de Creación',
-value: 'createdAt'
+        value: 'createdAt'
         });
 
         const parser = new Parser({ fields });
