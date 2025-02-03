@@ -783,23 +783,27 @@ export function registerRoutes(app: Express): Server {
           isBuffer: Buffer.isBuffer(templateBuffer)
         });
 
-        // Preparar datos para el merge normalizando nombres de variables
-        const mergeData = Object.entries(entry.values || {}).reduce((acc, [key, value]) => {
-          // Normalizar el nombre de la variable para el merge
-          const normalizedKey = key
+        // Función para normalizar nombres de variables
+        const normalizeVariableName = (name: string): string => {
+          return name
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '') // Remover acentos
-            .replace(/[^\w\s]/g, '_') // Reemplazar caracteres especiales con _
-            .replace(/\s+/g, '_'); // Reemplazar espacios con _
+            .replace(/[^\w]/g, '_') // Reemplazar caracteres no alfanuméricos con _
+            .replace(/_+/g, '_') // Reemplazar múltiples _ con uno solo
+            .trim();
+        };
 
-          acc[normalizedKey] = value !== null && value !== undefined ? String(value) : '';
+        // Preparar datos para el merge normalizando nombres de variables
+        const mergeData = Object.entries(entry.values || {}).reduce((acc, [key, value]) => {
+          // Guardar tanto la versión normalizada como la original
+          acc[key] = value !== null && value !== undefined ? String(value) : '';
+          acc[normalizeVariableName(key)] = value !== null && value !== undefined ? String(value) : '';
           return acc;
         }, {} as Record<string, string>);
 
         console.log('Datos preparados para merge:', {
           originalKeys: Object.keys(entry.values || {}),
-          normalizedKeys: Object.keys(mergeData),
-          data: mergeData
+          mergeDataKeys: Object.keys(mergeData)
         });
 
         // Realizar el merge con opciones mínimas
@@ -808,14 +812,25 @@ export function registerRoutes(app: Express): Server {
           data: mergeData,
           cmdDelimiter: ['{{', '}}'],
           literalXmlDelimiter: '||',
-          failFast: true, // Para obtener errores más específicos
+          failFast: true,
           additionalJsContext: {
             // Funciones básicas de formato
             bold: (text: string) => `||<w:r><w:rPr><w:b/></w:rPr><w:t>${text}</w:t></w:r>||`,
             italic: (text: string) => `||<w:r><w:rPr><w:i/></w:rPr><w:t>${text}</w:t></w:r>||`,
             underline: (text: string) => `||<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>${text}</w:t></w:r>||`,
-            // Función para manejar valores undefined/null
-            defaultValue: (value: any, defaultVal: string = '') => value || defaultVal
+            // Función para manejar valores undefined/null y normalizar variables
+            get: (obj: any, key: string) => {
+              // Intentar con la clave original primero
+              if (obj[key] !== undefined) return obj[key];
+              // Si no se encuentra, intentar con la versión normalizada
+              const normalizedKey = normalizeVariableName(key);
+              return obj[normalizedKey] !== undefined ? obj[normalizedKey] : '';
+            },
+            // Función helper para debugging
+            debug: (value: any) => {
+              console.log('Debug valor en template:', value);
+              return String(value);
+            }
           }
         });
 
@@ -864,7 +879,8 @@ export function registerRoutes(app: Express): Server {
           details: {
             name: mergeError.name,
             message: mergeError.message,
-            command: mergeError.commandError
+            command: mergeError.commandError,
+            data: mergeError.data
           }
         });
       }
