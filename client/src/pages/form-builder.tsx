@@ -358,6 +358,21 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
             </AlertDescription>
           </Alert>
         )}
+
+        {/* Mostrar el thumbnail si existe */}
+        {previewContent?.preview.includes('/thumbnails/') && (
+          <div className="border rounded-lg p-4 bg-muted/50">
+            <h3 className="text-lg font-medium mb-4">Vista Previa del Documento</h3>
+            <div className="flex justify-center">
+              <img 
+                src={`/thumbnails/${previewContent.preview.match(/\/thumbnails\/([^"]+)/)?.[1]}`}
+                alt="Vista previa del documento"
+                className="max-w-md shadow-lg rounded-lg"
+              />
+            </div>
+          </div>
+        )}
+
         <div>
           <Label htmlFor="formName">Nombre del Formulario</Label>
           <Input
