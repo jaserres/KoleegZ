@@ -569,7 +569,13 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Form not found");
       }
 
-      // Redirigir al endpoint de upload para la creación de documentos
+      // Si no hay archivo adjunto, simplemente retornamos OK
+      // Esto permite que el guardado del formulario continúe sin error
+      if (!req.body.filePath) {
+        return res.status(200).json({ message: "No document to create" });
+      }
+
+      // Si hay un intento de crear documento sin usar /upload, entonces sí redirigimos
       return res.status(400).json({
         error: "Los documentos solo pueden ser creados a través del endpoint /upload",
         message: "Por favor usa el endpoint /api/forms/:formId/documents/upload para subir documentos"
