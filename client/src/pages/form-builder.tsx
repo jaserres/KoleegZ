@@ -405,6 +405,60 @@ export default function FormBuilder() {
             </div>
 
             <div className="grid gap-8 lg:grid-cols-2">
+              {previewContent?.thumbnailPath && (
+                <div className="lg:sticky lg:top-4 space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Documento de Referencia</CardTitle>
+                      <CardDescription>
+                        Use esta vista previa como guía para identificar las variables
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-auto max-h-[calc(100vh-16rem)] space-y-4">
+                        <img
+                          src={`/thumbnails/${previewContent.thumbnailPath}`}
+                          alt="Vista previa del documento"
+                          className="w-full rounded-lg shadow-lg"
+                        />
+                        <Button
+                          variant="secondary"
+                          onClick={handleOCRExtraction}
+                          className="w-full"
+                        >
+                          <Wand2 className="mr-2 h-4 w-4" />
+                          Detectar Variables con OCR
+                        </Button>
+
+                        {/* Variables detectadas */}
+                        <div className="mt-4">
+                          {variables.length > 0 ? (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                              <p className="text-green-700 font-medium mb-2">Variables Detectadas:</p>
+                              <div className="grid gap-2">
+                                {variables.map((variable, index) => (
+                                  <div key={index} className="flex items-center gap-2 text-sm">
+                                    <code className="bg-green-100 px-2 py-1 rounded text-green-800">
+                                      {`{{${variable.name}}}`}
+                                    </code>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                              <p className="text-yellow-800 font-medium">No se detectaron variables</p>
+                              <p className="text-sm text-yellow-600 mt-1">
+                                Por favor, agregue las variables manualmente basándose en el documento original.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
               <Card>
                 <CardHeader>
                   <CardTitle>Configuración del Formulario</CardTitle>
@@ -537,62 +591,6 @@ export default function FormBuilder() {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Vista previa del documento */}
-              {previewContent?.thumbnailPath && (
-                <div className="lg:sticky lg:top-4 space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Documento de Referencia</CardTitle>
-                      <CardDescription>
-                        Use esta vista previa como guía para identificar las variables
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="overflow-auto max-h-[calc(100vh-16rem)] space-y-4">
-                        <img
-                          src={`/thumbnails/${previewContent.thumbnailPath}`}
-                          alt="Vista previa del documento"
-                          className="w-full rounded-lg shadow-lg"
-                        />
-                        <Button
-                          variant="secondary"
-                          onClick={handleOCRExtraction}
-                          className="w-full"
-                        >
-                          <Wand2 className="mr-2 h-4 w-4" />
-                          Detectar Variables con OCR
-                        </Button>
-
-                        {/* Variables detectadas */}
-                        <div className="mt-4">
-                          {variables.length > 0 ? (
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                              <p className="text-green-700 font-medium mb-2">Variables Detectadas:</p>
-                              <div className="grid gap-2">
-                                {variables.map((variable, index) => (
-                                  <div key={index} className="flex items-center gap-2 text-sm">
-                                    <code className="bg-green-100 px-2 py-1 rounded text-green-800">
-                                      {`{{${variable.name}}}`}
-                                    </code>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                              <p className="text-yellow-800 font-medium">No se detectaron variables</p>
-                              <p className="text-sm text-yellow-600 mt-1">
-                                Por favor, agregue las variables manualmente basándose en el documento original.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
             </div>
           </>
         )}
