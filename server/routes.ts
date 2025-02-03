@@ -274,15 +274,32 @@ export function registerRoutes(app: Express): Server {
       if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         console.log('Procesando archivo DOCX...');
 
-        // Guardar el archivo en el sistema de archivos
+        // Guardar el archivo DOCX original
         filePath = await saveFile(file.buffer, file.originalname);
 
         try {
-          // Extraer el texto para búsqueda y preview
-          const [htmlResult, textResult] = await Promise.all([
-            mammoth.convertToHtml({ buffer: file.buffer }),
-            mammoth.extractRawText({ buffer: file.buffer })
-          ]);
+          // Extraer el contenido preservando el formato para la vista previa
+          const htmlResult = await mammoth.convertToHtml(
+            { buffer: file.buffer },
+            {
+              styleMap: [
+                "p[style-name='Normal'] => p:fresh",
+                "p[style-name='Heading 1'] => h1:fresh",
+                "p[style-name='Heading 2'] => h2:fresh",
+                "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
+                "b => strong",
+                "i => em",
+                "u => u",
+                "strike => s",
+                "tab => span.tab"
+              ],
+              includeDefaultStyleMap: true,
+              preserveEmptyParagraphs: true
+            }
+          );
+
+          // Extraer texto para búsqueda de variables manteniendo el formato
+          const textResult = await mammoth.extractRawText({ buffer: file.buffer });
 
           template = textResult.value;
           preview = htmlResult.value;
@@ -298,13 +315,13 @@ export function registerRoutes(app: Express): Server {
           throw new Error('Error al procesar el documento DOCX');
         }
       } else {
-        // Para archivos .txt
+        // Para archivos .txt (mantenemos este caso por compatibilidad)
         template = file.buffer.toString('utf-8');
         preview = template;
         filePath = await saveFile(file.buffer, file.originalname);
       }
 
-      // Si es una carga temporal, solo devolver el contenido
+      // Si es una carga temporal, devolver el contenido
       if (formId === null) {
         return res.status(200).json({
           name: file.originalname,
@@ -314,7 +331,6 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Preparar los datos del documento
       const docData = {
         formId,
         name: file.originalname,
@@ -328,20 +344,9 @@ export function registerRoutes(app: Express): Server {
         filePath: docData.filePath
       });
 
-      // Insertar el documento en la base de datos
       const [doc] = await db.insert(documents)
         .values(docData)
         .returning();
-
-      // Verificar que el documento se guardó correctamente
-      const [savedDoc] = await db.select()
-        .from(documents)
-        .where(eq(documents.id, doc.id));
-
-      if (!savedDoc || !savedDoc.filePath) {
-        console.error('Error: Documento no guardado correctamente');
-        throw new Error('El documento no se guardó correctamente en la base de datos');
-      }
 
       res.status(201).json(doc);
     } catch (error: any) {
@@ -351,7 +356,6 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
-
   app.post("/api/forms/:formId/documents", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -520,6 +524,7 @@ export function registerRoutes(app: Express): Server {
     res.sendStatus(200);
   });
 
+  // Modificar el endpoint de merge para preservar el formato
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -567,52 +572,43 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Leer el archivo DOCX
-      const documentBuffer = await readFile(doc.filePath);
+      // Leer el archivo DOCX original
+      const templateBuffer = await readFile(doc.filePath);
 
-      // Asegurarse de que entry.values sea un objeto válido y transformar los valores
-      const rawValues = entry.values || {};
+      // Preparar datos para el merge
       const mergeData: Record<string, string> = {};
-
-      // Transformar todos los valores a string y validar que no sean undefined
-      Object.entries(rawValues).forEach(([key, value]) => {
+      Object.entries(entry.values || {}).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
           mergeData[key] = String(value);
         } else {
-          mergeData[key] = ''; // Valor por defecto para campos vacíos
+          mergeData[key] = '';
         }
       });
 
-      console.log('Datos preparados para merge:', {
-        id: doc.id,
-        name: doc.name,
-        filePath: doc.filePath,
-        bufferLength: documentBuffer.length,
-        mergeData
-      });
-
-      // Realizar el merge con manejo de errores más detallado
       try {
+        // Realizar el merge con configuración mejorada para preservar formato
         const mergedBuffer = await createReport({
-          template: documentBuffer,
+          template: templateBuffer,
           data: mergeData,
           cmdDelimiter: ['{{', '}}'],
           failFast: false,
           rejectNullish: false,
+          lineBreaks: true,
           fixSmartQuotes: true,
-          processLineBreaks: true,
-          processStyles: true, // Activar procesamiento de estilos
-          preserveFormatting: true, // Preservar formato
           errorHandler: (error, cmdStr) => {
             console.error('Error en comando:', { error, cmdStr });
-            return ''; // Retornar string vacío en caso de error
+            return '';
+          },
+          additionalJsContext: {
+            // Agregar funciones de utilidad si son necesarias
+            formatDate: (date: string) => new Date(date).toLocaleDateString(),
+            uppercase: (text: string) => text.toUpperCase(),
+            lowercase: (text: string) => text.toLowerCase(),
           }
         });
 
-        console.log('Merge completado exitosamente');
-
         if (isDownload) {
-          // Asegurarse de que el nombre del archivo tenga solo una extensión .docx
+          // Para descarga, enviar el archivo DOCX directamente
           const baseName = doc.name.toLowerCase().endsWith('.docx') 
             ? doc.name.slice(0, -5) 
             : doc.name;
@@ -621,9 +617,10 @@ export function registerRoutes(app: Express): Server {
           res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
           return res.send(mergedBuffer);
         } else {
-          const result = await mammoth.convertToHtml({
-            buffer: mergedBuffer,
-            options: {
+          // Para vista previa, convertir a HTML manteniendo el formato
+          const result = await mammoth.convertToHtml(
+            { buffer: mergedBuffer },
+            {
               styleMap: [
                 "p[style-name='Normal'] => p:fresh",
                 "p[style-name='Heading 1'] => h1:fresh",
@@ -639,26 +636,15 @@ export function registerRoutes(app: Express): Server {
                 "br => br",
                 "table => table",
                 "tr => tr",
-                "td => td",
-                "p[style-name='Footer'] => div.footer > p:fresh",
-                "p[style-name='Header'] => div.header > p:fresh"
+                "td => td"
               ],
               includeDefaultStyleMap: true,
               preserveEmptyParagraphs: true,
-              ignoreEmptyParagraphs: false,
-              idPrefix: 'doc-',
-              convertImage: mammoth.images.imgElement(function(image) {
-                return image.read().then(function(imageBuffer) {
-                  const base64Image = imageBuffer.toString('base64');
-                  return {
-                    src: `data:${image.contentType};base64,${base64Image}`,
-                    class: 'doc-image'
-                  };
-                });
-              })
+              ignoreEmptyParagraphs: false
             }
-          });
+          );
 
+          // Aplicar estilos CSS mejorados para la vista previa
           const styledHtml = `
             <style>
               .document-preview {
@@ -676,25 +662,10 @@ export function registerRoutes(app: Express): Server {
                 text-align: justify;
                 white-space: pre-wrap;
               }
-              .document-preview h1 {
-                font-size: 24px;
-                font-weight: bold;
-                margin: 24px 0 12px;
-              }
-              .document-preview h2 {
-                font-size: 20px;
-                font-weight: bold;
-                margin: 20px 0 10px;
-              }
-              .document-preview h3 {
-                font-size: 16px;
-                font-weight: bold;
-                margin: 16px 0 8px;
-              }
-              .document-preview .tab {
-                display: inline-block;
-                width: 36px;
-              }
+              .document-preview h1 { font-size: 24px; font-weight: bold; margin: 24px 0 12px; }
+              .document-preview h2 { font-size: 20px; font-weight: bold; margin: 20px 0 10px; }
+              .document-preview h3 { font-size: 16px; font-weight: bold; margin: 16px 0 8px; }
+              .document-preview .tab { display: inline-block; width: 36px; }
               .document-preview table {
                 border-collapse: collapse;
                 width: 100%;
@@ -706,40 +677,12 @@ export function registerRoutes(app: Express): Server {
                 padding: 8px;
                 vertical-align: top;
               }
-              .document-preview .doc-image {
-                max-width: 100%;
-                height: auto;
-                margin: 1em 0;
-                display: block;
-              }
-              .document-preview .list-paragraph {
-                margin-left: 24px;
-              }
-              .document-preview .header {
-                position: relative;
-                margin-bottom: 20px;
-                padding-bottom: 10px;
-                border-bottom: 1px solid #eee;
-              }
-              .document-preview .footer {
-                position: relative;
-                margin-top: 20px;
-                padding-top: 10px;
-                border-top: 1px solid #eee;
-              }
+              .document-preview .list-paragraph { margin-left: 24px; }
               @media print {
                 .document-preview {
                   box-shadow: none;
                   margin: 0;
                   padding: 0;
-                }
-                .document-preview .header {
-                  position: fixed;
-                  top: 0;
-                }
-                .document-preview .footer {
-                  position: fixed;
-                  bottom: 0;
                 }
               }
             </style>
@@ -747,20 +690,14 @@ export function registerRoutes(app: Express): Server {
               ${result.value}
             </div>`;
 
-          // Log el HTML generado para diagnóstico
-          console.log('HTML generado:', result.value.substring(0, 500));
-
           return res.json({ result: styledHtml });
         }
       } catch (mergeError: any) {
         console.error('Error específico en el merge:', mergeError);
-        // Agregar más información de diagnóstico en la respuesta
         return res.status(500).json({
           error: `Error en el proceso de merge: ${mergeError.message}`,
           details: mergeError.stack,
-          data: mergeData,
-          template: doc.template ? doc.template.substring(0, 200) + '...' : 'No template', // Mostrar primeros 200 caracteres del template
-          delimiters: ['{{', '}}']
+          data: mergeData
         });
       }
     } catch (error: any) {
@@ -771,7 +708,6 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
-
   // Export entries endpoints
   app.get("/api/forms/:formId/entries/export", async (req, res) => {
     const user = ensureAuth(req);
