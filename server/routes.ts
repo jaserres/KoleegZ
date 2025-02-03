@@ -848,21 +848,85 @@ export function registerRoutes(app: Express): Server {
             cmdDelimiter: ['{{', '}}'],
             failFast: false,
             rejectNullish: false,
-            linebreaks: true,
             processLineBreaks: true,
-            processImages: true
+            processImages: true,
+            processHeadersAndFooters: true,
+            processHyperlinks: true,
+            processTables: true,
+            processStyles: true,
+            processTheme: true,
+            processVariables: true,
+            processNumbering: true,
+            preserveQuickStyles: true,
+            preserveNumbering: true,
+            preserveOutline: true,
+            preserveStaticContent: true,
+            preprocessTemplate: (template: any) => {
+              // Preserve original XML structure
+              return template;
+            },
+            postprocessTemplate: (template: any) => {
+              // Ensure XML structure is maintained
+              return template;
+            },
+            errorHandler: (error: any, cmdStr: string) => {
+              console.error('Error en comando durante merge:', { error, cmdStr });
+              // Keep original text if there's an error
+              return cmdStr;
+            },
+            additionalJsContext: {
+              formatDate: (date: string) => {
+                try {
+                  return new Date(date).toLocaleDateString();
+                } catch (e) {
+                  console.error('Error formateando fecha:', e);
+                  return date;
+                }
+              },
+              uppercase: (text: string) => `<w:r><w:rPr><w:b/><w:caps w:val="true"/></w:rPr><w:t>${String(text).toUpperCase()}</w:t></w:r>`,
+              lowercase: (text: string) => `<w:r><w:rPr><w:b/><w:smallCaps w:val="true"/></w:rPr><w:t>${String(text).toLowerCase()}</w:t></w:r>`,
+              bold: (text: string) => `<w:r><w:rPr><w:b/></w:rPr><w:t>${text}</w:t></w:r>`,
+              italic: (text: string) => `<w:r><w:rPr><w:i/></w:rPr><w:t>${text}</w:t></w:r>`,
+              underline: (text: string) => `<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>${text}</w:t></w:r>`,
+              paragraph: (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`,
+              pageBreak: () => '<w:p><w:r><w:br w:type="page"/></w:r></w:p>',
+              indent: (text: string, level: number = 1) => `<w:p><w:pPr><w:ind w:left="${level * 720}"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`,
+              center: (text: string) => `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`,
+              right: (text: string) => `<w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`,
+              formatNumber: (num: number) => {
+                try {
+                  return new Intl.NumberFormat().format(num);
+                } catch (e) {
+                  console.error('Error formateando número:', e);
+                  return String(num);
+                }
+              }
+            }
           });
 
           mergedBuffer = Buffer.from(result);
 
-          console.log('Resultado del merge:', {
-            originalSize: originalBuffer.length,
-            mergedSize: mergedBuffer.length,
-            ratio: (mergedBuffer.length / originalBuffer.length).toFixed(4)
-          });
+          // Validar que el merge se realizó correctamente
+          const textResult = await mammoth.extractRawText({ buffer: mergedBuffer });
+          const mergedText = textResult.value;
 
-          // Verificar que el merge se realizó correctamente
+          // Verificar que las variables fueron reemplazadas
+          const anyVariableNotReplaced = Object.keys(mergeData).some(key => 
+            mergedText.includes(`{{${key}}}`)
+          );
+
+          if (anyVariableNotReplaced) {
+            console.error('Algunas variables no fueron reemplazadas');
+            throw new Error('El merge no reemplazó todas las variables');
+          }
+
+          // Verificar tamaño y estructura
           if (mergedBuffer.length < originalBuffer.length * 0.8) {
+            console.error('El archivo merged es demasiado pequeño:', {
+              originalSize: originalBuffer.length,
+              mergedSize: mergedBuffer.length,
+              ratio: mergedBuffer.length / originalBuffer.length
+            });
             throw new Error('El merge generó un archivo demasiado pequeño');
           }
 
