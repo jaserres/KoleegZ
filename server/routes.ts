@@ -758,6 +758,38 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
     }
 });
 
+// Añadir el nuevo endpoint para extracción OCR después del endpoint upload
+app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
+  try {
+    const thumbnailPath = req.body.thumbnailPath;
+    if (!thumbnailPath) {
+      return res.status(400).json({
+        error: "Se requiere la ruta del thumbnail"
+      });
+    }
+
+    const fullPath = path.join(THUMBNAIL_DIR, thumbnailPath);
+    console.log('Iniciando proceso OCR adicional...');
+    const extractedText = await extractTextFromImage(fullPath);
+    console.log('OCR Text extracted:', extractedText);
+
+    // Detectar variables en el texto extraído
+    const extractedVariables = detectVariables(extractedText);
+    console.log('Variables detected from OCR:', extractedVariables);
+
+    res.json({
+      extractedVariables,
+      message: "OCR completado exitosamente"
+    });
+  } catch (error: any) {
+    console.error('Error en proceso OCR:', error);
+    res.status(500).json({
+      error: `Error en proceso OCR: ${error.message}`,
+      details: error.stack
+    });
+  }
+});
+
   app.get("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -797,7 +829,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
         formId
       });
       res.status(500).json({
-error: 'Error al consultar documentos',
+        error: 'Error al consultar documentos',
         details: error.message
       });
     }

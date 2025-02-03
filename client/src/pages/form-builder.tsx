@@ -495,8 +495,59 @@ const renderFormEditor = () => (
   </Card>
 );
 
-// Modificar el renderPreview para siempre usar thumbnails
+// Modificar el renderPreview para incluir el botón de OCR
 const renderPreview = () => {
+  const handleOCRExtraction = async () => {
+    if (!previewContent?.thumbnailPath) return;
+
+    try {
+      const response = await fetch(`/api/forms/${id || 'temp'}/documents/extract-ocr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          thumbnailPath: previewContent.thumbnailPath
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al procesar OCR');
+      }
+
+      const result = await response.json();
+
+      if (result.extractedVariables && result.extractedVariables.length > 0) {
+        setPreviewContent({
+          ...previewContent,
+          extractedVariables: [
+            ...(previewContent.extractedVariables || []),
+            ...result.extractedVariables.filter(
+              (v: string) => !(previewContent.extractedVariables || []).includes(v)
+            )
+          ]
+        });
+        toast({
+          title: "Variables Detectadas",
+          description: `Se encontraron ${result.extractedVariables.length} nuevas variables.`
+        });
+      } else {
+        toast({
+          title: "OCR Completado",
+          description: "No se detectaron nuevas variables en el documento.",
+          variant: "default"
+        });
+      }
+    } catch (error) {
+      console.error('Error en OCR:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo completar el proceso de OCR",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col items-center gap-4 p-4">
       {previewContent?.thumbnailPath && (
@@ -506,6 +557,14 @@ const renderPreview = () => {
             alt="Vista previa del documento"
             className="max-w-md shadow-lg rounded-lg"
           />
+          <Button 
+            variant="secondary"
+            onClick={handleOCRExtraction}
+            className="mt-2"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Intentar extraer más variables con OCR
+          </Button>
           {previewContent.extractedVariables && previewContent.extractedVariables.length > 0 ? (
             <div className="mt-4 w-full max-w-md">
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
