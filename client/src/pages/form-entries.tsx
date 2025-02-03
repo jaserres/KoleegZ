@@ -55,6 +55,7 @@ export default function FormEntries() {
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
+  const [previewContent, setPreviewContent] = useState<any>(null);
   
     const user = {
     isPremium: true,
@@ -333,6 +334,7 @@ export default function FormEntries() {
 
             const doc = await response.json();
             setDocumentTemplate(doc.template);
+             setPreviewContent(doc);
           }
 
           // Extraer variables y usar el nombre del archivo
@@ -398,8 +400,78 @@ export default function FormEntries() {
     createEntryMutation.mutate(values);
   };
   
+  const handleOCRExtraction = async () => {
+      if (!previewContent?.thumbnailPath) return;
+
+      try {
+        const response = await fetch(`/api/forms/${id || 'temp'}/documents/extract-ocr`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            thumbnailPath: previewContent.thumbnailPath
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Error al procesar OCR');
+        }
+
+        const result = await response.json();
+
+        if (result.extractedVariables && result.extractedVariables.length > 0) {
+          // Convertir las nuevas variables extraídas al formato correcto
+          const newVariables = result.extractedVariables.map((varName: string) => ({
+            name: varName,
+            label: varName
+              .split('_')
+              .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' '),
+            type: 'text'
+          }));
+
+          // Combinar variables existentes con nuevas, evitando duplicados por nombre
+          const existingVarNames = new Set(previewContent.variables.map(v => v.name));
+          const uniqueNewVars = newVariables.filter(v => !existingVarNames.has(v.name));
+
+          const updatedVariables = [...previewContent.variables, ...uniqueNewVars];
+          const updatedExtractedVarNames = [
+            ...(previewContent.extractedVariables || []),
+            ...result.extractedVariables.filter(
+              (v: string) => !(previewContent.extractedVariables || []).includes(v)
+            )
+          ];
+
+          setPreviewContent({
+            ...previewContent,
+            variables: updatedVariables,
+            extractedVariables: updatedExtractedVarNames
+          });
+
+          toast({
+            title: "Variables Detectadas",
+            description: `Se encontraron ${uniqueNewVars.length} nuevas variables.`
+          });
+        } else {
+          toast({
+            title: "OCR Completado",
+            description: "No se detectaron nuevas variables en el documento.",
+            variant: "default"
+          });
+        }
+      } catch (error) {
+        console.error('Error en OCR:', error);
+        toast({
+          title: "Error",
+          description: "No se pudo completar el proceso de OCR",
+          variant: "destructive"
+        });
+      }
+    };
+
   const handleCreateFormFromTemplate = () => {
-    if (detectedVariables.length === 0) {
+    if (detectedVariables.length === 0 && (!previewContent?.variables || previewContent.variables.length === 0)) {
       toast({
         title: "Error",
         description: "No se detectaron variables en la plantilla",
@@ -408,9 +480,20 @@ export default function FormEntries() {
       return;
     }
 
+    // Combinar todas las variables detectadas
+    const allVariables = [
+      ...detectedVariables,
+      ...(previewContent?.variables || [])
+    ];
+
+    // Eliminar duplicados basados en el nombre de la variable
+    const uniqueVariables = Array.from(
+      new Map(allVariables.map(v => [v.name, v])).values()
+    );
+
     // Check if number of variables exceeds limit
     const variableLimit = user?.isPremium ? 50 : 10;
-    if (detectedVariables.length > variableLimit) {
+    if (uniqueVariables.length > variableLimit) {
       toast({
         title: "Límite de variables excedido",
         description: `Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario. Actualiza a premium para aumentar este límite.`,
@@ -422,10 +505,12 @@ export default function FormEntries() {
     // Store template data in sessionStorage
     const templateData = {
       name: documentName,
-      variables: detectedVariables,
+      variables: uniqueVariables,
       template: documentTemplate,
-      preview: documentTemplate, // Asegurarnos de incluir el preview
-      filePath: null // El backend generará esto
+      preview: documentTemplate,
+      filePath: previewContent?.filePath || null,
+      thumbnailPath: previewContent?.thumbnailPath || null,
+      extractedVariables: previewContent?.extractedVariables || []
     };
 
     console.log('Guardando datos de plantilla:', {
@@ -715,6 +800,17 @@ export default function FormEntries() {
                               </div>
                             </div>
                           )}
+                           {previewContent?.thumbnailPath && (
+                            <div className="space-y-2">
+                              <Label>Opciones de OCR</Label>
+                               <Button 
+                                   variant="outline"
+                                   onClick={handleOCRExtraction}
+                                 >
+                                   Extraer variables por OCR
+                                 </Button>
+                            </div>
+                         )}
                         </div>
                       </ScrollArea>
                     </div>
@@ -722,7 +818,7 @@ export default function FormEntries() {
                       <Button
                         variant="outline"
                         onClick={handleCreateFormFromTemplate}
-                        disabled={detectedVariables.length === 0}
+                        disabled={detectedVariables.length === 0 && (!previewContent?.variables || previewContent.variables.length === 0)}
                       >
                         <Wand2 className="mr-2 h-4 w-4" />
                         Crear Form
@@ -823,7 +919,7 @@ export default function FormEntries() {
                                           variant="outline"
                                           size="sm"
                                           onClick={() => handleDownloadMerge(selectedTemplate.id, selectedEntry)}
-                                        >
+                                                                                >
                                           <FileDown className="mr-2 h-4 w-4" />
                                           Descargar
                                         </Button>
