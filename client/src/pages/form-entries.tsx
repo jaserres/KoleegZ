@@ -128,22 +128,42 @@ export default function FormEntries() {
 
   const createDocumentMutation = useMutation({
     mutationFn: async () => {
+      console.log('Creating document with:', {
+        name: documentName,
+        template: documentTemplate,
+        originalTemplate: previewContent?.originalTemplate
+      });
+
       const res = await apiRequest("POST", `/api/forms/${id}/documents`, {
         name: documentName,
         template: documentTemplate,
-        originalTemplate: previewContent?.originalTemplate || documentTemplate, 
+        originalTemplate: previewContent?.originalTemplate || documentTemplate,
       });
+
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al crear el documento");
+      }
+
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/documents`] });
+      toast({
+        title: "Éxito",
+        description: "Plantilla creada exitosamente"
+      });
       setDocumentName("");
       setDocumentTemplate("");
-      toast({
-        title: "Success",
-        description: "Document template created successfully",
-      });
+      setShowTemplateDialog(false);
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo crear la plantilla",
+        variant: "destructive"
+      });
+    }
   });
 
   const mergeMutation = useMutation({
@@ -154,6 +174,12 @@ export default function FormEntries() {
       documentId: number;
       entryId: number;
     }) => {
+      console.log('Merging document:', {
+        documentId,
+        entryId,
+        useOriginalTemplate: true
+      });
+
       const res = await apiRequest(
         "POST",
         `/api/forms/${id}/documents/${documentId}/merge`,
@@ -162,9 +188,12 @@ export default function FormEntries() {
           useOriginalTemplate: true 
         }
       );
+
       if (!res.ok) {
-        throw new Error('Error al realizar el merge');
+        const error = await res.text();
+        throw new Error(error || 'Error al realizar el merge');
       }
+
       return res.json();
     },
     onSuccess: (data, { documentId }) => {
@@ -900,7 +929,7 @@ export default function FormEntries() {
                                           }}                                          disabled={mergeMutation.isPending}
                                         >
                                           {mergeMutation.isPending ? (
-                                            <Spinner variant="dots" size="sm" className="mr-2" />
+                                            <Spinner variant="dots" size="sm" className="mr-2"/>
                                           ) : null}
                                           Merge with this template
                                         </Button>
