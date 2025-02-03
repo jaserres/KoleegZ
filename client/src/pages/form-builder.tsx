@@ -575,7 +575,7 @@ export default function FormBuilder() {
     };
 
     return (
-      <Dialog open={!!previewContent} onOpenChange={() => setPreviewContent(null)}>
+      <Dialog open={!!previewContent && !showEditor} onOpenChange={() => setPreviewContent(null)}>
         <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0">
           <DialogHeader className="px-6 py-4 border-b">
             <DialogTitle>Vista Previa del Documento</DialogTitle>
