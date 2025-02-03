@@ -423,7 +423,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Documents endpoints
-  app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
+    app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
       const user = ensureAuth(req);
       const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
@@ -591,17 +591,21 @@ export function registerRoutes(app: Express): Server {
       // Usar Packer para generar el buffer del documento
       const buffer = await Packer.toBuffer(doc);
 
+      // Convertir el contenido binario a base64 para almacenamiento seguro
+      const template = buffer.toString('base64');
+
+      // Generar una vista previa segura del contenido
+      const preview = generatePreview(req.body.template || '');
+
       // Guardar el archivo DOCX
       const fileName = `template-${Date.now()}.docx`;
       const filePath = await saveFile(buffer, fileName);
-
-      const preview = generatePreview(req.body.template);
 
       const [document] = await db.insert(documents)
         .values({
           formId,
           name: req.body.name,
-          template: req.body.template,
+          template: template, // Guardamos el contenido en base64
           preview,
           filePath,
         })
@@ -609,7 +613,11 @@ export function registerRoutes(app: Express): Server {
 
       res.status(201).json(document);
     } catch (error: any) {
-      console.error('Error creating document:', error);
+      console.error('Error creating document:', {
+        error,
+        message: error.message,
+        stack: error.stack
+      });
       res.status(500).json({
         error: `Error creating document: ${error.message}`,
         details: error.stack
@@ -870,7 +878,7 @@ export function registerRoutes(app: Express): Server {
           });
 
         } catch (createReportError: any) {
-          console.error('Error detallado en createReport:', {
+          console.error('Errordetallado en createReport:', {
             error: createReportError,
             message: createReportError.message,
             stack: createReportError.stack
