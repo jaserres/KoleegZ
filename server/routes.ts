@@ -13,6 +13,8 @@ import mammoth from 'mammoth';
 import { saveFile, readFile, deleteFile } from './storage';
 import { Document, Paragraph, TextRun, Packer } from 'docx';
 import { Buffer } from 'buffer';
+import path from 'path';
+import express from 'express';
 
 // Configurar multer para manejar archivos
 const upload = multer({
@@ -230,6 +232,48 @@ const previewStyles = `
   }
 </style>`;
 
+// Configuración para thumbnails
+const THUMBNAIL_DIR = path.join(process.cwd(), 'storage', 'thumbnails');
+
+// Asegurar que existe el directorio de thumbnails
+async function ensureThumbnailDir() {
+  try {
+    await fs.mkdir(THUMBNAIL_DIR, { recursive: true });
+  } catch (error) {
+    console.error('Error creating thumbnail directory:', error);
+    throw error;
+  }
+}
+
+// Función para generar un thumbnail
+async function generateThumbnail(buffer: Buffer): Promise<string> {
+  try {
+    const thumbnailFileName = `thumb_${Date.now()}.png`;
+    const thumbnailPath = path.join(THUMBNAIL_DIR, thumbnailFileName);
+
+    // Convertir la primera página del documento a una imagen PNG
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+
+    // Guardar el buffer temporalmente
+    const tempDocxPath = path.join(THUMBNAIL_DIR, `temp_${Date.now()}.docx`);
+    await fs.writeFile(tempDocxPath, buffer);
+
+    // Usar libreoffice para convertir a PNG (solo la primera página)
+    await execAsync(`soffice --headless --convert-to png --outdir ${THUMBNAIL_DIR} ${tempDocxPath}`);
+
+    // Limpiar archivos temporales
+    await fs.unlink(tempDocxPath);
+    const pngFilePath = path.join(THUMBNAIL_DIR, `${path.basename(tempDocxPath, '.docx')}.png`);
+    return pngFilePath;
+
+  } catch (error) {
+    console.error('Error generating thumbnail:', error);
+    return '';
+  }
+}
+
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
@@ -318,7 +362,8 @@ export function registerRoutes(app: Express): Server {
         name: req.body.document.name,
         template: req.body.document.template,
         preview: req.body.document.preview,
-        filePath: req.body.document.filePath
+        filePath: req.body.document.filePath,
+        thumbnailPath: req.body.document.thumbnailPath
       };
 
       console.log('Vinculando documento al formulario:', {
@@ -544,7 +589,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
             size: file.size
         });
 
-        // Si es un formulario real (no temporal), verificar propiedad
+        // Verificar propiedad del formulario si no es temporal
         if (formId !== null) {
             const [form] = await db.select()
                 .from(forms)
@@ -562,152 +607,110 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
         let template = '';
         let preview = '';
         let filePath = '';
-        let extractedText = '';
+        let thumbnailPath = '';
 
         try {
             console.log('Procesando documento Word...');
+            await ensureThumbnailDir();
 
             // Asegurar que tenemos un buffer válido
             const validBuffer = Buffer.from(file.buffer);
 
-            // Primero guardar el archivo original exactamente como se recibió
+            // Guardar el archivo original
             filePath = await saveFile(validBuffer, file.originalname);
 
-            console.log('Archivo original guardado:', {
-                filePath,
-                size: validBuffer.length
-            });
-
-            // Intentar múltiples métodos de extracción de texto
             try {
-                // Método 1: Extraer texto plano
+                // Intentar extraer texto primero
                 const textResult = await mammoth.extractRawText({
                     buffer: validBuffer,
                     includeDefaultStyleMap: true
                 });
-                extractedText = textResult.value;
 
-                // Método 2: Si el primer método falla, intentar convertir a HTML
-                if (!extractedText) {
-                    const htmlResult = await mammoth.convertToHtml({ buffer: validBuffer });
-                    // Limpiar HTML para obtener texto
-                    extractedText = htmlResult.value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-                }
+                if (textResult.value) {
+                    template = textResult.value;
 
-                // Si aún no tenemos texto, intentar leer el archivo como texto plano
-                if (!extractedText && file.mimetype === 'text/plain') {
-                    extractedText = validBuffer.toString('utf-8');
-                }
-
-                // Si tenemos texto extraído, usarlo para template y generar preview
-                if (extractedText) {
-                    template = extractedText;
-                    preview = `${previewStyles}<div class="document-preview">${extractedText.split('\n').map(line => `<p>${line}</p>`).join('')}</div>`;
-                }
-
-                // Intentar generar una vista previa HTML más rica si es posible
-                try {
+                    // Intentar generar HTML preview
                     const htmlResult = await mammoth.convertToHtml(
                         { buffer: validBuffer },
                         { ...mammothOptions }
                     );
                     preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
-                } catch (htmlError) {
-                    console.log('No se pudo generar vista previa HTML rica, usando texto plano');
+                } else {
+                    // Si no se puede extraer texto, generar thumbnail
+                    thumbnailPath = await generateThumbnail(validBuffer);
+                    template = "Documento complejo - Las variables deben ser agregadas manualmente";
+                    preview = `${previewStyles}<div class="document-preview">
+                        <div class="flex flex-col items-center gap-4 p-4">
+                            <p class="text-amber-500 font-semibold">Documento Complejo</p>
+                            ${thumbnailPath ? `<img src="/thumbnails/${path.basename(thumbnailPath)}" 
+                                alt="Vista previa del documento" 
+                                class="max-w-md shadow-lg rounded-lg"/>` : ''}
+                            <p>Este documento contiene elementos avanzados que no pueden ser mostrados como texto.</p>
+                            <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
+                        </div>
+                    </div>`;
                 }
-
-            } catch (extractError) {
-                console.error('Error al extraer contenido del documento:', extractError);
-
-                // Si fallan todos los métodos, crear una vista previa básica
+            } catch (error) {
+                console.error('Error procesando documento:', error);
+                // Si falla todo, intentar generar al menos el thumbnail
+                thumbnailPath = await generateThumbnail(validBuffer);
                 template = "Documento complejo - Las variables deben ser agregadas manualmente";
                 preview = `${previewStyles}<div class="document-preview">
-                    <p class="text-amber-500">Aviso: Este es un documento complejo.</p>
-                    <p>El documento contiene elementos avanzados (imágenes, marcas de agua, etc.) que no pueden ser mostrados en la vista previa.</p>
-                    <p>Sin embargo, el documento original ha sido guardado y podrá ser usado para el merge.</p>
-                    <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
+                    <div class="flex flex-col items-center gap-4 p-4">
+                        <p class="text-amber-500 font-semibold">Documento Complejo</p>
+                        ${thumbnailPath ? `<img src="/thumbnails/${path.basename(thumbnailPath)}" 
+                            alt="Vista previa del documento" 
+                            class="max-w-md shadow-lg rounded-lg"/>` : ''}
+                        <p>Este documento contiene elementos avanzados que no pueden ser mostrados como texto.</p>
+                        <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
+                    </div>
                 </div>`;
             }
 
-            console.log('Documento procesado:', {
-                originalName: file.originalname,
-                filePath,
-                hasTemplate: !!template,
-                templateLength: template?.length || 0,
-                previewLength: preview?.length || 0
-            });
-
-        } catch (error: any) {
-            console.error('Error detallado al procesar el documento:', {
-                error,
-                message: error.message,
-                stack: error.stack
-            });
-            throw new Error(`No se pudo procesar el documento: ${error.message}`);
-        }
-
-        // Si es una carga temporal, devolver el contenido
-        if (formId === null) {
+            // Preparar respuesta
             const response = {
                 name: file.originalname,
                 template,
                 preview,
-                filePath
+                filePath,
+                thumbnailPath: thumbnailPath ? path.basename(thumbnailPath) : null
             };
 
-            console.log('Devolviendo documento temporal:', {
-                name: response.name,
-                filePath: response.filePath,
-                templateLength: response.template.length,
-                previewLength: response.preview.length
-            });
+            // Si es temporal, devolver directamente
+            if (formId === null) {
+                return res.status(200).json(response);
+            }
 
-            return res.status(200).json(response);
-        }
-
-        // Si llegamos aquí, es un formulario real y debemos guardar el documento
-        const docData = {
-            formId,
-            name: file.originalname,
-            template,
-            preview,
-            filePath
-        };
-
-        try {
+            // Si no es temporal, guardar en la base de datos
             const [doc] = await db.insert(documents)
-                .values(docData)
+                .values({
+                    formId,
+                    name: file.originalname,
+                    template,
+                    preview,
+                    filePath,
+                    thumbnailPath: thumbnailPath || null
+                })
                 .returning();
 
-            console.log('Documento guardado exitosamente:', {
-                id: doc.id,
-                name: doc.name,
-                formId: doc.formId
-            });
-
             res.status(201).json(doc);
-        } catch (dbError: any) {
-            console.error('Error al guardar documento en DB:', {
-                error: dbError,
-                message: dbError.message,
-                stack: dbError.stack,
-                docData: { ...docData, preview: 'truncated' }
-            });
-            throw new Error(`Error al guardar documento en base de datos: ${dbError.message}`);
-        }
 
+        } catch (error: any) {
+            console.error('Error procesando documento:', error);
+            res.status(400).json({
+                error: `Error procesando documento: ${error.message}`,
+                details: error.stack
+            });
+        }
     } catch (error: any) {
-        console.error('Error detallado al procesar el documento:', {
-            error,
-            message: error.message,
-            stack: error.stack
-        });
-        return res.status(400).json({
-            error: `Error al procesar el documento: ${error.message}`,
+        console.error('Error en el endpoint:', error);
+        res.status(500).json({
+            error: `Error del servidor: ${error.message}`,
             details: error.stack
         });
     }
 });
+
   app.get("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
@@ -779,6 +782,10 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
 
       // Eliminar el archivo físico primero
       await deleteFile(doc.filePath);
+        if (doc.thumbnailPath) {
+            await deleteFile(path.join(THUMBNAIL_DIR, doc.thumbnailPath));
+        }
+
 
       // Luego eliminar el registro de la base de datos
       await db.delete(documents)
@@ -837,7 +844,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
         label: req.body.label,
         type: req.body.type
       })
-      .where(eq(variables.id, variableId));
+            .where(eq(variables.id, variableId));
 
     res.sendStatus(200);
   });
@@ -1273,6 +1280,8 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
       res.status(500).send("Error al descargar la vista previa");
     }
   });
+  // Agregar endpoint para servir thumbnails
+  app.use('/thumbnails', express.static(THUMBNAIL_DIR));
 
   const httpServer = createServer(app);
   return httpServer;
