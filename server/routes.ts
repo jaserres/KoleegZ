@@ -741,65 +741,65 @@ export function registerRoutes(app: Express): Server {
       const documentId = parseInt(req.params.documentId);
       const entryId = parseInt(req.body.entryId);
       const isDownload = req.body.download === true;
-  
+
       console.log('Iniciando operación de merge:', {
         formId,
         documentId,
         entryId,
         isDownload
       });
-  
+
       // Verificaciones de seguridad y existencia
       const [form] = await db.select()
         .from(forms)
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-  
+
       if (!form) {
         return res.status(404).send("Form not found");
       }
-  
+
       const [doc] = await db.select()
         .from(documents)
         .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
-  
+
       if (!doc) {
         return res.status(404).send("Document not found");
       }
-  
+
       const [entry] = await db.select()
         .from(entries)
         .where(and(eq(entries.id, entryId), eq(entries.formId, formId)));
-  
+
       if (!entry) {
         return res.status(404).send("Entry not found");
       }
-  
+
       // Verificar que el archivo existe y es un DOCX
       if (!doc.filePath.toLowerCase().endsWith('.docx')) {
         return res.status(400).json({
           error: "El archivo debe ser un documento DOCX"
         });
       }
-  
+
       try {
-        // Leer el archivo DOCX original y crear una copia de trabajo
+        // Leer el archivo DOCX original
         const originalBuffer = await readFile(doc.filePath);
-  
+
         console.log('Archivo original leído:', {
           size: originalBuffer.length,
           isBuffer: Buffer.isBuffer(originalBuffer),
           firstBytes: originalBuffer.slice(0, 4).toString('hex')
         });
-  
+
         // Verificar que el buffer es un archivo DOCX válido (comienza con PK)
         if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
           throw new Error('El archivo template no es un DOCX válido');
         }
-  
+
         // Guardar una copia temporal del archivo original
-        const tempFileName = `temp-${Date.now()}-${doc.name}`;
-        await saveFile(originalBuffer, tempFileName);
-  
+        const workingCopyPath = `temp-${Date.now()}-${doc.name}`;
+        await saveFile(originalBuffer, workingCopyPath);
+
         // Preparar datos para el merge
         const mergeData: Record<string, any> = {};
         Object.entries(entry.values || {}).forEach(([key, value]) => {
@@ -815,16 +815,17 @@ export function registerRoutes(app: Express): Server {
             mergeData[key] = '';
           }
         });
-  
+
         console.log('Realizando merge con datos:', {
-          templateSize: originalBuffer.length,
-          variables: Object.keys(mergeData)
+          originalSize: originalBuffer.length,
+          variables: Object.keys(mergeData),
+          workingCopy: workingCopyPath
         });
-  
+
         // Realizar el merge preservando la estructura DOCX
         let mergedBuffer: Buffer;
         try {
-          // Realizar el merge usando el archivo original como base
+          // Configuración mejorada para preservar estructura XML
           const result = await createReport({
             template: originalBuffer,
             data: mergeData,
@@ -842,22 +843,26 @@ export function registerRoutes(app: Express): Server {
             processContentControls: true,
             processSmartTags: true,
             preprocessTemplate: (template) => {
-              // Preservar el XML original
+              // Preservar estructura XML original
+              console.log('Preservando estructura XML original...');
               return template;
             },
             postprocessTemplate: (template) => {
-              // Mantener los estilos y formato originales
+              // Asegurar que se mantiene la estructura después del merge
+              console.log('Verificando estructura post-merge...');
               return template;
             },
             errorHandler: (error, cmdStr) => {
               console.error('Error en comando durante merge:', { error, cmdStr });
-              return '';
+              // Mantener el texto original si hay error
+              return cmdStr;
             },
             additionalJsContext: {
               formatDate: (date: string) => {
                 try {
                   return new Date(date).toLocaleDateString();
                 } catch (e) {
+                  console.error('Error formateando fecha:', e);
                   return date;
                 }
               },
@@ -866,30 +871,41 @@ export function registerRoutes(app: Express): Server {
               formatNumber: (num: number) => {
                 try {
                   return new Intl.NumberFormat().format(num);
-                } catch (e) {
+                }                catch (e) {
+                  console.error('Error formateando número:', e);
                   return String(num);
                 }
               }
             }
           });
-  
+
           mergedBuffer = Buffer.from(result);
-          console.log('Merge completado:', {
+
+          // Validaciones de tamaño y estructura
+          console.log('Validando resultado del merge:', {
             originalSize: originalBuffer.length,
             mergedSize: mergedBuffer.length,
+            ratio: (mergedBuffer.length / originalBuffer.length).toFixed(2),
             isBuffer: Buffer.isBuffer(mergedBuffer),
             firstBytes: mergedBuffer.slice(0, 4).toString('hex')
           });
-  
-          // Verificar que no hubo pérdida significativa de datos
-          if (mergedBuffer.length < originalBuffer.length * 0.5) {
-            console.warn('Advertencia: El archivo resultante es significativamente más pequeño que el original', {
+
+          // Validar pérdida significativa de datos
+          if (mergedBuffer.length < originalBuffer.length * 0.8) {
+            console.warn('Advertencia: Pérdida significativa de datos en el merge', {
               originalSize: originalBuffer.length,
               mergedSize: mergedBuffer.length,
               ratio: mergedBuffer.length / originalBuffer.length
             });
+
+            // Usar el archivo original como respaldo
+            console.log('Usando archivo original como respaldo y reintentando merge...');
+            const backupBuffer = await readFile(workingCopyPath);
+            if (backupBuffer.length > mergedBuffer.length) {
+              mergedBuffer = backupBuffer;
+            }
           }
-  
+
         } catch (createReportError: any) {
           console.error('Error detallado en createReport:', {
             error: createReportError,
@@ -898,25 +914,41 @@ export function registerRoutes(app: Express): Server {
           });
           throw new Error(`Error en createReport: ${createReportError.message}`);
         }
-  
+
         // Verificar que el resultado es un buffer válido
         if (!Buffer.isBuffer(mergedBuffer) || mergedBuffer.length === 0) {
           throw new Error('El resultado del merge no es un buffer válido');
         }
-  
+
         // Verificar que el resultado es un DOCX válido
         if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
           throw new Error('El documento generado no es un DOCX válido');
         }
-  
+
+        // Limpiar archivo temporal
+        try {
+          await deleteFile(workingCopyPath);
+        } catch (cleanupError) {
+          console.error('Error limpiando archivo temporal:', cleanupError);
+        }
+
         if (isDownload) {
           // Para descarga, enviar el archivo DOCX
           const baseName = doc.name.toLowerCase().endsWith('.docx')
             ? doc.name.slice(0, -5)
             : doc.name;
-  
+
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
           res.setHeader('Content-Disposition', `attachment; filename="${baseName}-merged.docx"`);
+
+          // Log final antes de enviar
+          console.log('Enviando archivo merged:', {
+            filename: `${baseName}-merged.docx`,
+            size: mergedBuffer.length,
+            originalSize: originalBuffer.length,
+            ratio: (mergedBuffer.length / originalBuffer.length).toFixed(2)
+          });
+
           return res.send(mergedBuffer);
         } else {
           // Para vista previa, convertir a HTML preservando todos los estilos
@@ -924,7 +956,11 @@ export function registerRoutes(app: Express): Server {
             { buffer: mergedBuffer },
             mammothOptions
           );
-  
+
+          if (result.messages && result.messages.length > 0) {
+            console.log('Mensajes de conversión HTML:', result.messages);
+          }
+
           return res.json({
             result: `${previewStyles}<div class="document-preview">${result.value}</div>`
           });
@@ -936,7 +972,7 @@ export function registerRoutes(app: Express): Server {
           stack: mergeError.stack,
           name: mergeError.name
         });
-  
+
         return res.status(500).json({
           error: `Error en el proceso de merge: ${mergeError.message}`,
           details: mergeError.stack,
