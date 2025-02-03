@@ -43,6 +43,8 @@ export default function FormBuilder() {
     preview: string;
     variables: Array<Partial<SelectVariable>>;
     filePath?: string;
+    thumbnailPath?: string;
+    extractedVariables?: string[];
   } | null>(null);
 
   const variableLimit = user?.isPremium ? 50 : 10;
@@ -101,7 +103,9 @@ export default function FormBuilder() {
           name: formName,
           template: parsedTemplate.template,
           preview: parsedTemplate.preview,
-          filePath: parsedTemplate.filePath
+          filePath: parsedTemplate.filePath,
+          thumbnailPath: parsedTemplate.thumbnailPath,
+           extractedVariables: parsedTemplate.extractedVariables,
         };
       }
 
@@ -251,8 +255,10 @@ export default function FormBuilder() {
         const result = await response.json();
 
         let detectedVariables: Array<Partial<SelectVariable>> = [];
+        let extractedVariables: string[] = [];
         if (result.template && !result.template.includes("Documento complejo")) {
           detectedVariables = extractVariables(result.template);
+           extractedVariables = detectedVariables.map(variable => variable.name || '')
         }
 
         const previewData = {
@@ -260,7 +266,9 @@ export default function FormBuilder() {
           template: result.template,
           preview: result.preview,
           variables: detectedVariables,
-          filePath: result.filePath
+          filePath: result.filePath,
+          thumbnailPath: result.thumbnailPath,
+          extractedVariables: extractedVariables
         };
 
         setPreviewContent(previewData);
@@ -311,230 +319,222 @@ export default function FormBuilder() {
     }
   };
 
-  const renderFormEditor = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle>Configurar Formulario</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-8">
-        {variables.length > variableLimit && (
-          <Alert>
-            <AlertDescription className="flex items-center justify-between">
-              <span>
-                Su formulario tiene {variables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
-                Necesita eliminar {variables.length - variableLimit} variable(s).
-              </span>
-              <Button
-                variant="outline"
-                onClick={removeExcessVariables}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Eliminar variables excedentes
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+// Modificar el renderFormEditor para siempre mostrar el thumbnail
+const renderFormEditor = () => (
+  <Card>
+    <CardHeader>
+      <CardTitle>Configurar Formulario</CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-8">
+      {variables.length > variableLimit && (
+        <Alert>
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              Su formulario tiene {variables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
+              Necesita eliminar {variables.length - variableLimit} variable(s).
+            </span>
+            <Button
+              variant="outline"
+              onClick={removeExcessVariables}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Eliminar variables excedentes
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
-        <div>
-          <Label htmlFor="formName">Nombre del Formulario</Label>
-          <Input
-            id="formName"
-            value={formName}
-            onChange={(e) => setFormName(e.target.value)}
-            className="max-w-md"
-            placeholder="Ingrese el nombre del formulario"
-            required
-          />
-        </div>
+      <div>
+        <Label htmlFor="formName">Nombre del Formulario</Label>
+        <Input
+          id="formName"
+          value={formName}
+          onChange={(e) => setFormName(e.target.value)}
+          className="max-w-md"
+          placeholder="Ingrese el nombre del formulario"
+          required
+        />
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Columna de variables */}
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium">Variables del Formulario</h3>
-              <Button
-                onClick={() =>
-                  setVariables([
-                    ...variables,
-                    { name: "", label: "", type: "text" },
-                  ])
-                }
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar Variable
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              {variables.map((variable, index) => (
-                <Card key={variable.id || index}>
-                  <CardContent className="pt-6 space-y-4">
-                    <div className="grid gap-4">
-                      <div>
-                        <Label>Nombre Interno</Label>
-                        <Input
-                          value={variable.name}
-                          onChange={(e) =>
-                            setVariables(
-                              variables.map((v, i) =>
-                                i === index
-                                  ? { ...v, name: e.target.value }
-                                  : v
-                              )
-                            )
-                          }
-                          placeholder="nombreVariable"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label>Etiqueta</Label>
-                        <Input
-                          value={variable.label}
-                          onChange={(e) =>
-                            setVariables(
-                              variables.map((v, i) =>
-                                i === index
-                                  ? { ...v, label: e.target.value }
-                                  : v
-                              )
-                            )
-                          }
-                          placeholder="Nombre de la Variable"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label>Tipo</Label>
-                        <Select
-                          value={variable.type}
-                          onValueChange={(value) =>
-                            setVariables(
-                              variables.map((v, i) =>
-                                i === index
-                                  ? { ...v, type: value }
-                                  : v
-                              )
-                            )
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="text">Texto</SelectItem>
-                            <SelectItem value="number">Número</SelectItem>
-                            <SelectItem value="date">Fecha</SelectItem>
-                            <SelectItem value="time">Hora</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                      onClick={() => {
-                        setVariables(variables.filter((_, i) => i !== index));
-                        toast({
-                          title: "Variable eliminada",
-                          description: "La variable ha sido eliminada correctamente",
-                        });
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Columna de variables */}
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Variables del Formulario</h3>
+            <Button
+              onClick={() =>
+                setVariables([
+                  ...variables,
+                  { name: "", label: "", type: "text" },
+                ])
+              }
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Agregar Variable
+            </Button>
           </div>
 
-          {/* Columna del thumbnail */}
-          {previewContent?.preview.includes('/thumbnails/') && (
-            <div className="space-y-4 lg:sticky lg:top-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Documento de Referencia</CardTitle>
-                  <CardDescription>
-                    Use esta vista previa como guía para identificar las variables en el documento
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-auto max-h-[calc(100vh-16rem)]">
-                    <img 
-                      src={`/thumbnails/${previewContent.preview.match(/\/thumbnails\/([^"]+)/)?.[1]}`}
-                      alt="Vista previa del documento"
-                      className="w-full rounded-lg shadow-lg"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
-
-        <Button
-          size="lg"
-          onClick={() => id ? updateFormMutation.mutate() : createFormMutation.mutate()}
-          disabled={createFormMutation.isPending || updateFormMutation.isPending || !formName}
-        >
-          <Save className="mr-2 h-4 w-4" />
-          {id ? "Actualizar Formulario" : "Guardar Formulario"}
-        </Button>
-      </CardContent>
-    </Card>
-  );
-
-    const renderPreview = () => {
-    if (previewContent.preview.includes('Documento Complejo')) {
-      return (
-        <div className="flex flex-col items-center gap-4 p-4">
-          <p className="text-amber-500 font-semibold">Documento Complejo Detectado</p>
-          <p className="text-sm text-muted-foreground mb-4">
-            El documento contiene elementos avanzados. Se intentará extraer variables mediante reconocimiento óptico (OCR).
-          </p>
-
-          {previewContent.preview.includes('/thumbnails/') && (
-            <>
-              <img 
-                src={`/thumbnails/${previewContent.preview.match(/\/thumbnails\/([^"]+)/)?.[1]}`}
-                alt="Vista previa del documento"
-                className="max-w-md shadow-lg rounded-lg"
-              />
-              {previewContent.variables && previewContent.variables.length > 0 ? (
-                <div className="mt-4 w-full max-w-md">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <p className="text-green-700 font-medium mb-2">Variables Detectadas por OCR:</p>
-                    <div className="grid gap-2">
-                      {previewContent.variables.map((variable, index) => (
-                        <div key={index} className="flex items-center gap-2 text-sm">
-                          <code className="bg-green-100 px-2 py-1 rounded text-green-800">
-                            {'{{' + variable.name + '}}'}</code>
-                          <span className="text-green-600">{variable.label}</span>
-                        </div>
-                      ))}
+          <div className="space-y-4">
+            {variables.map((variable, index) => (
+              <Card key={variable.id || index}>
+                <CardContent className="pt-6 space-y-4">
+                  <div className="grid gap-4">
+                    <div>
+                      <Label>Nombre Interno</Label>
+                      <Input
+                        value={variable.name}
+                        onChange={(e) =>
+                          setVariables(
+                            variables.map((v, i) =>
+                              i === index
+                                ? { ...v, name: e.target.value }
+                                : v
+                            )
+                          )
+                        }
+                        placeholder="nombreVariable"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label>Etiqueta</Label>
+                      <Input
+                        value={variable.label}
+                        onChange={(e) =>
+                          setVariables(
+                            variables.map((v, i) =>
+                              i === index
+                                ? { ...v, label: e.target.value }
+                                : v
+                            )
+                          )
+                        }
+                        placeholder="Nombre de la Variable"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label>Tipo</Label>
+                      <Select
+                        value={variable.type}
+                        onValueChange={(value) =>
+                          setVariables(
+                            variables.map((v, i) =>
+                              i === index
+                                ? { ...v, type: value }
+                                : v
+                            )
+                          )
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text">Texto</SelectItem>
+                          <SelectItem value="number">Número</SelectItem>
+                          <SelectItem value="date">Fecha</SelectItem>
+                          <SelectItem value="time">Hora</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="mt-4 w-full max-w-md">
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-yellow-800 font-medium">No se detectaron variables mediante OCR</p>
-                    <p className="text-sm text-yellow-600 mt-1">
-                      Por favor, agregue las variables manualmente basándose en el documento original.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                    onClick={() => {
+                      setVariables(variables.filter((_, i) => i !== index));
+                      toast({
+                        title: "Variable eliminada",
+                        description: "La variable ha sido eliminada correctamente",
+                      });
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
-      );
-    }
 
-    return <div dangerouslySetInnerHTML={{ __html: previewContent.preview }} />;
-  };
+        {/* Columna del thumbnail */}
+        {previewContent?.thumbnailPath && (
+          <div className="space-y-4 lg:sticky lg:top-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Documento de Referencia</CardTitle>
+                <CardDescription>
+                  Use esta vista previa como guía para identificar las variables en el documento
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-auto max-h-[calc(100vh-16rem)]">
+                  <img 
+                    src={`/thumbnails/${previewContent.thumbnailPath}`}
+                    alt="Vista previa del documento"
+                    className="w-full rounded-lg shadow-lg"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+
+      <Button
+        size="lg"
+        onClick={() => id ? updateFormMutation.mutate() : createFormMutation.mutate()}
+        disabled={createFormMutation.isPending || updateFormMutation.isPending || !formName}
+      >
+        <Save className="mr-2 h-4 w-4" />
+        {id ? "Actualizar Formulario" : "Guardar Formulario"}
+      </Button>
+    </CardContent>
+  </Card>
+);
+
+// Modificar el renderPreview para siempre usar thumbnails
+const renderPreview = () => {
+  return (
+    <div className="flex flex-col items-center gap-4 p-4">
+      {previewContent?.thumbnailPath && (
+        <>
+          <img 
+            src={`/thumbnails/${previewContent.thumbnailPath}`}
+            alt="Vista previa del documento"
+            className="max-w-md shadow-lg rounded-lg"
+          />
+          {previewContent.extractedVariables && previewContent.extractedVariables.length > 0 ? (
+            <div className="mt-4 w-full max-w-md">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-green-700 font-medium mb-2">Variables Detectadas:</p>
+                <div className="grid gap-2">
+                  {previewContent.extractedVariables.map((variable, index) => (
+                    <div key={index} className="flex items-center gap-2 text-sm">
+                      <code className="bg-green-100 px-2 py-1 rounded text-green-800">
+                        {'{{' + variable + '}}'}</code>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 w-full max-w-md">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-yellow-800 font-medium">No se detectaron variables</p>
+                <p className="text-sm text-yellow-600 mt-1">
+                  Por favor, agregue las variables manualmente basándose en el documento original.
+                </p>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
     const PreviewDialog = () => {
     if (!previewContent) return null;

@@ -668,13 +668,12 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
         }
 
         let template = '';
-        let preview = '';
         let filePath = '';
         let thumbnailPath = '';
         let extractedVariables: string[] = [];
 
         try {
-            console.log('Procesando documento Word...');
+            console.log('Procesando documento...');
             await ensureThumbnailDir();
 
             // Asegurar que tenemos un buffer válido
@@ -684,85 +683,45 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
             filePath = await saveFile(validBuffer, file.originalname);
 
             try {
-                // Intentar extraer texto primero
+                // Generar thumbnail para todos los documentos
+                const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
+                thumbnailPath = thumbPath;
+                extractedVariables = vars;
+
+                // Extraer texto para variables
                 const textResult = await mammoth.extractRawText({
-                    buffer: validBuffer,
-                    includeDefaultStyleMap: true
+                    buffer: validBuffer
                 });
 
                 if (textResult.value) {
                     template = textResult.value;
-
-                    // Intentar generar HTML preview
-                    const htmlResult = await mammoth.convertToHtml(
-                        { buffer: validBuffer },
-                        { ...mammothOptions }
-                    );
-                    preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
-                } else {
-                    // Si no se puede extraer texto, generar thumbnail y usar OCR
-                    console.log('Documento complejo detectado, intentando OCR...');
-                    const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
-                    thumbnailPath = thumbPath;
-                    extractedVariables = vars;
-
-                    // Crear plantilla con variables detectadas
-                    if (extractedVariables.length > 0) {
-                        console.log(`OCR exitoso: ${extractedVariables.length} variables detectadas`);
-                        template = `Documento complejo - Variables detectadas por OCR:\n${
-                            extractedVariables.map(v => `{{${v}}}`).join('\n')
-                        }`;
-                    } else {
-                        console.log('OCR completado: No se detectaron variables');
-                        template = "Documento complejo - No se detectaron variables mediante OCR";
-                    }
-
-                    preview = `${previewStyles}<div class="document-preview">
-                        <div class="flex flex-col items-center gap-4 p-4">
-                            <p class="text-amber-500 font-semibold">Documento Complejo</p>
-                            ${thumbnailPath ? `<img src="/thumbnails/${thumbnailPath}" 
-                                alt="Vista previa del documento" 
-                                class="max-w-md shadow-lg rounded-lg"/>` : ''}
-                            ${extractedVariables.length > 0 ? `
-                                <div class="mt-4">
-                                    <p class="font-semibold">Variables Detectadas por OCR:</p>
-                                    <ul class="list-disc pl-5 mt-2">
-                                        ${extractedVariables.map(v => `<li>{{${v}}}</li>`).join('\n')}
-                                    </ul>
-                                </div>
-                            ` : `
-                                <p>No se detectaron variables en el proceso de OCR.</p>
-                                <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
-                            `}
-                        </div>
-                    </div>`;
                 }
+
+                // Si no se pudo extraer texto, usar OCR
+                if (!template) {
+                    console.log('Usando OCR para extraer texto...');
+                    template = await extractTextFromImage(path.join(THUMBNAIL_DIR, thumbnailPath));
+                }
+
+                if (!template) {
+                    template = "No se pudo extraer texto del documento. Por favor, agregue las variables manualmente.";
+                }
+
             } catch (error) {
                 console.error('Error procesando documento:', error);
-                // Si falla todo, intentar generar al menos el thumbnail
-                 const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
-                    thumbnailPath = thumbPath;
-                     extractedVariables = vars;
-                template = "Documento complejo - Las variables deben ser agregadas manualmente";
-                preview = `${previewStyles}<div class="document-preview">
-                    <div class="flex flex-col items-center gap-4 p-4">
-                        <p class="text-amber-500 font-semibold">Documento Complejo</p>
-                        ${thumbnailPath ? `<img src="/thumbnails/${path.basename(thumbnailPath)}" 
-                            alt="Vista previa del documento" 
-                            class="max-w-md shadow-lg rounded-lg"/>` : ''}
-                        <p>Este documento contiene elementos avanzados que no pueden ser mostrados como texto.</p>
-                        <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
-                    </div>
-                </div>`;
+                const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
+                thumbnailPath = thumbPath;
+                extractedVariables = vars;
+                template = "Error al procesar el documento. Por favor, agregue las variables manualmente.";
             }
 
             // Preparar respuesta
             const response = {
                 name: file.originalname,
                 template,
-                preview,
+                thumbnailPath: thumbnailPath ? path.basename(thumbnailPath) : null,
                 filePath,
-                thumbnailPath: thumbnailPath ? path.basename(thumbnailPath) : null
+                extractedVariables
             };
 
             // Si es temporal, devolver directamente
@@ -776,7 +735,6 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
                     formId,
                     name: file.originalname,
                     template,
-                    preview,
                     filePath,
                     thumbnailPath: thumbnailPath || null
                 })
