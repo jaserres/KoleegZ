@@ -783,14 +783,23 @@ export function registerRoutes(app: Express): Server {
           isBuffer: Buffer.isBuffer(templateBuffer)
         });
 
-        // Preparar datos para el merge
+        // Preparar datos para el merge normalizando nombres de variables
         const mergeData = Object.entries(entry.values || {}).reduce((acc, [key, value]) => {
-          acc[key] = value !== null && value !== undefined ? String(value) : '';
+          // Normalizar el nombre de la variable para el merge
+          const normalizedKey = key
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') // Remover acentos
+            .replace(/[^\w\s]/g, '_') // Reemplazar caracteres especiales con _
+            .replace(/\s+/g, '_'); // Reemplazar espacios con _
+
+          acc[normalizedKey] = value !== null && value !== undefined ? String(value) : '';
           return acc;
         }, {} as Record<string, string>);
 
         console.log('Datos preparados para merge:', {
-          keys: Object.keys(mergeData)
+          originalKeys: Object.keys(entry.values || {}),
+          normalizedKeys: Object.keys(mergeData),
+          data: mergeData
         });
 
         // Realizar el merge con opciones mínimas
@@ -799,15 +808,16 @@ export function registerRoutes(app: Express): Server {
           data: mergeData,
           cmdDelimiter: ['{{', '}}'],
           literalXmlDelimiter: '||',
+          failFast: true, // Para obtener errores más específicos
           additionalJsContext: {
             // Funciones básicas de formato
             bold: (text: string) => `||<w:r><w:rPr><w:b/></w:rPr><w:t>${text}</w:t></w:r>||`,
             italic: (text: string) => `||<w:r><w:rPr><w:i/></w:rPr><w:t>${text}</w:t></w:r>||`,
             underline: (text: string) => `||<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>${text}</w:t></w:r>||`,
+            // Función para manejar valores undefined/null
+            defaultValue: (value: any, defaultVal: string = '') => value || defaultVal
           }
         });
-
-        console.log('Merge completado, verificando resultado');
 
         if (!result) {
           throw new Error('El resultado del merge es undefined');
@@ -815,19 +825,21 @@ export function registerRoutes(app: Express): Server {
 
         const mergedBuffer = Buffer.from(result);
 
-        console.log('Buffer creado:', {
-          size: mergedBuffer.length,
-          isValid: Buffer.isBuffer(mergedBuffer)
+        if (!Buffer.isBuffer(mergedBuffer) || mergedBuffer.length === 0) {
+          throw new Error('El resultado del merge no es un buffer válido');
+        }
+
+        console.log('Merge completado exitosamente:', {
+          resultSize: mergedBuffer.length,
+          isBuffer: Buffer.isBuffer(mergedBuffer)
         });
 
         if (isDownload) {
-          // Para descarga directa
           const fileName = `${doc.name.replace(/\.docx$/, '')}-merged.docx`;
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
           res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
           return res.send(mergedBuffer);
         } else {
-          // Para vista previa
           const result = await mammoth.convertToHtml(
             { buffer: mergedBuffer },
             mammothOptions
@@ -843,7 +855,8 @@ export function registerRoutes(app: Express): Server {
           name: mergeError.name,
           message: mergeError.message,
           stack: mergeError.stack,
-          data: mergeError.data // Para capturar datos adicionales si existen
+          commandError: mergeError.commandError,
+          data: mergeError.data
         });
 
         return res.status(500).json({
@@ -851,7 +864,7 @@ export function registerRoutes(app: Express): Server {
           details: {
             name: mergeError.name,
             message: mergeError.message,
-            stack: mergeError.stack
+            command: mergeError.commandError
           }
         });
       }
