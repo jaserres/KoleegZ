@@ -76,9 +76,9 @@ const wordStyleMap = [
   "p[style-name='Caption'] => p.caption:fresh",
   "r[style-name='Subtle Emphasis'] => em.subtle",
   "p[style-name='Intense Quote'] => blockquote.intense:fresh",
-  "p[style-name='Subtitle'] => p.subtitle:fresh",
+    "p[style-name='Subtitle'] => p.subtitle:fresh",
     "r[style-name='Subtle Reference'] => span.subtle-reference",
-  "p[style-name='Bibliography'] => p.bibliography:fresh"
+    "p[style-name='Bibliography'] => p.bibliography:fresh"
 ];
 
 // Mejorar la función de transformación de documento
@@ -279,8 +279,20 @@ export function registerRoutes(app: Express): Server {
     res.json(form);
   });
 
+  // Parte del endpoint POST /api/forms
   app.post("/api/forms", async (req, res) => {
     const user = ensureAuth(req);
+
+    console.log('Creando nuevo formulario:', {
+      name: req.body.name,
+      hasDocument: !!req.body.document,
+      documentInfo: req.body.document ? {
+        name: req.body.document.name,
+        hasTemplate: !!req.body.document.template,
+        hasPreview: !!req.body.document.preview,
+        filePath: req.body.document.filePath
+      } : null
+    });
 
     // Check limits
     const formCount = await db.select().from(forms).where(eq(forms.userId, user.id));
@@ -298,6 +310,56 @@ export function registerRoutes(app: Express): Server {
         theme: req.body.theme || { primary: "#64748b", variant: "default" }
       })
       .returning();
+
+    // Si hay un documento temporal, lo vinculamos al formulario
+    if (req.body.document) {
+      const docData = {
+        formId: form.id,
+        name: req.body.document.name,
+        template: req.body.document.template,
+        preview: req.body.document.preview,
+        filePath: req.body.document.filePath
+      };
+
+      console.log('Vinculando documento al formulario:', {
+        formId: form.id,
+        name: docData.name,
+        filePath: docData.filePath,
+        templateLength: docData.template?.length,
+        previewLength: docData.preview?.length
+      });
+
+      try {
+        const [doc] = await db.insert(documents)
+          .values(docData)
+          .returning();
+
+        console.log('Documento vinculado exitosamente:', {
+          id: doc.id,
+          name: doc.name,
+          formId: doc.formId,
+          filePath: doc.filePath
+        });
+
+        // Devolver el formulario con el documento vinculado
+        return res.status(201).json({
+          ...form,
+          document: doc
+        });
+      } catch (dbError: any) {
+        console.error('Error al vincular documento:', {
+          error: dbError.message,
+          stack: dbError.stack,
+          docData: { 
+            ...docData,
+            template: docData.template?.slice(0, 100) + '...',
+            preview: 'truncated'
+          }
+        });
+        // Aún así devolvemos el formulario creado
+        return res.status(201).json(form);
+      }
+    }
 
     res.status(201).json(form);
   });
@@ -462,7 +524,7 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
-
+  
 app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -549,12 +611,21 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
 
       // Si es una carga temporal, devolver el contenido
       if (formId === null) {
-        return res.status(200).json({
+        const response = {
           name: file.originalname,
           template,
           preview,
           filePath
+        };
+
+        console.log('Devolviendo documento temporal:', {
+          name: response.name,
+          filePath: response.filePath,
+          templateLength: response.template.length,
+          previewLength: response.preview.length
         });
+
+        return res.status(200).json(response);
       }
 
       // Si llegamos aquí, es un formulario real y debemos guardar el documento
@@ -605,10 +676,15 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
         details: error.stack
       });
     }
-  });
+});
   app.get("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
+
+    console.log('Consultando documentos para formulario:', {
+      formId,
+      userId: user.id
+    });
 
     // Verify ownership
     const [form] = await db.select()
@@ -616,14 +692,34 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
       .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
     if (!form) {
+      console.log('Formulario no encontrado:', { formId, userId: user.id });
       return res.status(404).send("Form not found");
     }
 
-    const docs = await db.select()
-      .from(documents)
-      .where(eq(documents.formId, formId));
+    try {
+      const docs = await db.select()
+        .from(documents)
+        .where(eq(documents.formId, formId));
 
-    res.json(docs);
+      console.log('Documentos encontrados:', {
+        formId,
+        count: docs.length,
+        documentIds: docs.map(d => d.id),
+        documentNames: docs.map(d => d.name)
+      });
+
+      res.json(docs);
+    } catch (error: any) {
+      console.error('Error al consultar documentos:', {
+        error,
+        message: error.message,
+        formId
+      });
+      res.status(500).json({
+        error: 'Error al consultar documentos',
+        details: error.message
+      });
+    }
   });
 
   app.delete("/api/forms/:formId/documents/:documentId", async (req, res) => {
@@ -775,8 +871,8 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
           filePath: doc.filePath
         });
 
-        // Verificar que el buffer es un archivo DOCX válido (comienza con PK)
-        if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
+        //        // Verificar que el buffer es un archivo DOCX válido (comienza con PK)
+if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
           throw new Error('El archivo template no es un DOCX válido');
         }
 
@@ -913,7 +1009,6 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
           if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
             throw new Error('El resultado del merge no es un DOCX válido');
           }
-
         } catch (mergeError: any) {
           console.error('Error en merge, usando copia sin procesar:', mergeError);
           // Si falla el merge, usar la copia sin procesar
@@ -942,7 +1037,6 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
             result: `${previewStyles}<div class="document-preview">${result.value}</div>`
           });
         }
-
       } finally {
         // Limpiar archivo temporal
         if (tempFilePath) {
