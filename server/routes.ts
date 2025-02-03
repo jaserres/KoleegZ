@@ -30,11 +30,29 @@ async function extractTextFromImage(imagePath: string): Promise<string> {
   }
 }
 
-// Función para detectar variables en texto
+// Función para detectar variables en texto con mejor procesamiento
 function detectVariables(text: string): string[] {
   const variablePattern = /{{([^}]+)}}/g;
   const matches = text.match(variablePattern) || [];
-  return matches.map(match => match.slice(2, -2).trim());
+  const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
+  const invalidVariables: string[] = [];
+  const validVariables = new Set<string>();
+
+  matches.forEach(match => {
+    const varName = match.slice(2, -2).trim();
+    // Convertir espacios y guiones a guiones bajos
+    const normalizedName = varName
+      .replace(/[\s-]+/g, '_')
+      .replace(/[^a-zA-Z0-9_]/g, '');
+
+    if (normalizedName && validVariableRegex.test(normalizedName)) {
+      validVariables.add(normalizedName);
+    } else {
+      invalidVariables.push(varName);
+    }
+  });
+
+  return Array.from(validVariables);
 }
 
 // Configurar multer para manejar archivos
@@ -266,7 +284,7 @@ async function ensureThumbnailDir() {
   }
 }
 
-// En la función generateThumbnail, actualizar para incluir OCR
+// Actualizar generateThumbnail para mejorar el proceso de OCR
 async function generateThumbnail(buffer: Buffer): Promise<{thumbnailPath: string, extractedVariables: string[]}> {
   try {
     const thumbnailFileName = `thumb_${Date.now()}.png`;
@@ -276,7 +294,7 @@ async function generateThumbnail(buffer: Buffer): Promise<{thumbnailPath: string
     const tempDocxPath = path.join(THUMBNAIL_DIR, `temp_${Date.now()}.docx`);
     await fs.writeFile(tempDocxPath, buffer);
 
-    // Usar libreoffice para convertir a PNG
+    // Convertir a PNG usando libreoffice
     await execAsync(`libreoffice --headless --convert-to png --outdir "${THUMBNAIL_DIR}" "${tempDocxPath}"`);
 
     // Limpiar archivo temporal DOCX
@@ -291,6 +309,7 @@ async function generateThumbnail(buffer: Buffer): Promise<{thumbnailPath: string
       await fs.access(pngFilePath);
 
       // Extraer texto usando OCR
+      console.log('Iniciando proceso OCR...');
       const extractedText = await extractTextFromImage(pngFilePath);
       console.log('OCR Text extracted:', extractedText);
 
@@ -682,16 +701,20 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
                     preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
                 } else {
                     // Si no se puede extraer texto, generar thumbnail y usar OCR
+                    console.log('Documento complejo detectado, intentando OCR...');
                     const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
                     thumbnailPath = thumbPath;
                     extractedVariables = vars;
-                    template = "Documento complejo - Variables detectadas por OCR";
 
                     // Crear plantilla con variables detectadas
                     if (extractedVariables.length > 0) {
-                        template = `Documento complejo - Variables detectadas:\n${
+                        console.log(`OCR exitoso: ${extractedVariables.length} variables detectadas`);
+                        template = `Documento complejo - Variables detectadas por OCR:\n${
                             extractedVariables.map(v => `{{${v}}}`).join('\n')
                         }`;
+                    } else {
+                        console.log('OCR completado: No se detectaron variables');
+                        template = "Documento complejo - No se detectaron variables mediante OCR";
                     }
 
                     preview = `${previewStyles}<div class="document-preview">
@@ -708,7 +731,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
                                     </ul>
                                 </div>
                             ` : `
-                                <p>No se detectaron variables en el documento.</p>
+                                <p>No se detectaron variables en el proceso de OCR.</p>
                                 <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
                             `}
                         </div>
@@ -816,7 +839,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
         formId
       });
       res.status(500).json({
-        error: 'Error al consultar documentos',
+error: 'Error al consultar documentos',
         details: error.message
       });
     }
@@ -849,7 +872,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
       // Eliminar el archivo físico primero
       await deleteFile(doc.filePath);
         if (doc.thumbnailPath) {
-            awaitdeleteFile(path.join(THUMBNAIL_DIR, doc.thumbnailPath));
+            await deleteFile(path.join(THUMBNAIL_DIR, doc.thumbnailPath));
         }
 
       // Luego eliminar el registro de la base de datos

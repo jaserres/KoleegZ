@@ -194,7 +194,7 @@ export default function FormBuilder() {
     }
   });
 
-    const extractVariables = (template: string) => {
+  const extractVariables = (template: string) => {
     const variableRegex = /{{([^}]+)}}/g;
     const matches = template.match(variableRegex) || [];
     const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
@@ -494,8 +494,58 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     </Card>
   );
 
-  // Actualizar la sección de PreviewDialog para manejar mejor los thumbnails
-const PreviewDialog = () => {
+    const renderPreview = () => {
+    if (previewContent.preview.includes('Documento Complejo')) {
+      return (
+        <div className="flex flex-col items-center gap-4 p-4">
+          <p className="text-amber-500 font-semibold">Documento Complejo Detectado</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            El documento contiene elementos avanzados. Se intentará extraer variables mediante reconocimiento óptico (OCR).
+          </p>
+
+          {previewContent.preview.includes('/thumbnails/') && (
+            <>
+              <img 
+                src={`/thumbnails/${previewContent.preview.match(/\/thumbnails\/([^"]+)/)?.[1]}`}
+                alt="Vista previa del documento"
+                className="max-w-md shadow-lg rounded-lg"
+              />
+              {previewContent.variables && previewContent.variables.length > 0 ? (
+                <div className="mt-4 w-full max-w-md">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-green-700 font-medium mb-2">Variables Detectadas por OCR:</p>
+                    <div className="grid gap-2">
+                      {previewContent.variables.map((variable, index) => (
+                        <div key={index} className="flex items-center gap-2 text-sm">
+                          <code className="bg-green-100 px-2 py-1 rounded text-green-800">
+                            {'{{' + variable.name + '}}'}</code>
+                          <span className="text-green-600">{variable.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 w-full max-w-md">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <p className="text-yellow-800 font-medium">No se detectaron variables mediante OCR</p>
+                    <p className="text-sm text-yellow-600 mt-1">
+                      Por favor, agregue las variables manualmente basándose en el documento original.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      );
+    }
+
+    return <div dangerouslySetInnerHTML={{ __html: previewContent.preview }} />;
+  };
+
+  // Update PreviewDialog to handle OCR status
+  const PreviewDialog = () => {
     if (!previewContent) return null;
 
     const handleDownload = async () => {
@@ -533,34 +583,15 @@ const PreviewDialog = () => {
       }
     };
 
-    const renderPreview = () => {
-      if (previewContent.preview.includes('Documento Complejo')) {
-        return (
-          <div className="flex flex-col items-center gap-4 p-4">
-            <p className="text-amber-500 font-semibold">Documento Complejo</p>
-            {previewContent.preview.includes('/thumbnails/') && (
-              <img 
-                src={`/thumbnails/${previewContent.preview.match(/\/thumbnails\/([^"]+)/)?.[1]}`}
-                alt="Vista previa del documento"
-                className="max-w-md shadow-lg rounded-lg"
-              />
-            )}
-            <p>Este documento contiene elementos avanzados que no pueden ser mostrados como texto.</p>
-            <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
-          </div>
-        );
-      }
-
-      return <div dangerouslySetInnerHTML={{ __html: previewContent.preview }} />;
-    };
-
     return (
       <Dialog open={!!previewContent} onOpenChange={() => setPreviewContent(null)}>
         <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0">
           <DialogHeader className="px-6 py-4 border-b">
             <DialogTitle>Vista Previa del Documento</DialogTitle>
             <DialogDescription>
-              Revise el contenido y las variables detectadas antes de crear el formulario
+              {previewContent.preview.includes('Documento Complejo') 
+                ? 'Documento complejo detectado - Se intentará extraer variables mediante OCR'
+                : 'Revise el contenido y las variables detectadas antes de crear el formulario'}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-hidden">
@@ -578,19 +609,6 @@ const PreviewDialog = () => {
                     {renderPreview()}
                   </div>
                 </div>
-                <div>
-                  <h3 className="font-medium mb-2">Variables Detectadas ({previewContent.variables.length})</h3>
-                  <div className="bg-muted rounded-md p-4">
-                    <div className="grid gap-2">
-                      {previewContent.variables.map((variable, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <code className="bg-background px-2 py-1 rounded">{'{{' + variable.name + '}}'}</code>
-                          <span className="text-muted-foreground">{variable.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
               </div>
             </ScrollArea>
           </div>
@@ -606,7 +624,9 @@ const PreviewDialog = () => {
               setPreviewContent(null);
               toast({
                 title: "Plantilla cargada",
-                description: `Se detectaron ${previewContent.variables.length} variables válidas en la plantilla`,
+                description: previewContent.variables.length > 0
+                  ? `Se detectaron ${previewContent.variables.length} variables en el documento`
+                  : "No se detectaron variables. Por favor, agrégalas manualmente.",
               });
             }}>
               Crear Formulario
