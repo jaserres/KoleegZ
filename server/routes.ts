@@ -571,54 +571,21 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Form not found");
       }
 
-      // Crear un documento DOCX básico con el contenido del template
-      const doc = new Document({
-        sections: [{
-          properties: {},
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: req.body.template || '',
-                }),
-              ],
-            }),
-          ],
-        }],
+      // Ya no creamos un nuevo documento aquí
+      // En su lugar, redirigimos al endpoint de upload
+      return res.status(400).json({
+        error: "Los documentos solo pueden ser creados a través del endpoint /upload",
+        uploadEndpoint: `/api/forms/${formId}/documents/upload`
       });
 
-      // Usar Packer para generar el buffer del documento
-      const buffer = await Packer.toBuffer(doc);
-
-      // Convertir el contenido binario a base64 para almacenamiento seguro
-      const template = buffer.toString('base64');
-
-      // Generar una vista previa segura del contenido
-      const preview = generatePreview(req.body.template || '');
-
-      // Guardar el archivo DOCX
-      const fileName = `template-${Date.now()}.docx`;
-      const filePath = await saveFile(buffer, fileName);
-
-      const [document] = await db.insert(documents)
-        .values({
-          formId,
-          name: req.body.name,
-          template: template, // Guardamos el contenido en base64
-          preview,
-          filePath,
-        })
-        .returning();
-
-      res.status(201).json(document);
     } catch (error: any) {
-      console.error('Error creating document:', {
+      console.error('Error handling document request:', {
         error,
         message: error.message,
         stack: error.stack
       });
       res.status(500).json({
-        error: `Error creating document: ${error.message}`,
+        error: `Error handling document request: ${error.message}`,
         details: error.stack
       });
     }
