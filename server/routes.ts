@@ -245,15 +245,15 @@ async function ensureThumbnailDir() {
   }
 }
 
-// Función para generar un thumbnail
+// En la función generateThumbnail, reemplazar require con import dinámico
 async function generateThumbnail(buffer: Buffer): Promise<string> {
   try {
     const thumbnailFileName = `thumb_${Date.now()}.png`;
     const thumbnailPath = path.join(THUMBNAIL_DIR, thumbnailFileName);
 
-    // Convertir la primera página del documento a una imagen PNG
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
+    // Usar import dinámico para child_process
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
     const execAsync = promisify(exec);
 
     // Guardar el buffer temporalmente
@@ -261,12 +261,23 @@ async function generateThumbnail(buffer: Buffer): Promise<string> {
     await fs.writeFile(tempDocxPath, buffer);
 
     // Usar libreoffice para convertir a PNG (solo la primera página)
-    await execAsync(`soffice --headless --convert-to png --outdir ${THUMBNAIL_DIR} ${tempDocxPath}`);
+    await execAsync(`libreoffice --headless --convert-to png --outdir "${THUMBNAIL_DIR}" "${tempDocxPath}"`);
 
     // Limpiar archivos temporales
     await fs.unlink(tempDocxPath);
-    const pngFilePath = path.join(THUMBNAIL_DIR, `${path.basename(tempDocxPath, '.docx')}.png`);
-    return pngFilePath;
+
+    // Obtener el nombre del archivo PNG generado
+    const pngFileName = path.basename(tempDocxPath, '.docx') + '.png';
+    const pngFilePath = path.join(THUMBNAIL_DIR, pngFileName);
+
+    // Verificar si el archivo existe
+    try {
+      await fs.access(pngFilePath);
+      return pngFileName; // Retornar solo el nombre del archivo
+    } catch {
+      console.error('Thumbnail file was not created');
+      return '';
+    }
 
   } catch (error) {
     console.error('Error generating thumbnail:', error);
@@ -832,7 +843,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
     // Verify ownership
     const [form] = await db.select()
       .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+      .where(and(eq(forms.id, formId),eq(forms.userId, user.id)));
 
     if (!form) {
       return res.status(404).send("Form not found");

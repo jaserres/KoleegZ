@@ -494,7 +494,8 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     </Card>
   );
 
-  const PreviewDialog = () => {
+  // Actualizar la sección de PreviewDialog para manejar mejor los thumbnails
+const PreviewDialog = () => {
     if (!previewContent) return null;
 
     const handleDownload = async () => {
@@ -517,7 +518,7 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = downloadUrl;
-        link.download = `${previewContent.name}.txt`;
+        link.download = previewContent.name;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -530,6 +531,27 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           variant: "destructive"
         });
       }
+    };
+
+    const renderPreview = () => {
+      if (previewContent.preview.includes('Documento Complejo')) {
+        return (
+          <div className="flex flex-col items-center gap-4 p-4">
+            <p className="text-amber-500 font-semibold">Documento Complejo</p>
+            {previewContent.preview.includes('/thumbnails/') && (
+              <img 
+                src={`/thumbnails/${previewContent.preview.match(/\/thumbnails\/([^"]+)/)?.[1]}`}
+                alt="Vista previa del documento"
+                className="max-w-md shadow-lg rounded-lg"
+              />
+            )}
+            <p>Este documento contiene elementos avanzados que no pueden ser mostrados como texto.</p>
+            <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
+          </div>
+        );
+      }
+
+      return <div dangerouslySetInnerHTML={{ __html: previewContent.preview }} />;
     };
 
     return (
@@ -553,7 +575,7 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
                     </Button>
                   </div>
                   <div className="bg-muted rounded-md p-4">
-                    <pre className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: previewContent.preview }} />
+                    {renderPreview()}
                   </div>
                 </div>
                 <div>
