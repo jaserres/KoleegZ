@@ -33,11 +33,16 @@ export default function FormBuilder() {
     variables: Array<Partial<SelectVariable>>;
     filePath?: string;
     thumbnailPath?: string;
-    originalTemplate?: string;  
+    originalTemplate?: string;
+    extractedVariables?: string[];
   } | null>(null);
 
   const [formName, setFormName] = useState("");
   const [variables, setVariables] = useState<Array<Partial<SelectVariable>>>([]);
+  const [documentName, setDocumentName] = useState(""); //New State
+  const [documentTemplate, setDocumentTemplate] = useState(""); //New State
+  const [allVariables, setAllVariables] = useState<Array<Partial<SelectVariable>>>([]); //New State
+
 
   const variableLimit = user?.isPremium ? 50 : 10;
 
@@ -198,7 +203,7 @@ export default function FormBuilder() {
       formData.append('file', file);
 
       // Si estamos editando un formulario existente, usamos su ID
-      const uploadUrl = `/api/forms${id ? `/${id}` : ''}/documents/upload`;
+      const uploadUrl = `/api/forms/${id}/documents/upload`;
 
       console.log('Uploading to:', uploadUrl); // Debug log
 
@@ -211,24 +216,33 @@ export default function FormBuilder() {
         throw new Error(await response.text());
       }
 
-      const result = await response.json();
-      console.log('Upload result:', result);
+      const doc = await response.json();
 
-      const templateVariables = extractVariables(result.template);
+      const templateVariables = extractVariables(doc.template);
+      const ocrVariables = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
+        name: varName,
+        label: varName
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' '),
+        type: 'text'
+      })) : [];
 
-      setFormName(formName || file.name.split('.')[0]);
-      setVariables(templateVariables);
+      const combinedVariables = [...templateVariables, ...ocrVariables];
+      const uniqueVariables = Array.from(
+        new Map(combinedVariables.map(v => [v.name, v])).values()
+      );
+
+      setAllVariables(uniqueVariables);
       setPreviewContent({
-        name: file.name,
-        template: result.template,
-        preview: result.preview || result.template,
-        variables: templateVariables,
-        filePath: result.filePath,
-        thumbnailPath: result.thumbnailPath,
-        originalTemplate: result.template
+        ...doc,
+        variables: uniqueVariables,
+        extractedVariables: uniqueVariables.map(v => v.name),
+        originalTemplate: doc.template 
       });
 
-      setShowEditor(true);
+      setDocumentTemplate(doc.template);
+      setDocumentName(documentName || file.name.split('.')[0]);
 
     } catch (error) {
       console.error('Error al cargar archivo:', error);
@@ -312,7 +326,7 @@ export default function FormBuilder() {
         name: formName,
         document: previewContent ? {
           template: previewContent.template,
-          originalTemplate: previewContent.originalTemplate  
+          originalTemplate: previewContent.originalTemplate
         } : undefined
       });
 
