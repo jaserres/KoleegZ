@@ -562,6 +562,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
         let template = '';
         let preview = '';
         let filePath = '';
+        let extractedText = '';
 
         try {
             console.log('Procesando documento Word...');
@@ -577,65 +578,63 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
                 size: validBuffer.length
             });
 
+            // Intentar múltiples métodos de extracción de texto
             try {
-                // Intentar extraer texto primero
+                // Método 1: Extraer texto plano
                 const textResult = await mammoth.extractRawText({
                     buffer: validBuffer,
-                    includeDefaultStyleMap: true,
-                    includeEmbeddedStyleMap: true,
-                    convertImage: mammoth.images.imgElement((image) => {
-                        return image.read("base64").then((imageData) => ({
-                            src: `data:${image.contentType};base64,${imageData}`
-                        }));
-                    })
+                    includeDefaultStyleMap: true
                 });
+                extractedText = textResult.value;
 
-                template = textResult.value || '';
+                // Método 2: Si el primer método falla, intentar convertir a HTML
+                if (!extractedText) {
+                    const htmlResult = await mammoth.convertToHtml({ buffer: validBuffer });
+                    // Limpiar HTML para obtener texto
+                    extractedText = htmlResult.value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                }
 
-                // Si el texto se extrajo exitosamente, intentar convertir a HTML
-                const htmlResult = await mammoth.convertToHtml(
-                    { buffer: validBuffer },
-                    {
-                        ...mammothOptions,
-                        transformDocument: (element) => {
-                            // Preservar estructura original
-                            return element;
-                        }
-                    }
-                );
+                // Si aún no tenemos texto, intentar leer el archivo como texto plano
+                if (!extractedText && file.mimetype === 'text/plain') {
+                    extractedText = validBuffer.toString('utf-8');
+                }
 
-                preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
+                // Si tenemos texto extraído, usarlo para template y generar preview
+                if (extractedText) {
+                    template = extractedText;
+                    preview = `${previewStyles}<div class="document-preview">${extractedText.split('\n').map(line => `<p>${line}</p>`).join('')}</div>`;
+                }
+
+                // Intentar generar una vista previa HTML más rica si es posible
+                try {
+                    const htmlResult = await mammoth.convertToHtml(
+                        { buffer: validBuffer },
+                        { ...mammothOptions }
+                    );
+                    preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
+                } catch (htmlError) {
+                    console.log('No se pudo generar vista previa HTML rica, usando texto plano');
+                }
 
             } catch (extractError) {
                 console.error('Error al extraer contenido del documento:', extractError);
-                // Si falla la extracción, intentar un método alternativo
-                const doc = new Document({
-                    sections: [{
-                        properties: {},
-                        children: [
-                            new Paragraph({
-                                children: [
-                                    new TextRun("Error al procesar el documento. " +
-                                        "El documento puede contener elementos no soportados.")
-                                ],
-                            }),
-                        ],
-                    }],
-                });
 
-                template = "Documento no procesable";
+                // Si fallan todos los métodos, crear una vista previa básica
+                template = "Documento complejo - Las variables deben ser agregadas manualmente";
                 preview = `${previewStyles}<div class="document-preview">
-                    <p class="text-red-500">Error: No se pudo procesar el contenido del documento.</p>
-                    <p>El documento puede contener elementos complejos que no se pueden procesar.</p>
-                    <p>Sin embargo, el documento original se ha guardado y podrá ser usado para el merge.</p>
+                    <p class="text-amber-500">Aviso: Este es un documento complejo.</p>
+                    <p>El documento contiene elementos avanzados (imágenes, marcas de agua, etc.) que no pueden ser mostrados en la vista previa.</p>
+                    <p>Sin embargo, el documento original ha sido guardado y podrá ser usado para el merge.</p>
+                    <p>Por favor, agregue las variables manualmente basándose en el documento original.</p>
                 </div>`;
             }
 
-            console.log('Documento procesado exitosamente:', {
+            console.log('Documento procesado:', {
                 originalName: file.originalname,
                 filePath,
-                templateLength: template.length,
-                previewLength: preview.length
+                hasTemplate: !!template,
+                templateLength: template?.length || 0,
+                previewLength: preview?.length || 0
             });
 
         } catch (error: any) {
@@ -674,12 +673,6 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
             preview,
             filePath
         };
-
-        console.log('Guardando documento en la base de datos:', {
-            name: docData.name,
-            filePath: docData.filePath,
-            previewLength: docData.preview.length
-        });
 
         try {
             const [doc] = await db.insert(documents)
@@ -873,7 +866,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
         return res.status(404).send("Form not found");
       }
 
-      const [doc] = awaitdb.select()
+      const [doc] = await db.select()
         .from(documents)
         .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
 

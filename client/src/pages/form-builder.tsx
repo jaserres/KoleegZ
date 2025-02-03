@@ -236,7 +236,8 @@ export default function FormBuilder() {
     return variables;
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Modificar la función handleFileUpload para manejar documentos complejos
+const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const allowedTypes = [
@@ -255,52 +256,56 @@ export default function FormBuilder() {
       }
 
       try {
-        let text;
-        if (file.type === 'text/plain') {
-          const fileText = await file.text();
-          text = fileText
-            .replace(/\0/g, '')
-            .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
+        const formData = new FormData();
+        formData.append('file', file);
 
-          const detectedVariables = extractVariables(text);
-          setPreviewContent({
-            name: file.name.split('.')[0],
-            template: text,
-            preview: generatePreview(text),
-            variables: detectedVariables,
-            filePath: null
-          });
-        } else {
-          const formData = new FormData();
-          formData.append('file', file);
+        const response = await fetch(`/api/forms/${id || 'temp'}/documents/upload`, {
+          method: 'POST',
+          body: formData,
+        });
 
-          const response = await fetch(`/api/forms/${id || 'temp'}/documents/upload`, {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error(await response.text());
-          }
-
-          const result = await response.json();
-          const detectedVariables = extractVariables(result.template);
-
-          // Guardar toda la información incluyendo el filePath
-          const previewData = {
-            name: result.name,
-            template: result.template,
-            preview: result.preview,
-            variables: detectedVariables,
-            filePath: result.filePath
-          };
-
-          setPreviewContent(previewData);
-
-          // Guardar en sessionStorage para uso posterior
-          sessionStorage.setItem("selectedTemplate", JSON.stringify(previewData));
+        if (!response.ok) {
+          throw new Error(await response.text());
         }
-      } catch (error) {
+
+        const result = await response.json();
+
+        // Intentar extraer variables del template si existe
+        let detectedVariables: Array<Partial<SelectVariable>> = [];
+        if (result.template && !result.template.includes("Documento complejo")) {
+          detectedVariables = extractVariables(result.template);
+        }
+
+        // Guardar toda la información incluyendo el filePath
+        const previewData = {
+          name: result.name,
+          template: result.template,
+          preview: result.preview,
+          variables: detectedVariables,
+          filePath: result.filePath
+        };
+
+        setPreviewContent(previewData);
+
+        // Si es un documento complejo, mostrar un mensaje específico
+        if (result.template.includes("Documento complejo")) {
+          toast({
+            title: "Documento Complejo Detectado",
+            description: "Este documento contiene elementos avanzados. Por favor, agregue las variables manualmente.",
+            duration: 6000
+          });
+        } else if (detectedVariables.length > 0) {
+          toast({
+            title: "Variables Detectadas",
+            description: `Se encontraron ${detectedVariables.length} variables en el documento.`,
+            duration: 3000
+          });
+        }
+
+        // Guardar en sessionStorage para uso posterior
+        sessionStorage.setItem("selectedTemplate", JSON.stringify(previewData));
+
+      } catch (error: any) {
         console.error('Error al cargar archivo:', error);
         toast({
           title: "Error al cargar archivo",
