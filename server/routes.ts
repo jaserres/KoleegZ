@@ -852,8 +852,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
             },
             errorHandler: (error: any, cmdStr: string) => {
               console.error('Error en comando durante merge:', { error, cmdStr });
-              // Keep original text if there's an error
-              return cmdStr;
+              //              return cmdStr;
             },additionalJsContext: {
               formatDate: (date: string) => {
                 try {
