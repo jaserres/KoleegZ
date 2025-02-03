@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Plus, Save, ArrowLeft, Upload, Download, Wand2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { SelectVariable } from "@db/schema";
@@ -33,7 +33,7 @@ export default function FormBuilder() {
     variables: Array<Partial<SelectVariable>>;
     filePath?: string;
     thumbnailPath?: string;
-    originalTemplate?: string;  // Restaurado: campo para la plantilla original
+    originalTemplate?: string;  
   } | null>(null);
 
   const [formName, setFormName] = useState("");
@@ -219,7 +219,7 @@ export default function FormBuilder() {
         variables: templateVariables,
         filePath: result.filePath,
         thumbnailPath: result.thumbnailPath,
-        originalTemplate: result.template  // Restaurado: guardamos la plantilla original
+        originalTemplate: result.template 
       });
 
       setShowEditor(true);
@@ -246,22 +246,42 @@ export default function FormBuilder() {
       if (templateData) {
         const parsedTemplate = JSON.parse(templateData);
         documentData = {
-          name: formName,
+          name: formName || parsedTemplate.name,
           template: parsedTemplate.template,
           preview: parsedTemplate.preview,
           filePath: parsedTemplate.filePath,
           thumbnailPath: parsedTemplate.thumbnailPath,
-          originalTemplate: parsedTemplate.originalTemplate  // Restaurado: incluimos la plantilla original
+          originalTemplate: parsedTemplate.originalTemplate,
+          variables: parsedTemplate.variables
         };
       }
+
+      console.log('Creating form with document:', documentData);
 
       const res = await apiRequest("POST", "/api/forms", {
         name: formName,
         document: documentData
       });
+
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al crear el formulario");
+      }
+
       const form = await res.json();
 
       try {
+        if (documentData) {
+          await apiRequest("POST", `/api/forms/${form.id}/documents`, {
+            name: documentData.name,
+            template: documentData.template,
+            originalTemplate: documentData.originalTemplate,
+            preview: documentData.preview,
+            filePath: documentData.filePath,
+            thumbnailPath: documentData.thumbnailPath
+          });
+        }
+
         for (const variable of variables) {
           await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
         }
@@ -302,7 +322,7 @@ export default function FormBuilder() {
         name: formName,
         document: previewContent ? {
           template: previewContent.template,
-          originalTemplate: previewContent.originalTemplate  // Restaurado: incluimos la plantilla original en actualizaciones
+          originalTemplate: previewContent.originalTemplate  
         } : undefined
       });
 
