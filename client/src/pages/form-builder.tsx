@@ -5,7 +5,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/hooks/use-auth";
 import {
   Select,
   SelectContent,
@@ -19,6 +18,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { SelectVariable } from "@db/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Trash2 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function FormBuilder() {
   const { id } = useParams();
@@ -33,6 +33,7 @@ export default function FormBuilder() {
     variables: Array<Partial<SelectVariable>>;
     filePath?: string;
     thumbnailPath?: string;
+    originalTemplate?: string;  // Restaurado: campo para la plantilla original
   } | null>(null);
 
   const [formName, setFormName] = useState("");
@@ -136,7 +137,6 @@ export default function FormBuilder() {
       const result = await response.json();
 
       if (result.extractedVariables && result.extractedVariables.length > 0) {
-        // Convertir variables OCR al formato correcto
         const newVariables = result.extractedVariables
           .filter((varName: string) => !variables.some(v => v.name === varName))
           .map((varName: string) => ({
@@ -149,7 +149,6 @@ export default function FormBuilder() {
           }));
 
         if (newVariables.length > 0) {
-          // Combinar con las variables existentes
           const updatedVariables = [...variables, ...newVariables];
           setVariables(updatedVariables);
 
@@ -209,7 +208,6 @@ export default function FormBuilder() {
 
       const result = await response.json();
 
-      // Detectar variables del template
       const templateVariables = extractVariables(result.template);
 
       setFormName(result.name);
@@ -221,6 +219,7 @@ export default function FormBuilder() {
         variables: templateVariables,
         filePath: result.filePath,
         thumbnailPath: result.thumbnailPath,
+        originalTemplate: result.template  // Restaurado: guardamos la plantilla original
       });
 
       setShowEditor(true);
@@ -252,6 +251,7 @@ export default function FormBuilder() {
           preview: parsedTemplate.preview,
           filePath: parsedTemplate.filePath,
           thumbnailPath: parsedTemplate.thumbnailPath,
+          originalTemplate: parsedTemplate.originalTemplate  // Restaurado: incluimos la plantilla original
         };
       }
 
@@ -299,7 +299,11 @@ export default function FormBuilder() {
       }
 
       await apiRequest("PATCH", `/api/forms/${id}`, {
-        name: formName
+        name: formName,
+        document: previewContent ? {
+          template: previewContent.template,
+          originalTemplate: previewContent.originalTemplate  // Restaurado: incluimos la plantilla original en actualizaciones
+        } : undefined
       });
 
       for (const variable of variables) {
@@ -430,7 +434,6 @@ export default function FormBuilder() {
                           Detectar Variables con OCR
                         </Button>
 
-                        {/* Variables detectadas */}
                         <div className="mt-4">
                           {variables.length > 0 ? (
                             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -459,6 +462,7 @@ export default function FormBuilder() {
                   </Card>
                 </div>
               )}
+
               <Card>
                 <CardHeader>
                   <CardTitle>Configuración del Formulario</CardTitle>
@@ -574,7 +578,6 @@ export default function FormBuilder() {
                     ))}
                   </div>
 
-                  {/* Botón de guardar formulario */}
                   <div className="pt-6">
                     <Button
                       className="w-full"
