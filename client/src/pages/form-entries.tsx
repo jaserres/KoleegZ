@@ -786,40 +786,54 @@ export default function FormEntries() {
                               </div>
                             </div>
                           </div>
-                          {(detectedVariables.length > 0 || (previewContent?.extractedVariables && previewContent.extractedVariables.length > 0)) && (
-                             <div className="space-y-2">
-                               <Label>Variables Detectadas</Label>
-                               <div className="bg-muted p-4 rounded-md max-h-[120px] overflow-y-auto">
-                                 <ul className="list-disc list-inside space-y-1">
+                           {/* Mostrar las variables detectadas si hay alguna */}
+                          {(detectedVariables.length > 0 || (previewContent?.extractedVariables && previewContent.extractedVariables.length > 0)) ? (
+                             <div className="mt-4 w-full max-w-md">
+                               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                 <p className="text-green-700 font-medium mb-2">Variables Detectadas:</p>
+                                 <div className="grid gap-2">
                                    {/* Mostrar variables detectadas inicialmente */}
                                    {detectedVariables.map((variable, index) => (
-                                     <li key={`initial-${index}`} className="text-sm">
-                                       {variable.label} ({variable.name})
-                                     </li>
+                                     <div key={`initial-${index}`} className="flex items-center gap-2 text-sm">
+                                       <code className="bg-green-100 px-2 py-1 rounded text-green-800">
+                                         {'{{'}{variable.name}{'}}'}</code>
+                                     </div>
                                    ))}
                                    {/* Mostrar variables detectadas por OCR */}
-                                   {previewContent?.extractedVariables && previewContent.extractedVariables.map((varName: string, index: number) => (
-                                     <li key={`ocr-${index}`} className="text-sm">
-                                       {varName.split('_')
-                                         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                                         .join(' ')} ({varName})
-                                     </li>
+                                   {previewContent?.extractedVariables && previewContent.extractedVariables.map((variable, index) => (
+                                     <div key={`ocr-${index}`} className="flex items-center gap-2 text-sm">
+                                       <code className="bg-green-100 px-2 py-1 rounded text-green-800">
+                                         {'{{'}{variable}{'}}'}
+                                       </code>
+                                     </div>
                                    ))}
-                                 </ul>
+                                 </div>
+                               </div>
+                             </div>
+                           ) : (
+                             <div className="mt-4 w-full max-w-md">
+                               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                 <p className="text-yellow-800 font-medium">No se detectaron variables</p>
+                                 <p className="text-sm text-yellow-600 mt-1">
+                                   Por favor, agregue las variables manualmente basándose en el documento original.
+                                 </p>
                                </div>
                              </div>
                            )}
+
+                           {/* Botón de OCR si hay thumbnail */}
                            {previewContent?.thumbnailPath && (
-                            <div className="space-y-2">
-                              <Label>Opciones de OCR</Label>
+                             <div className="mt-4">
                                <Button 
                                    variant="outline"
                                    onClick={handleOCRExtraction}
-                                 >
-                                   Extraer variables por OCR
-                                 </Button>
-                            </div>
-                         )}
+                                   className="mt-2"
+                               >
+                                   <Plus className="mr-2 h-4 w-4" />
+                                   Intentar extraer más variables con OCR
+                               </Button>
+                             </div>
+                           )}
                         </div>
                       </ScrollArea>
                     </div>
