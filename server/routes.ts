@@ -790,27 +790,27 @@ export function registerRoutes(app: Express): Server {
 
         console.log('Contenido del template:', textResult.value);
 
-        // Función para normalizar nombres de variables
+        // Función para normalizar nombres de variables manteniendo espacios
         const normalizeVariableName = (name: string): string => {
           return name
             .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '') // Remover acentos
-            .replace(/[^\w]/g, '_') // Reemplazar caracteres no alfanuméricos con _
-            .replace(/_+/g, '_') // Reemplazar múltiples _ con uno solo
-            .toLowerCase() // Convertir a minúsculas para consistencia
-            .trim();
+            .replace(/[\u0300-\u036f]/g, ''); // Solo remover acentos, mantener espacios y mayúsculas
         };
 
         // Preparar datos para el merge normalizando nombres de variables
         const mergeData = Object.entries(entry.values || {}).reduce((acc, [key, value]) => {
           const normalizedValue = value !== null && value !== undefined ? String(value) : '';
-          // Guardar la variable con su nombre original
-          acc[key] = normalizedValue;
-          // Guardar la variable con nombre normalizado
-          acc[normalizeVariableName(key)] = normalizedValue;
-          // Guardar también versiones sin espacios y sin acentos
-          acc[key.replace(/\s+/g, '')] = normalizedValue;
-          acc[key.normalize('NFD').replace(/[\u0300-\u036f]/g, '')] = normalizedValue;
+          const normalizedKey = key.toUpperCase() // Convertir a mayúsculas para coincidir con el template
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') // Remover acentos
+            .replace(/_/g, ' '); // Reemplazar guiones bajos con espacios
+
+          // Guardar todas las variaciones posibles
+          acc[key] = normalizedValue; // Original
+          acc[normalizedKey] = normalizedValue; // Normalizada
+          acc[key.replace(/[_\s]/g, '')] = normalizedValue; // Sin espacios ni guiones
+          acc[normalizeVariableName(key)] = normalizedValue; // Solo sin acentos
+
           return acc;
         }, {} as Record<string, string>);
 
@@ -826,7 +826,7 @@ export function registerRoutes(app: Express): Server {
           data: mergeData,
           cmdDelimiter: ['{{', '}}'],
           literalXmlDelimiter: '||',
-          failFast: false, // Cambiar a false para ver todos los errores
+          failFast: false,
           additionalJsContext: {
             // Funciones básicas de formato
             bold: (text: string) => `||<w:r><w:rPr><w:b/></w:rPr><w:t>${text}</w:t></w:r>||`,
@@ -834,26 +834,26 @@ export function registerRoutes(app: Express): Server {
             underline: (text: string) => `||<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>${text}</w:t></w:r>||`,
             // Función para manejar valores undefined/null y normalizar variables
             get: (obj: any, key: string) => {
-              // Intentar con varias versiones de la clave
               const variations = [
-                key,
-                normalizeVariableName(key),
-                key.replace(/\s+/g, ''),
-                key.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                key, // Original
+                key.toUpperCase(), // Mayúsculas
+                key.replace(/[_\s]/g, ''), // Sin espacios ni guiones
+                normalizeVariableName(key), // Sin acentos
+                key.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Mayúsculas sin acentos
               ];
 
               for (const variation of variations) {
                 if (obj[variation] !== undefined) {
+                  console.log(`Variable encontrada: ${key} -> ${variation}`);
                   return obj[variation];
                 }
               }
-              console.log(`No se encontró valor para la variable: ${key}, variaciones intentadas:`, variations);
+
+              console.log(`No se encontró valor para la variable: ${key}`, {
+                intentados: variations,
+                disponibles: Object.keys(obj)
+              });
               return '';
-            },
-            // Función helper para debugging
-            debug: (value: any) => {
-              console.log('Debug valor en template:', value);
-              return String(value);
             }
           }
         });
