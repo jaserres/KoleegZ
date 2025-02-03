@@ -630,6 +630,11 @@ export function registerRoutes(app: Express): Server {
             processTables: true,
             processListItems: true,
             processPageBreaks: true,
+            preserveQuickStyles: true,
+            preserveNumbering: true,
+            preserveOutline: true,
+            processContentControls: true,
+            processSmartTags: true,
             errorHandler: (error, cmdStr) => {
               console.error('Error en comando durante merge:', { error, cmdStr });
               return '';
@@ -704,11 +709,14 @@ export function registerRoutes(app: Express): Server {
                 "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
                 "r[style-name='Strong'] => strong",
                 "r[style-name='Emphasis'] => em",
+                "r[style-name='style1'] => strong",
+                "r[style-name='style2'] => em",
                 "b => strong",
                 "i => em",
                 "u => u",
                 "strike => s",
                 "tab => span.tab",
+                "br => br",
                 "table => table",
                 "tr => tr",
                 "td => td",
@@ -898,8 +906,7 @@ export function registerRoutes(app: Express): Server {
 
     // Verify ownership
     const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+      .from(forms)      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
     if (!form) {
       return res.status(404).send("Form not found");
