@@ -8,21 +8,10 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Spinner } from "@/components/ui/spinner";
 
-interface Form {
-  id: number;
-  name: string;
-  variables: Array<{
-    id: number;
-    name: string;
-    label: string;
-    type: string;
-  }>;
-}
-
 export default function HomePage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { data: forms = [] } = useQuery<Form[]>({ 
+  const { data: forms, refetch } = useQuery({ 
     queryKey: ["/api/forms"]
   });
 
@@ -85,7 +74,7 @@ export default function HomePage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {forms.map((form: Form) => (
+        {forms?.map((form: any) => (
           <Card key={form.id}>
             <CardHeader>
               <div className="flex justify-between items-center">

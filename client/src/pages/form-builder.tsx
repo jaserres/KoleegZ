@@ -38,8 +38,6 @@ export default function FormBuilder() {
   const { user } = useAuth();
   const [showEditor, setShowEditor] = useState(false);
   const [templateContent, setTemplateContent] = useState("");
-  const [originalFile, setOriginalFile] = useState<string | null>(null);
-  const [originalMimeType, setOriginalMimeType] = useState<string | null>(null);
   const [formTheme, setFormTheme] = useState<{ primary: string; variant: string }>({
     primary: "#64748b",
     variant: "default",
@@ -48,8 +46,6 @@ export default function FormBuilder() {
     name: string;
     template: string;
     preview: string;
-    originalFile?: string;
-    originalMimeType?: string;
     variables: Array<Partial<SelectVariable>>;
   } | null>(null);
 
@@ -89,8 +85,6 @@ export default function FormBuilder() {
         setFormName(template.name);
         setVariables(template.variables);
         setTemplateContent(template.template || "");
-        setOriginalFile(template.originalFile || null);
-        setOriginalMimeType(template.originalMimeType || null);
         setShowEditor(true);
         sessionStorage.removeItem("selectedTemplate");
       } catch (error) {
@@ -106,62 +100,29 @@ export default function FormBuilder() {
         throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
       }
 
-      // Validar que todas las variables tengan nombre y etiqueta
-      const invalidVariables = variables.filter(v => !v.name || !v.label);
-      if (invalidVariables.length > 0) {
-        throw new Error('Todas las variables deben tener nombre y etiqueta');
-      }
-
-      const formData = {
+      const res = await apiRequest("POST", "/api/forms", {
         name: formName,
-        theme: formTheme,
-        variables: variables.map(v => ({
-          name: v.name,
-          label: v.label,
-          type: v.type || 'text'
-        }))
-      };
-
-      console.log('Creating form with data:', {
-        formName,
-        variablesCount: variables.length,
-        hasTemplate: !!templateContent,
-        templateLength: templateContent?.length
+        theme: formTheme
       });
-
-      const res = await apiRequest("POST", "/api/forms", formData);
-
-      if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error || "Error al crear el formulario");
-      }
-
       const form = await res.json();
 
-      // Si hay una plantilla cargada, crear el documento
-      if (templateContent) {
-        console.log('Creating document with template:', {
-          formId: form.id,
-          name: formName,
-          templateLength: templateContent.length,
-          hasOriginalFile: !!originalFile
-        });
-
-        const docRes = await apiRequest("POST", `/api/forms/${form.id}/documents`, {
-          name: formName,
-          template: templateContent,
-          originalFile: originalFile,
-          originalMimeType: originalMimeType
-        });
-
-        if (!docRes.ok) {
-          // Si falla la creación del documento, eliminar el formulario
-          await apiRequest("DELETE", `/api/forms/${form.id}`);
-          const error = await docRes.text();
-          throw new Error(error || "Error al crear el documento");
+      // Create variables
+      try {
+        for (const variable of variables) {
+          await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
         }
 
-        console.log('Document created successfully');
+        // Si hay una plantilla cargada, crear el documento
+        if (templateContent) {
+          await apiRequest("POST", `/api/forms/${form.id}/documents`, {
+            name: formName,
+            template: templateContent,
+          });
+        }
+      } catch (error) {
+        // If variable or document creation fails, delete the form to maintain consistency
+        await apiRequest("DELETE", `/api/forms/${form.id}`);
+        throw error;
       }
 
       return form;
@@ -177,7 +138,6 @@ export default function FormBuilder() {
       setLocation("/");
     },
     onError: (error: Error) => {
-      console.error('Error en createFormMutation:', error);
       toast({
         title: "Error al crear el formulario",
         description: error.message,
@@ -227,7 +187,7 @@ export default function FormBuilder() {
     }
   });
 
-  const extractVariables = (template: string) => {
+    const extractVariables = (template: string) => {
     const variableRegex = /{{([^}]+)}}/g;
     const matches = template.match(variableRegex) || [];
     const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
@@ -321,8 +281,6 @@ export default function FormBuilder() {
             name: result.name,
             template: result.template,
             preview: result.preview,
-            originalFile: result.originalFile,
-            originalMimeType: result.mimeType,
             variables: detectedVariables
           });
         }
@@ -598,17 +556,9 @@ export default function FormBuilder() {
               Cancelar
             </Button>
             <Button onClick={() => {
-              // Asegurar que el templateContent se establezca correctamente
-              console.log('Setting template content:', {
-                name: previewContent.name,
-                template: previewContent.template,
-                hasOriginalFile: !!previewContent.originalFile
-              });
               setFormName(previewContent.name);
               setVariables(previewContent.variables);
               setTemplateContent(previewContent.template);
-              setOriginalFile(previewContent.originalFile || null);
-              setOriginalMimeType(previewContent.originalMimeType || null);
               setShowEditor(true);
               setPreviewContent(null);
               toast({
@@ -712,7 +662,7 @@ export default function FormBuilder() {
                   <h1 className="text-3xl font-bold">
                     {formName || "Nuevo Formulario"}
                   </h1>
-                  <Button
+                  <Button 
                     variant="outline"
                     onClick={() => {
                       setShowEditor(false);
@@ -720,8 +670,6 @@ export default function FormBuilder() {
                       setVariables([]);
                       setTemplateContent("");
                       setPreviewContent(null);
-                      setOriginalFile(null);
-                      setOriginalMimeType(null);
                     }}
                   >
                     Cambiar Plantilla

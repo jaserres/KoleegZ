@@ -55,8 +55,6 @@ export default function FormEntries() {
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
-  const [originalFile, setOriginalFile] = useState<string | null>(null);
-  const [originalMimeType, setOriginalMimeType] = useState<string | null>(null);
   
     const user = {
     isPremium: true,
@@ -134,33 +132,16 @@ export default function FormEntries() {
       const res = await apiRequest("POST", `/api/forms/${id}/documents`, {
         name: documentName,
         template: documentTemplate,
-        originalFile,
-        originalMimeType
       });
-      if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error || "Error al crear el documento");
-      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}/documents`] });
-      setShowTemplateDialog(false);
       setDocumentName("");
       setDocumentTemplate("");
-      setDetectedVariables([]);
-      setOriginalFile(null);
-      setOriginalMimeType(null);
       toast({
-        title: "Éxito",
-        description: "Plantilla guardada correctamente",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "No se pudo guardar la plantilla",
-        variant: "destructive",
+        title: "Success",
+        description: "Document template created successfully",
       });
     },
   });
@@ -308,55 +289,68 @@ export default function FormEntries() {
       return variables;
     };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const allowedTypes = [
-        'text/plain',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ];
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        // Verificar tipos de archivo permitidos
+        const allowedTypes = [
+          'text/plain',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ];
 
-      if (!allowedTypes.includes(file.type)) {
-        toast({
-          title: "Error al cargar archivo",
-          description: "Solo se permiten archivos .txt, .doc y .docx",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`/api/forms/${id}/documents/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          throw new Error(await response.text());
+        if (!allowedTypes.includes(file.type)) {
+          toast({
+            title: "Error al cargar archivo",
+            description: "Solo se permiten archivos .txt, .doc y .docx",
+            variant: "destructive"
+          });
+          return;
         }
 
-        const doc = await response.json();
-        setDocumentTemplate(doc.template);
-        setDocumentName(doc.name || file.name.split('.')[0]);
-        setOriginalFile(doc.originalFile);
-        setOriginalMimeType(doc.originalMimeType);
+        try {
+          if (file.type === 'text/plain') {
+            // Procesar archivo .txt como antes
+            const text = await file.text();
+            const sanitizedText = text
+              .replace(/\0/g, '')
+              .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
 
-        // Extract variables after setting the template
-        const variables = extractVariables(doc.template);
-        setDetectedVariables(variables);
-      } catch (error: any) {
-        toast({
-          title: "Error al cargar archivo",
-          description: error.message || "Error al procesar el archivo",
-          variant: "destructive"
-        });
+            setDocumentTemplate(sanitizedText);
+          } else {
+            // Para archivos .doc y .docx, usar el nuevo endpoint
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch(`/api/forms/${id}/documents/upload`, {
+              method: 'POST',
+              body: formData,
+            });
+
+            if (!response.ok) {
+              throw new Error(await response.text());
+            }
+
+            const doc = await response.json();
+            setDocumentTemplate(doc.template);
+          }
+
+          // Extraer variables y usar el nombre del archivo
+          const variables = extractVariables(documentTemplate);
+          setDetectedVariables(variables);
+
+          if (!documentName) {
+            setDocumentName(file.name.split('.')[0]);
+          }
+        } catch (error) {
+          toast({
+            title: "Error al cargar archivo",
+            description: error.message || "Error al procesar el archivo",
+            variant: "destructive"
+          });
+        }
       }
-    }
-  };
+    };
 
   const handleCreateDocument = async () => {
     if (!documentName || !documentTemplate) {
@@ -368,11 +362,7 @@ export default function FormEntries() {
       return;
     }
 
-    try {
-      await createDocumentMutation.mutateAsync();
-    } catch (error) {
-      console.error('Error al crear documento:', error);
-    }
+    await createDocumentMutation.mutateAsync();
   };
   
     const handleFieldChange = (name: string, value: any) => {
@@ -391,15 +381,20 @@ export default function FormEntries() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
     const values: Record<string, any> = {};
 
     form?.variables?.forEach((variable: any) => {
-      const value = formValues[variable.name];
-      if (value !== undefined && value !== '') {
-        values[variable.name] = variable.type === "number" ? Number(value) : value;
+      const value = formData.get(variable.name);
+      // Solo incluir el valor si no está vacío
+      if (value) {
+        values[variable.name] = variable.type === "number"
+          ? Number(value)
+          : value;
       }
     });
 
+    // Create a new entry
     createEntryMutation.mutate(values);
   };
   
@@ -428,9 +423,7 @@ export default function FormEntries() {
     sessionStorage.setItem("selectedTemplate", JSON.stringify({
       name: documentName,
       variables: detectedVariables,
-      template: documentTemplate,
-      originalFile: originalFile,
-      originalMimeType: originalMimeType
+      template: documentTemplate
     }));
 
     // Redirect to form creation page
@@ -776,67 +769,67 @@ export default function FormEntries() {
                                 Merge
                               </Button>
                             </DialogTrigger>
-                             <DialogContent className="max-w-2xl">
-                            <DialogHeader>
-                              <DialogTitle>Mail Merge</DialogTitle>
-                              <DialogDescription>
-                                Seleccione una plantilla para combinar con los datos de esta entrada
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="grid gap-4 grid-cols-2">
-                                {documents?.map((doc: any) => (
-                                  <Card key={doc.id}>
-                                    <CardHeader>
-                                      <CardTitle>{doc.name}</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                      <Button
-                                        onClick={() => {
-                                          mergeMutation.mutate({
-                                            documentId: doc.id,
-                                            entryId: selectedEntry!,
-                                          });
-                                        }}
-                                        disabled={mergeMutation.isPending}
-                                      >
-                                        {mergeMutation.isPending ? (
-                                          <Spinner variant="bounce" size="sm" className="mr-2" />
-                                        ) : null}
-                                        Merge with this template
-                                      </Button>
-                                    </CardContent>
-                                  </Card>
-                                ))}
-                              </div>
-                              {mergedResult && (
-                                <div className="space-y-4">
-                                  <div className="flex justify-between items-center">
-                                    <Label>Vista Previa</Label>
-                                    {selectedTemplate && (
-                                       <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleDownloadMerge(selectedTemplate.id, selectedEntry!)}
-                                      >
-                                        <FileDown className="mr-2 h-4 w-4" />
-                                        Descargar
-                                      </Button>
-                                    )}
-                                  </div>
-                                  <div 
-                                    className="p-4 border rounded-md bg-white"
-                                    style={{ 
-                                      minHeight: "200px",
-                                      maxHeight: "400px",
-                                      overflowY: "auto"
-                                    }}
-                                    dangerouslySetInnerHTML={{ __html: mergedResult }}
-                                  />
+                            <DialogContent className="max-w-2xl">
+                              <DialogHeader>
+                                <DialogTitle>Mail Merge</DialogTitle>
+                                 <DialogDescription>
+                                  Seleccione una plantilla para combinar con los datos de esta entrada
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div className="grid gap-4 grid-cols-2">
+                                  {documents?.map((doc: any) => (
+                                    <Card key={doc.id}>
+                                      <CardHeader>
+                                        <CardTitle>{doc.name}</CardTitle>
+                                      </CardHeader>
+                                      <CardContent>
+                                        <Button
+                                          onClick={() => {
+                                            mergeMutation.mutate({
+                                              documentId: doc.id,
+                                              entryId: selectedEntry!,
+                                            });
+                                          }}
+                                          disabled={mergeMutation.isPending}
+                                        >
+                                          {mergeMutation.isPending ? (
+                                            <Spinner variant="bounce" size="sm" className="mr-2" />
+                                          ) : null}
+                                          Merge with this template
+                                        </Button>
+                                      </CardContent>
+                                    </Card>
+                                  ))}
                                 </div>
-                              )}
-                            </div>
-                          </DialogContent>
+                                {mergedResult && (
+                                  <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                      <Label>Vista Previa</Label>
+                                      {selectedTemplate && (
+                                         <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleDownloadMerge(selectedTemplate.id, selectedEntry)}
+                                        >
+                                          <FileDown className="mr-2 h-4 w-4" />
+                                          Descargar
+                                        </Button>
+                                      )}
+                                    </div>
+                                    <div 
+                                      className="p-4 border rounded-md bg-white"
+                                      style={{ 
+                                        minHeight: "200px",
+                                        maxHeight: "400px",
+                                        overflowY: "auto"
+                                      }}
+                                      dangerouslySetInnerHTML={{ __html: mergedResult }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </DialogContent>
                           </Dialog>
                           <Button
                             variant="ghost"
@@ -918,7 +911,6 @@ export default function FormEntries() {
                          >
                            Ver Plantilla
                          </Button>
-```
                        </div>
                      </CardContent>
                    </Card>
@@ -931,7 +923,8 @@ export default function FormEntries() {
         <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{selectedTemplate?.name}</DialogTitle>          </DialogHeader>
+            <DialogTitle>{selectedTemplate?.name}</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Contenido de la Plantilla</Label>
