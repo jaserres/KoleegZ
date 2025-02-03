@@ -231,7 +231,6 @@ const previewStyles = `
 </style>`;
 
 
-
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
