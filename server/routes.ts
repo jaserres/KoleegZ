@@ -774,144 +774,170 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Entry not found");
       }
 
+      // Verificar que el archivo existe y es un DOCX
+      if (!doc.filePath.toLowerCase().endsWith('.docx')) {
+        return res.status(400).json({
+          error: "El archivo debe ser un documento DOCX"
+        });
+      }
+
       try {
         // Leer el archivo DOCX original
         const templateBuffer = await readFile(doc.filePath);
 
         console.log('Template buffer leído:', {
           size: templateBuffer.length,
-          isBuffer: Buffer.isBuffer(templateBuffer)
+          isBuffer: Buffer.isBuffer(templateBuffer),
+          firstBytes: templateBuffer.slice(0, 4).toString('hex')
         });
 
-        // Extraer texto del template para ver las variables
-        const textResult = await mammoth.extractRawText({
-          buffer: templateBuffer
-        });
+        // Verificar que el buffer es un archivo DOCX válido (comienza con PK)
+        if (templateBuffer[0] !== 0x50 || templateBuffer[1] !== 0x4B) {
+          throw new Error('El archivo template no es un DOCX válido');
+        }
 
-        console.log('Contenido del template:', textResult.value);
-
-        // Función para normalizar nombres de variables manteniendo espacios
-        const normalizeVariableName = (name: string): string => {
-          return name
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, ''); // Solo remover acentos, mantener espacios y mayúsculas
-        };
-
-        // Preparar datos para el merge normalizando nombres de variables
-        const mergeData = Object.entries(entry.values || {}).reduce((acc, [key, value]) => {
-          const normalizedValue = value !== null && value !== undefined ? String(value) : '';
-          const normalizedKey = key.toUpperCase() // Convertir a mayúsculas para coincidir con el template
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '') // Remover acentos
-            .replace(/_/g, ' '); // Reemplazar guiones bajos con espacios
-
-          // Guardar todas las variaciones posibles
-          acc[key] = normalizedValue; // Original
-          acc[normalizedKey] = normalizedValue; // Normalizada
-          acc[key.replace(/[_\s]/g, '')] = normalizedValue; // Sin espacios ni guiones
-          acc[normalizeVariableName(key)] = normalizedValue; // Solo sin acentos
-
-          return acc;
-        }, {} as Record<string, string>);
-
-        console.log('Datos preparados para merge:', {
-          originalKeys: Object.keys(entry.values || {}),
-          mergeDataKeys: Object.keys(mergeData),
-          mergeData
-        });
-
-        // Realizar el merge con opciones mínimas
-        const result = await createReport({
-          template: templateBuffer,
-          data: mergeData,
-          cmdDelimiter: ['{{', '}}'],
-          literalXmlDelimiter: '||',
-          failFast: false,
-          additionalJsContext: {
-            // Funciones básicas de formato
-            bold: (text: string) => `||<w:r><w:rPr><w:b/></w:rPr><w:t>${text}</w:t></w:r>||`,
-            italic: (text: string) => `||<w:r><w:rPr><w:i/></w:rPr><w:t>${text}</w:t></w:r>||`,
-            underline: (text: string) => `||<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>${text}</w:t></w:r>||`,
-            // Función para manejar valores undefined/null y normalizar variables
-            get: (obj: any, key: string) => {
-              const variations = [
-                key, // Original
-                key.toUpperCase(), // Mayúsculas
-                key.replace(/[_\s]/g, ''), // Sin espacios ni guiones
-                normalizeVariableName(key), // Sin acentos
-                key.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Mayúsculas sin acentos
-              ];
-
-              for (const variation of variations) {
-                if (obj[variation] !== undefined) {
-                  console.log(`Variable encontrada: ${key} -> ${variation}`);
-                  return obj[variation];
-                }
-              }
-
-              console.log(`No se encontró valor para la variable: ${key}`, {
-                intentados: variations,
-                disponibles: Object.keys(obj)
-              });
-              return '';
+        // Preparar datos para el merge
+        const mergeData: Record<string, any> = {};
+        Object.entries(entry.values || {}).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            // Mantener el tipo de dato original cuando sea posible
+            if (typeof value === 'number') {
+              mergeData[key] = value;
+            } else if (typeof value === 'boolean') {
+              mergeData[key] = value;
+            } else {
+              mergeData[key] = String(value);
             }
+          } else {
+            mergeData[key] = '';
           }
         });
 
-        if (!result) {
-          throw new Error('El resultado del merge es undefined');
-        }
-
-        const mergedBuffer = Buffer.from(result);
-
-        console.log('Merge completado exitosamente:', {
-          resultSize: mergedBuffer.length,
-          isBuffer: Buffer.isBuffer(mergedBuffer)
+        console.log('Realizando merge con datos:', {
+          templateSize: templateBuffer.length,
+          variables: Object.keys(mergeData)
         });
 
-        if (isDownload) {
-          const fileName = `${doc.name.replace(/\.docx$/, '')}-merged.docx`;
-          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-          res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-          return res.send(mergedBuffer);
-        } else {
-          const result = await mammoth.convertToHtml(
-            { buffer: mergedBuffer },
-            mammothOptions
-          );
+        // Realizar el merge preservando la estructura DOCX
+        let mergedBuffer: Buffer;
+        try {
+          // Asegurarnos de que el template es un Buffer válido
+          const validTemplateBuffer = Buffer.from(templateBuffer);
 
-          return res.json({
-            result: `${previewStyles}<div class="document-preview">${result.value}</div>`
+          // Realizar el merge con el buffer validado y opciones para preservar formato
+          const result = await createReport({
+            template: validTemplateBuffer,
+            data: mergeData,
+            cmdDelimiter: ['{{', '}}'],
+            failFast: false,
+            rejectNullish: false,
+            processLineBreaks: true,
+            processStyles: true,
+            processImages: true,
+            processHeadersAndFooters: true,
+            processHyperlinks: true,
+              processTables: true,
+              processListItems: true,
+              processPageBreaks: true,
+              preserveQuickStyles: true,
+              preserveNumbering: true,
+              preserveOutline: true,
+              processContentControls: true,
+              processSmartTags: true,
+            errorHandler: (error, cmdStr) => {
+              console.error('Error en comando durante merge:', { error, cmdStr });
+              return '';
+            },
+              additionalJsContext: {
+                  formatDate: (date: string) => {
+                      try {
+                          return new Date(date).toLocaleDateString();
+                      } catch (e) {
+                          return date;
+                      }
+                  },
+                  uppercase: (text: string) => String(text).toUpperCase(),
+                  lowercase: (text: string) => String(text).toLowerCase(),
+                formatNumber: (num: number) => {
+                  try {
+                    return new Intl.NumberFormat().format(num);
+                  } catch (e) {
+                    return String(num);
+                  }
+                }
+              }
           });
+
+          // Asegurarnos de que el resultado es un Buffer válido
+            mergedBuffer = Buffer.from(result);
+
+          console.log('Merge completado:', {
+            resultSize: mergedBuffer.length,
+            isBuffer: Buffer.isBuffer(mergedBuffer),
+            firstBytes: mergedBuffer.slice(0, 4).toString('hex')
+          });
+
+        } catch (createReportError: any) {
+          console.error('Errordetallado en createReport:', {
+            error: createReportError,
+            message: createReportError.message,
+            stack: createReportError.stack
+          });
+          throw new Error(`Error en createReport: ${createReportError.message}`);
         }
 
+        // Verificar que el resultado es un buffer válido
+        if (!Buffer.isBuffer(mergedBuffer) || mergedBuffer.length === 0) {
+          throw new Error('El resultado del merge no es un buffer válido');
+        }
+
+        // Verificar que el resultado es un DOCX válido
+        if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
+          throw new Error('El documento generado no es un DOCX válido');
+        }
+
+        if (isDownload) {
+          // Para descarga, enviar el archivo DOCX
+          const baseName = doc.name.toLowerCase().endsWith('.docx')
+            ? doc.name.slice(0, -5)
+            : doc.name;
+
+          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
+          return res.send(mergedBuffer);
+        } else {
+          // Para vista previa, convertir a HTML preservando todos los estilos
+          const result = await mammoth.convertToHtml(
+              { buffer: mergedBuffer },
+              mammothOptions
+          );
+
+            return res.json({
+                result: `${previewStyles}<div class="document-preview">${result.value}</div>`
+            });
+        }
       } catch (mergeError: any) {
-        console.error('Error específico en el merge:', {
-          name: mergeError.name,
+        console.error('Error en el merge:', {
+          error: mergeError,
           message: mergeError.message,
           stack: mergeError.stack,
-          commandError: mergeError.commandError,
-          data: mergeError.data
+          name: mergeError.name
         });
 
         return res.status(500).json({
           error: `Error en el proceso de merge: ${mergeError.message}`,
-          details: {
-            name: mergeError.name,
-            message: mergeError.message,
-            command: mergeError.commandError,
-            data: mergeError.data
-          }
+          details: mergeError.stack,
+          name: mergeError.name
         });
       }
     } catch (error: any) {
-      console.error('Error general:', {
-        name: error.name,
+      console.error('Error en el procesamiento:', {
+        error,
         message: error.message,
         stack: error.stack
       });
       return res.status(500).json({
-        error: `Error en el proceso: ${error.message}`,
+        error: `Error procesando el documento: ${error.message}`,
         details: error.stack
       });
     }
