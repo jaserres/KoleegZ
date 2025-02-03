@@ -519,9 +519,26 @@ export default function FormBuilder() {
                       </Card>
                     ))}
                   </div>
+
+                  {/* Botón de guardar formulario */}
+                  <div className="pt-6">
+                    <Button
+                      className="w-full"
+                      onClick={() => id ? updateFormMutation.mutate() : createFormMutation.mutate()}
+                      disabled={createFormMutation.isPending || updateFormMutation.isPending || !formName || variables.length === 0}
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      {id ? (
+                        updateFormMutation.isPending ? "Actualizando..." : "Actualizar Formulario"
+                      ) : (
+                        createFormMutation.isPending ? "Guardando..." : "Guardar Formulario"
+                      )}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 
+              {/* Vista previa del documento */}
               {previewContent?.thumbnailPath && (
                 <div className="lg:sticky lg:top-4 space-y-4">
                   <Card>
