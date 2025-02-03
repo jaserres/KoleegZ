@@ -298,6 +298,9 @@ export function registerRoutes(app: Express): Server {
       })
       .returning();
 
+    // NO creamos un nuevo documento aquí, ya que el documento se crea en /upload
+    // y mantiene su estructura original
+
     res.status(201).json(form);
   });
 
@@ -491,6 +494,7 @@ export function registerRoutes(app: Express): Server {
           mammothOptions
         );
 
+        // Solo guardamos el texto para identificar variables
         template = textResult.value;
         preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
 
@@ -520,12 +524,13 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
+      // Guardamos la referencia al documento original y el texto para variables
       const docData = {
         formId,
         name: file.originalname,
-        template,
+        template, // Solo texto para variables
         preview,
-        filePath
+        filePath  // Ruta al archivo original
       };
 
       console.log('Guardando documento en la base de datos:', {
