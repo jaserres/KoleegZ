@@ -471,7 +471,11 @@ export default function FormEntries() {
     };
 
   const handleCreateFormFromTemplate = () => {
-    if (detectedVariables.length === 0 && (!previewContent?.variables || previewContent.variables.length === 0)) {
+    // Obtener todas las variables disponibles
+    const hasInitialVariables = detectedVariables.length > 0;
+    const hasOCRVariables = previewContent?.extractedVariables && previewContent.extractedVariables.length > 0;
+
+    if (!hasInitialVariables && !hasOCRVariables) {
       toast({
         title: "Error",
         description: "No se detectaron variables en la plantilla",
@@ -480,10 +484,22 @@ export default function FormEntries() {
       return;
     }
 
+    // Convertir las variables de OCR al formato correcto
+    const ocrVariables = previewContent?.extractedVariables 
+      ? previewContent.extractedVariables.map(varName => ({
+          name: varName,
+          label: varName
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' '),
+          type: 'text'
+        }))
+      : [];
+
     // Combinar todas las variables detectadas
     const allVariables = [
       ...detectedVariables,
-      ...(previewContent?.variables || [])
+      ...ocrVariables
     ];
 
     // Eliminar duplicados basados en el nombre de la variable
@@ -885,8 +901,7 @@ export default function FormEntries() {
                           {entry.values[variable.name]}
                         </TableCell>
                       ))}
-                      <TableCell className="whitespace-nowrap">
-                        {format(new Date(entry.createdAt), "PPp")}
+                      <TableCell className="whitespace-nowrap">{format(new Date(entry.createdAt), "PPp")}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex gap-2">
