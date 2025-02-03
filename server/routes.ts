@@ -783,6 +783,13 @@ export function registerRoutes(app: Express): Server {
           isBuffer: Buffer.isBuffer(templateBuffer)
         });
 
+        // Extraer texto del template para ver las variables
+        const textResult = await mammoth.extractRawText({
+          buffer: templateBuffer
+        });
+
+        console.log('Contenido del template:', textResult.value);
+
         // Función para normalizar nombres de variables
         const normalizeVariableName = (name: string): string => {
           return name
@@ -790,20 +797,27 @@ export function registerRoutes(app: Express): Server {
             .replace(/[\u0300-\u036f]/g, '') // Remover acentos
             .replace(/[^\w]/g, '_') // Reemplazar caracteres no alfanuméricos con _
             .replace(/_+/g, '_') // Reemplazar múltiples _ con uno solo
+            .toLowerCase() // Convertir a minúsculas para consistencia
             .trim();
         };
 
         // Preparar datos para el merge normalizando nombres de variables
         const mergeData = Object.entries(entry.values || {}).reduce((acc, [key, value]) => {
-          // Guardar tanto la versión normalizada como la original
-          acc[key] = value !== null && value !== undefined ? String(value) : '';
-          acc[normalizeVariableName(key)] = value !== null && value !== undefined ? String(value) : '';
+          const normalizedValue = value !== null && value !== undefined ? String(value) : '';
+          // Guardar la variable con su nombre original
+          acc[key] = normalizedValue;
+          // Guardar la variable con nombre normalizado
+          acc[normalizeVariableName(key)] = normalizedValue;
+          // Guardar también versiones sin espacios y sin acentos
+          acc[key.replace(/\s+/g, '')] = normalizedValue;
+          acc[key.normalize('NFD').replace(/[\u0300-\u036f]/g, '')] = normalizedValue;
           return acc;
         }, {} as Record<string, string>);
 
         console.log('Datos preparados para merge:', {
           originalKeys: Object.keys(entry.values || {}),
-          mergeDataKeys: Object.keys(mergeData)
+          mergeDataKeys: Object.keys(mergeData),
+          mergeData
         });
 
         // Realizar el merge con opciones mínimas
@@ -812,7 +826,7 @@ export function registerRoutes(app: Express): Server {
           data: mergeData,
           cmdDelimiter: ['{{', '}}'],
           literalXmlDelimiter: '||',
-          failFast: true,
+          failFast: false, // Cambiar a false para ver todos los errores
           additionalJsContext: {
             // Funciones básicas de formato
             bold: (text: string) => `||<w:r><w:rPr><w:b/></w:rPr><w:t>${text}</w:t></w:r>||`,
@@ -820,11 +834,21 @@ export function registerRoutes(app: Express): Server {
             underline: (text: string) => `||<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>${text}</w:t></w:r>||`,
             // Función para manejar valores undefined/null y normalizar variables
             get: (obj: any, key: string) => {
-              // Intentar con la clave original primero
-              if (obj[key] !== undefined) return obj[key];
-              // Si no se encuentra, intentar con la versión normalizada
-              const normalizedKey = normalizeVariableName(key);
-              return obj[normalizedKey] !== undefined ? obj[normalizedKey] : '';
+              // Intentar con varias versiones de la clave
+              const variations = [
+                key,
+                normalizeVariableName(key),
+                key.replace(/\s+/g, ''),
+                key.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+              ];
+
+              for (const variation of variations) {
+                if (obj[variation] !== undefined) {
+                  return obj[variation];
+                }
+              }
+              console.log(`No se encontró valor para la variable: ${key}, variaciones intentadas:`, variations);
+              return '';
             },
             // Función helper para debugging
             debug: (value: any) => {
@@ -839,10 +863,6 @@ export function registerRoutes(app: Express): Server {
         }
 
         const mergedBuffer = Buffer.from(result);
-
-        if (!Buffer.isBuffer(mergedBuffer) || mergedBuffer.length === 0) {
-          throw new Error('El resultado del merge no es un buffer válido');
-        }
 
         console.log('Merge completado exitosamente:', {
           resultSize: mergedBuffer.length,
