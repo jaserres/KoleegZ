@@ -290,6 +290,7 @@ export function registerRoutes(app: Express): Server {
       return res.status(403).send(`Free users can only create ${limit} forms`);
     }
 
+    // Crear solo el formulario, sin crear documentos
     const [form] = await db.insert(forms)
       .values({
         userId: user.id,
@@ -297,9 +298,6 @@ export function registerRoutes(app: Express): Server {
         theme: req.body.theme || { primary: "#64748b", variant: "default" }
       })
       .returning();
-
-    // NO creamos un nuevo documento aquí, ya que el documento se crea en /upload
-    // y mantiene su estructura original
 
     res.status(201).json(form);
   });
