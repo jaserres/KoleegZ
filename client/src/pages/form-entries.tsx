@@ -786,20 +786,29 @@ export default function FormEntries() {
                               </div>
                             </div>
                           </div>
-                          {detectedVariables.length > 0 && (
-                            <div className="space-y-2">
-                              <Label>Variables Detectadas</Label>
-                              <div className="bg-muted p-4 rounded-md max-h-[120px] overflow-y-auto">
-                                <ul className="list-disc list-inside space-y-1">
-                                  {detectedVariables.map((variable, index) => (
-                                    <li key={index} className="text-sm">
-                                      {variable.label} ({variable.name})
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </div>
-                          )}
+                          {(detectedVariables.length > 0 || (previewContent?.extractedVariables && previewContent.extractedVariables.length > 0)) && (
+                             <div className="space-y-2">
+                               <Label>Variables Detectadas</Label>
+                               <div className="bg-muted p-4 rounded-md max-h-[120px] overflow-y-auto">
+                                 <ul className="list-disc list-inside space-y-1">
+                                   {/* Mostrar variables detectadas inicialmente */}
+                                   {detectedVariables.map((variable, index) => (
+                                     <li key={`initial-${index}`} className="text-sm">
+                                       {variable.label} ({variable.name})
+                                     </li>
+                                   ))}
+                                   {/* Mostrar variables detectadas por OCR */}
+                                   {previewContent?.extractedVariables && previewContent.extractedVariables.map((varName: string, index: number) => (
+                                     <li key={`ocr-${index}`} className="text-sm">
+                                       {varName.split('_')
+                                         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                         .join(' ')} ({varName})
+                                     </li>
+                                   ))}
+                                 </ul>
+                               </div>
+                             </div>
+                           )}
                            {previewContent?.thumbnailPath && (
                             <div className="space-y-2">
                               <Label>Opciones de OCR</Label>
@@ -894,7 +903,7 @@ export default function FormEntries() {
                                       <CardContent>
                                         <Button
                                           onClick={() => {
-                                            mergeMutation.mutate({
+                                                                                        mergeMutation.mutate({
                                               documentId: doc.id,
                                               entryId: selectedEntry!,
                                             });
