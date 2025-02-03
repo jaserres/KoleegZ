@@ -593,15 +593,16 @@ export function registerRoutes(app: Express): Server {
 
       // Realizar el merge con manejo de errores más detallado
       try {
-        // Sanitizar el template para evitar interpretación incorrecta de comandos
         const mergedBuffer = await createReport({
           template: documentBuffer,
           data: mergeData,
-          cmdDelimiter: ['{{', '}}'], // Usar los delimitadores que coinciden con el formato del documento
+          cmdDelimiter: ['{{', '}}'],
           failFast: false,
           rejectNullish: false,
           fixSmartQuotes: true,
           processLineBreaks: true,
+          processStyles: true, // Activar procesamiento de estilos
+          preserveFormatting: true, // Preservar formato
           errorHandler: (error, cmdStr) => {
             console.error('Error en comando:', { error, cmdStr });
             return ''; // Retornar string vacío en caso de error
@@ -611,8 +612,13 @@ export function registerRoutes(app: Express): Server {
         console.log('Merge completado exitosamente');
 
         if (isDownload) {
+          // Asegurarse de que el nombre del archivo tenga solo una extensión .docx
+          const baseName = doc.name.toLowerCase().endsWith('.docx') 
+            ? doc.name.slice(0, -5) 
+            : doc.name;
+
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-          res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+          res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
           return res.send(mergedBuffer);
         } else {
           const result = await mammoth.convertToHtml({
