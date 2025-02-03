@@ -84,7 +84,12 @@ export default function FormEntries() {
     enabled: !!id,
   });
 
-  const { data: documents = [] } = useQuery({
+  const { data: documents = [] } = useQuery<Array<{
+    id: number;
+    name: string;
+    template: string;
+    originalTemplate: string;
+  }>>({
     queryKey: [`/api/forms/${id}/documents`],
     enabled: !!id,
   });
@@ -911,31 +916,37 @@ export default function FormEntries() {
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div className="grid gap-4 grid-cols-2">
-                                  {documents?.map((doc: any) => (
-                                    <Card key={doc.id}>
-                                      <CardHeader>
-                                        <CardTitle>{doc.name}</CardTitle>
-                                      </CardHeader>
-                                      <CardContent>
-                                        <Button
-                                          variant="outline"
-                                          className="w-full"
-                                          onClick={() => {
-                                            mergeMutation.mutate({
-                                              documentId: doc.id,
-                                              entryId: entry.id,
-                                            });
-                                            setSelectedTemplate(doc);
-                                          }}                                          disabled={mergeMutation.isPending}
-                                        >
-                                          {mergeMutation.isPending ? (
-                                            <Spinner variant="dots" size="sm" className="mr-2"/>
-                                          ) : null}
-                                          Merge with this template
-                                        </Button>
-                                      </CardContent>
-                                    </Card>
-                                  ))}
+                                  {documents && documents.length > 0 ? (
+                                    documents.map((doc) => (
+                                      <Card key={doc.id}>
+                                        <CardHeader>
+                                          <CardTitle>{doc.name}</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                          <Button
+                                            variant="outline"
+                                            onClick={() => {
+                                              mergeMutation.mutate({
+                                                documentId: doc.id,
+                                                entryId: entry.id,
+                                              });
+                                              setSelectedTemplate(doc);
+                                            }}
+                                            disabled={mergeMutation.isPending}
+                                          >
+                                            {mergeMutation.isPending ? (
+                                              <Spinner variant="dots" size="sm" className="mr-2"/>
+                                            ) : null}
+                                            Merge with this template
+                                          </Button>
+                                        </CardContent>
+                                      </Card>
+                                    ))
+                                  ) : (
+                                    <div className="text-center py-4 text-muted-foreground">
+                                      No hay plantillas disponibles
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                               {mergedResult && (
