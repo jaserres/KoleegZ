@@ -796,6 +796,18 @@ export function registerRoutes(app: Express): Server {
           throw new Error('El archivo template no es un DOCX válido');
         }
 
+        // Crear una copia temporal del documento original para el merge
+        const tempFileName = `merge-${Date.now()}-${doc.name}`;
+        await saveFile(originalBuffer, tempFileName);
+
+        // Leer la copia temporal para el merge
+        const workingBuffer = await readFile(tempFileName);
+        console.log('Copia de trabajo creada:', {
+          originalSize: originalBuffer.length,
+          workingSize: workingBuffer.length,
+          tempFile: tempFileName
+        });
+
         // Preparar datos para el merge
         const mergeData: Record<string, any> = {};
         Object.entries(entry.values || {}).forEach(([key, value]) => {
@@ -817,12 +829,11 @@ export function registerRoutes(app: Express): Server {
           variables: Object.keys(mergeData)
         });
 
-        // Realizar el merge preservando la estructura DOCX
+        // Realizar el merge sobre la copia temporal
         let mergedBuffer: Buffer;
         try {
-          // Configuración mejorada para preservar estructura XML
           const result = await createReport({
-            template: originalBuffer,
+            template: workingBuffer,
             data: mergeData,
             cmdDelimiter: ['{{', '}}'],
             failFast: false,
@@ -880,9 +891,9 @@ export function registerRoutes(app: Express): Server {
               ratio: mergedBuffer.length / originalBuffer.length
             });
 
-            // Si hay pérdida significativa, usar el archivo original
-            console.log('Pérdida de datos detectada, usando archivo original...');
-            mergedBuffer = originalBuffer;
+            // Si hay pérdida significativa, usar la copia temporal
+            console.log('Pérdida de datos detectada, usando copia temporal...');
+            mergedBuffer = workingBuffer;
           }
 
         } catch (createReportError: any) {
@@ -904,6 +915,14 @@ export function registerRoutes(app: Express): Server {
           throw new Error('El documento generado no es un DOCX válido');
         }
 
+        // Log final antes de enviar
+        console.log('Enviando archivo merged:', {
+          filename: `${doc.name}-merged.docx`,
+          size: mergedBuffer.length,
+          originalSize: originalBuffer.length,
+          ratio: (mergedBuffer.length / originalBuffer.length).toFixed(2)
+        });
+
         if (isDownload) {
           // Para descarga, enviar el archivo DOCX
           const baseName = doc.name.toLowerCase().endsWith('.docx')
@@ -912,15 +931,6 @@ export function registerRoutes(app: Express): Server {
 
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
           res.setHeader('Content-Disposition', `attachment; filename="${baseName}-merged.docx"`);
-
-          // Log final antes de enviar
-          console.log('Enviando archivo merged:', {
-            filename: `${baseName}-merged.docx`,
-            size: mergedBuffer.length,
-            originalSize: originalBuffer.length,
-            ratio: (mergedBuffer.length / originalBuffer.length).toFixed(2)
-          });
-
           return res.send(mergedBuffer);
         } else {
           // Para vista previa, convertir a HTML preservando todos los estilos
@@ -937,19 +947,19 @@ export function registerRoutes(app: Express): Server {
             result: `${previewStyles}<div class="document-preview">${result.value}</div>`
           });
         }
-      } catch (mergeError: any) {
-        console.error('Error en el merge:', {
-          error: mergeError,
-          message: mergeError.message,
-          stack: mergeError.stack,
-          name: mergeError.name
-        });
-
-        return res.status(500).json({
-          error: `Error en el proceso de merge: ${mergeError.message}`,
-          details: mergeError.stack,
-          name: mergeError.name
-        });
+      } finally {
+        // Limpiar el archivo temporal si existe
+        try {
+          const tempFiles = await fs.readdir('.');
+          for (const file of tempFiles) {
+            if (file.startsWith('merge-') && file.includes(doc.name)) {
+              await deleteFile(file);
+              console.log('Archivo temporal eliminado:', file);
+            }
+          }
+        } catch (cleanupError) {
+          console.error('Error limpiando archivos temporales:', cleanupError);
+        }
       }
     } catch (error: any) {
       console.error('Error en el procesamiento:', {
