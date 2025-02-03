@@ -818,27 +818,30 @@ export function registerRoutes(app: Express): Server {
           throw new Error('La copia temporal no coincide con el archivo original');
         }
 
-        // Preparar datos para el merge
+        // Preparar datos para el merge verificando tipos
         const mergeData: Record<string, any> = {};
         Object.entries(entry.values || {}).forEach(([key, value]) => {
           if (value !== undefined && value !== null) {
             if (typeof value === 'number') {
-              mergeData[key] = value;
+              mergeData[key] = value.toString(); // Convertir números a strings para el merge
             } else if (typeof value === 'boolean') {
-              mergeData[key] = value;
+              mergeData[key] = value.toString(); // Convertir booleanos a strings
             } else {
-              mergeData[key] = String(value);
+              mergeData[key] = String(value); // Asegurar que todo sea string
             }
           } else {
-            mergeData[key] = '';
+            mergeData[key] = ''; // Valor vacío para null/undefined
           }
+        });
+
+        console.log('Datos preparados para merge:', {
+          variables: Object.keys(mergeData).length,
+          exampleValues: Object.entries(mergeData).slice(0, 3)
         });
 
         // Realizar el merge sobre la copia temporal
         let mergedBuffer: Buffer;
         try {
-          console.log('Iniciando merge con buffer de tamaño:', copiedBuffer.length);
-
           const result = await createReport({
             template: copiedBuffer,
             data: mergeData,
@@ -847,71 +850,32 @@ export function registerRoutes(app: Express): Server {
             rejectNullish: false,
             linebreaks: true,
             processLineBreaks: true,
-            processImages: true,
-            processHeadersAndFooters: true,
-            processHyperlinks: true,
-            processTables: true,
-            preserveQuickStyles: true,
-            preserveNumbering: true,
-            preserveOutline: true,
-            processContentControls: true,
-            processSmartTags: true
+            processImages: true
           });
 
           mergedBuffer = Buffer.from(result);
 
           console.log('Resultado del merge:', {
             originalSize: originalBuffer.length,
-            copiedSize: copiedBuffer.length,
             mergedSize: mergedBuffer.length,
             ratio: (mergedBuffer.length / originalBuffer.length).toFixed(4)
           });
 
-          // Si el archivo merged es significativamente más pequeño, usar la copia temporal
+          // Verificar que el merge se realizó correctamente
           if (mergedBuffer.length < originalBuffer.length * 0.8) {
-            console.warn('El archivo merged es demasiado pequeño, usando copia temporal:', {
-              originalSize: originalBuffer.length,
-              mergedSize: mergedBuffer.length,
-              ratio: mergedBuffer.length / originalBuffer.length
-            });
-
-            // Usar la copia temporal en lugar del resultado del merge
-            mergedBuffer = Buffer.from(copiedBuffer);
-
-            console.log('Usando copia temporal como respaldo:', {
-              finalSize: mergedBuffer.length,
-              ratio: (mergedBuffer.length / originalBuffer.length).toFixed(4)
-            });
+            throw new Error('El merge generó un archivo demasiado pequeño');
           }
 
-        } catch (createReportError: any) {
-          console.error('Error detallado en createReport:', {
-            error: createReportError,
-            message: createReportError.message,
-            stack: createReportError.stack
-          });
+          // Verificar que es un DOCX válido
+          if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
+            throw new Error('El resultado del merge no es un DOCX válido');
+          }
 
-          // En caso de error en el merge, usar la copia temporal
-          mergedBuffer = Buffer.from(copiedBuffer);
-          console.log('Error en merge, usando copia temporal:', {
-            finalSize: mergedBuffer.length
-          });
+        } catch (mergeError: any) {
+          console.error('Error en merge, usando copia sin procesar:', mergeError);
+          // Si falla el merge, usar la copia sin procesar
+          mergedBuffer = copiedBuffer;
         }
-
-        // Verificaciones finales
-        if (!Buffer.isBuffer(mergedBuffer) || mergedBuffer.length === 0) {
-          throw new Error('El resultado final no es un buffer válido');
-        }
-
-        if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
-          throw new Error('El documento final no es un DOCX válido');
-        }
-
-        console.log('Documento final preparado:', {
-          originalSize: originalBuffer.length,
-          finalSize: mergedBuffer.length,
-          ratio: (mergedBuffer.length / originalBuffer.length).toFixed(4)
-        });
 
         if (isDownload) {
           const baseName = doc.name.toLowerCase().endsWith('.docx')
