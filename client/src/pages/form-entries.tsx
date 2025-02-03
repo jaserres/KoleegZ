@@ -52,6 +52,7 @@ export default function FormEntries() {
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   const [detectedVariables, setDetectedVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
+  const [allVariables, setAllVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -290,6 +291,12 @@ export default function FormEntries() {
       return variables;
     };
 
+    // Función auxiliar para unificar variables
+  const unifyVariables = (initial: Array<{name: string, label: string, type: string}>, ocr: Array<{name: string, label: string, type: string}> = []) => {
+    const combined = [...initial, ...ocr];
+    return Array.from(new Map(combined.map(v => [v.name, v])).values());
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -323,7 +330,8 @@ export default function FormEntries() {
 
         const doc = await response.json();
 
-        // Convertir inmediatamente las variables OCR al formato correcto
+        // Detectar todas las variables (tanto del template como del OCR)
+        const templateVariables = extractVariables(doc.template);
         const ocrVariables = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
           name: varName,
           label: varName
@@ -333,17 +341,28 @@ export default function FormEntries() {
           type: 'text'
         })) : [];
 
+        // Combinar todas las variables en un solo array
+        const combinedVariables = [...templateVariables, ...ocrVariables];
+        const uniqueVariables = Array.from(
+          new Map(combinedVariables.map(v => [v.name, v])).values()
+        );
+
+        // Actualizar el estado con todas las variables unificadas
+        setAllVariables(uniqueVariables);
         setPreviewContent({
           ...doc,
-          variables: ocrVariables  // Guardar las variables ya formateadas
+          variables: uniqueVariables,
+          extractedVariables: uniqueVariables.map(v => v.name)
         });
 
         setDocumentTemplate(doc.template);
-        setDetectedVariables(extractVariables(doc.template));
+        setDocumentName(documentName || file.name.split('.')[0]);
 
-        if (!documentName) {
-          setDocumentName(file.name.split('.')[0]);
-        }
+        console.log('Variables detectadas:', {
+          template: templateVariables.length,
+          ocr: ocrVariables.length,
+          total: uniqueVariables.length
+        });
       } catch (error) {
         console.error('Error al cargar archivo:', error);
         toast({
@@ -422,37 +441,33 @@ export default function FormEntries() {
         const result = await response.json();
 
         if (result.extractedVariables && result.extractedVariables.length > 0) {
-          // Convertir las nuevas variables extraídas al formato correcto
-          const newVariables = result.extractedVariables.map((varName: string) => ({
+          // Convertir las nuevas variables OCR al formato correcto
+          const newOCRVariables = result.extractedVariables.map((varName: string) => ({
             name: varName,
             label: varName
               .split('_')
-              .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
               .join(' '),
             type: 'text'
           }));
 
-          // Combinar variables existentes con nuevas, evitando duplicados por nombre
-          const existingVarNames = new Set(previewContent.variables.map(v => v.name));
-          const uniqueNewVars = newVariables.filter(v => !existingVarNames.has(v.name));
+          // Combinar con las variables existentes
+          const combinedVariables = [...allVariables, ...newOCRVariables];
+          const uniqueVariables = Array.from(
+            new Map(combinedVariables.map(v => [v.name, v])).values()
+          );
 
-          const updatedVariables = [...previewContent.variables, ...uniqueNewVars];
-          const updatedExtractedVarNames = [
-            ...(previewContent.extractedVariables || []),
-            ...result.extractedVariables.filter(
-              (v: string) => !(previewContent.extractedVariables || []).includes(v)
-            )
-          ];
-
+          // Actualizar el estado con las nuevas variables
+          setAllVariables(uniqueVariables);
           setPreviewContent({
             ...previewContent,
-            variables: updatedVariables,
-            extractedVariables: updatedExtractedVarNames
+            variables: uniqueVariables,
+            extractedVariables: uniqueVariables.map(v => v.name)
           });
 
           toast({
             title: "Variables Detectadas",
-            description: `Se encontraron ${uniqueNewVars.length} nuevas variables.`
+            description: `Se encontraron ${result.extractedVariables.length} nuevas variables.`
           });
         } else {
           toast({
@@ -472,20 +487,17 @@ export default function FormEntries() {
     };
 
   const handleCreateFormFromTemplate = () => {
-    // Obtener todas las variables disponibles
-    const initialVariables = detectedVariables;
-    const ocrVariables = previewContent?.variables || [];
+    if (allVariables.length === 0) {
+      toast({
+        title: "Error",
+        description: "No se detectaron variables en la plantilla",
+        variant: "destructive"
+      });
+      return;
+    }
 
-    // Combinar todas las variables detectadas
-    const allVariables = [...initialVariables, ...ocrVariables];
-
-    // Eliminar duplicados basados en el nombre de la variable
-    const uniqueVariables = Array.from(
-      new Map(allVariables.map(v => [v.name, v])).values()
-    );
-
-    // Check if number of variables exceeds limit
-    if (uniqueVariables.length > variableLimit) {
+    // Verificar límite de variables
+    if (allVariables.length > variableLimit) {
       toast({
         title: "Límite de variables excedido",
         description: `Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`,
@@ -494,22 +506,21 @@ export default function FormEntries() {
       return;
     }
 
-    // Store template data in sessionStorage
+    // Almacenar los datos de la plantilla en sessionStorage
     const templateData = {
       name: documentName,
-      variables: uniqueVariables,
+      variables: allVariables,
       template: documentTemplate,
       preview: documentTemplate,
       filePath: previewContent?.filePath || null,
       thumbnailPath: previewContent?.thumbnailPath || null,
-      extractedVariables: previewContent?.extractedVariables || []
+      extractedVariables: allVariables.map(v => v.name)
     };
 
     console.log('Guardando datos de plantilla:', {
       name: templateData.name,
       variablesCount: templateData.variables.length,
-      variables: templateData.variables,
-      ocr_variables: ocrVariables.length
+      variables: templateData.variables
     });
 
     sessionStorage.setItem("selectedTemplate", JSON.stringify(templateData));
@@ -833,7 +844,7 @@ export default function FormEntries() {
                       <Button
                         variant="outline"
                         onClick={handleCreateFormFromTemplate}
-                        disabled={detectedVariables.length === 0 && (!previewContent?.variables || previewContent.variables.length === 0)}
+                        disabled={allVariables.length === 0}
                       >
                         <Wand2 className="mr-2 h-4 w-4" />
                         Crear Form
@@ -893,9 +904,9 @@ export default function FormEntries() {
                             </DialogTrigger>
                             <DialogContent className="max-w-2xl">
                               <DialogHeader>
-                                <DialogTitle>Mail Merge</DialogTitle>
-                                 <DialogDescription>
-                                  Seleccione una plantilla para combinar con los datos de esta entrada
+                                <DialogTitle>Seleccionar Plantilla</DialogTitle>
+                                <DialogDescription>
+                                  Seleccione una plantilla para generar el documento
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
@@ -907,16 +918,19 @@ export default function FormEntries() {
                                       </CardHeader>
                                       <CardContent>
                                         <Button
+                                          variant="outline"
+                                          className="w-full"
                                           onClick={() => {
-                                                                                        mergeMutation.mutate({
+                                            mergeMutation.mutate({
                                               documentId: doc.id,
-                                              entryId: selectedEntry!,
+                                              entryId: entry.id,
                                             });
+                                            setSelectedTemplate(doc);
                                           }}
                                           disabled={mergeMutation.isPending}
                                         >
                                           {mergeMutation.isPending ? (
-                                            <Spinner variant="bounce" size="sm" className="mr-2" />
+                                            <Spinner variant="dots" size="sm" className="mr-2" />
                                           ) : null}
                                           Merge with this template
                                         </Button>
@@ -924,6 +938,7 @@ export default function FormEntries() {
                                     </Card>
                                   ))}
                                 </div>
+                              </div>
                                 {mergedResult && (
                                   <div className="space-y-4">
                                     <div className="flex justify-between items-center">
@@ -950,7 +965,6 @@ export default function FormEntries() {
                                     />
                                   </div>
                                 )}
-                              </div>
                             </DialogContent>
                           </Dialog>
                           <Button
