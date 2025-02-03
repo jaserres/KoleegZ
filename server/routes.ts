@@ -275,7 +275,7 @@ export function registerRoutes(app: Express): Server {
         console.log('Procesando archivo DOCX...');
 
         // Guardar el archivo DOCX original
-        filePath = await saveFile(file.buffer, file.originalname);
+        filePath = await saveFile(Buffer.from(file.buffer), file.originalname);
 
         try {
           // Extraer el contenido preservando el formato para la vista previa
@@ -287,14 +287,27 @@ export function registerRoutes(app: Express): Server {
                 "p[style-name='Heading 1'] => h1:fresh",
                 "p[style-name='Heading 2'] => h2:fresh",
                 "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
+                 "r[style-name='Strong'] => strong",
+                "r[style-name='Emphasis'] => em",
+                 "r[style-name='style1'] => strong",
+                "r[style-name='style2'] => em",
                 "b => strong",
                 "i => em",
                 "u => u",
                 "strike => s",
-                "tab => span.tab"
+                "tab => span.tab",
+                "br => br",
+                "table => table",
+                "tr => tr",
+                "td => td",
+                "p[style-name='Footer'] => div.footer > p:fresh",
+                "p[style-name='Header'] => div.header > p:fresh"
               ],
               includeDefaultStyleMap: true,
-              preserveEmptyParagraphs: true
+              transformDocument: (element) => {
+                // Preservar todos los estilos originales
+                return element;
+              }
             }
           );
 
@@ -318,7 +331,7 @@ export function registerRoutes(app: Express): Server {
         // Para archivos .txt (mantenemos este caso por compatibilidad)
         template = file.buffer.toString('utf-8');
         preview = template;
-        filePath = await saveFile(file.buffer, file.originalname);
+        filePath = await saveFile(Buffer.from(file.buffer), file.originalname);
       }
 
       // Si es una carga temporal, devolver el contenido
@@ -697,7 +710,7 @@ export function registerRoutes(app: Express): Server {
           res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
           return res.send(mergedBuffer);
         } else {
-          // Para vista previa, convertir a HTML preservando el formato
+          // Para vista previa, convertir a HTML
           const result = await mammoth.convertToHtml(
             { buffer: mergedBuffer },
             {
@@ -725,7 +738,11 @@ export function registerRoutes(app: Express): Server {
               ],
               includeDefaultStyleMap: true,
               preserveEmptyParagraphs: true,
-              ignoreEmptyParagraphs: false
+              ignoreEmptyParagraphs: false,
+              transformDocument: (element) => {
+                // Preservar todos los estilos originales
+                return element;
+              }
             }
           );
 
