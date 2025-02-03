@@ -18,14 +18,13 @@ import { Buffer } from 'buffer';
 const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
-    const allowedTypes = [
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword'
-    ];
-    if (allowedTypes.includes(file.mimetype)) {
+    // Aceptar cualquier tipo de documento de Word
+    if (file.mimetype.includes('word') || 
+        file.originalname.toLowerCase().endsWith('.doc') || 
+        file.originalname.toLowerCase().endsWith('.docx')) {
       cb(null, true);
     } else {
-      cb(new Error('Solo se permiten archivos .doc y .docx'));
+      cb(new Error('Por favor sube un documento de Word (.doc o .docx)'));
     }
   }
 });
@@ -272,103 +271,109 @@ export function registerRoutes(app: Express): Server {
       let preview = '';
       let filePath = '';
 
-      if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        console.log('Procesando archivo DOCX...');
+      try {
+        console.log('Procesando documento Word...');
 
-        // Guardar el archivo DOCX original asegurando que es un buffer válido
-        filePath = await saveFile(Buffer.from(file.buffer), file.originalname);
+        // Asegurar que tenemos un buffer válido
+        const validBuffer = Buffer.from(file.buffer);
 
-        try {
-          // Extraer el contenido preservando el formato para la vista previa
-          const htmlResult = await mammoth.convertToHtml(
-            { buffer: file.buffer },
-            {
-              styleMap: [
-                "p[style-name='Normal'] => p:fresh",
-                "p[style-name='Heading 1'] => h1:fresh",
-                "p[style-name='Heading 2'] => h2:fresh",
-                "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
-                "r[style-name='Strong'] => strong",
-                "r[style-name='Emphasis'] => em",
-                 "r[style-name='style1'] => strong",
-                "r[style-name='style2'] => em",
-                "b => strong",
-                "i => em",
-                "u => u",
-                "strike => s",
-                "tab => span.tab",
-                "br => br",
-                "table => table",
-                "tr => tr",
-                "td => td",
-                "p[style-name='Footer'] => div.footer > p:fresh",
-                "p[style-name='Header'] => div.header > p:fresh"
-              ],
-              includeDefaultStyleMap: true,
-              transformDocument: (element) => {
-                // Preservar todos los estilos originales
-                 if (element.type === 'paragraph' && element.styleId) {
-                  element.alignment = element.styleId.alignment;
-                  element.indent = element.styleId.indent;
-                  element.numbering = element.styleId.numbering;
-                  element.styleId = element.styleId.name;
-                }
-                if (element.type === 'run' && element.styleId) {
-                  element.isBold = element.styleId.bold;
-                  element.isItalic = element.styleId.italic;
-                  element.isUnderline = element.styleId.underline;
-                  element.font = element.styleId.font;
-                  element.size = element.styleId.size;
-                  element.color = element.styleId.color;
-                }
-                return element;
-              },
-              convertImage: mammoth.images.imgElement((image) => {
-                return image.read("base64").then((imageData) => {
-                  const contentType = image.contentType || 'image/png';
-                  return {
-                    src: `data:${contentType};base64,${imageData}`,
-                    alt: image.altText || ''
-                  };
-                });
-              })
-            }
-          );
+        // Guardar el archivo original
+        filePath = await saveFile(validBuffer, file.originalname);
 
-          // Extraer texto para búsqueda de variables manteniendo el formato
-          const textResult = await mammoth.extractRawText({ 
-            buffer: file.buffer,
-            defaultCharacterEncoding: 'utf-8'
-          });
-
-          template = textResult.value;
-          preview = htmlResult.value;
-
-          // Registrar cualquier warning durante el proceso
-          if (htmlResult.messages.length > 0) {
-            console.log('Warnings durante la conversión:', htmlResult.messages);
+        // Extraer el contenido preservando el formato
+        const htmlResult = await mammoth.convertToHtml(
+          { buffer: validBuffer },
+          {
+            styleMap: [
+              "p[style-name='Normal'] => p:fresh",
+              "p[style-name='Heading 1'] => h1:fresh",
+              "p[style-name='Heading 2'] => h2:fresh",
+              "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
+              "r[style-name='Strong'] => strong",
+              "r[style-name='Emphasis'] => em",
+              "r[style-name='style1'] => strong",
+              "r[style-name='style2'] => em",
+              "b => strong",
+              "i => em",
+              "u => u",
+              "strike => s",
+              "tab => span.tab",
+              "br => br",
+              "table => table",
+              "tr => tr",
+              "td => td",
+              "p[style-name='Footer'] => div.footer > p:fresh",
+              "p[style-name='Header'] => div.header > p:fresh"
+            ],
+            includeDefaultStyleMap: true,
+            transformDocument: (element) => {
+              // Preservar todos los estilos originales
+              if (element.type === 'paragraph' && element.styleId) {
+                element.alignment = element.styleId.alignment;
+                element.indent = element.styleId.indent;
+                element.numbering = element.styleId.numbering;
+                element.styleId = element.styleId.name;
+              }
+              if (element.type === 'run' && element.styleId) {
+                element.isBold = element.styleId.bold;
+                element.isItalic = element.styleId.italic;
+                element.isUnderline = element.styleId.underline;
+                element.font = element.styleId.font;
+                element.size = element.styleId.size;
+                element.color = element.styleId.color;
+              }
+              return element;
+            },
+            convertImage: mammoth.images.imgElement((image) => {
+              return image.read("base64").then((imageData) => {
+                const contentType = image.contentType || 'image/png';
+                return {
+                  src: `data:${contentType};base64,${imageData}`,
+                  alt: image.altText || ''
+                };
+              });
+            })
           }
+        );
 
-          console.log('Documento DOCX procesado:', {
-            originalName: file.originalname,
-            filePath,
-            templateLength: template.length,
-            previewLength: preview.length,
-            warnings: htmlResult.messages
-          });
-        } catch (error) {
-          console.error('Error detallado al procesar el documento DOCX:', {
-            error,
-            message: error.message,
-            stack: error.stack
-          });
-          throw new Error(`Error al procesar el documento DOCX: ${error.message}`);
+        // Extraer texto para búsqueda de variables
+        const textResult = await mammoth.extractRawText({ 
+          buffer: validBuffer,
+          preserveNumbering: true
+        });
+
+        template = textResult.value;
+        preview = htmlResult.value;
+
+        if (htmlResult.messages.length > 0) {
+          console.log('Warnings durante la conversión:', htmlResult.messages);
         }
-      } else {
-        // Para archivos .txt (mantenemos este caso por compatibilidad)
-        template = file.buffer.toString('utf-8');
-        preview = template;
-        filePath = await saveFile(Buffer.from(file.buffer), file.originalname);
+
+        console.log('Documento procesado exitosamente:', {
+          originalName: file.originalname,
+          filePath,
+          templateLength: template.length,
+          previewLength: preview.length
+        });
+
+      } catch (error: any) {
+        console.error('Error detallado al procesar el documento:', {
+          error,
+          message: error.message,
+          stack: error.stack
+        });
+
+        // Intentar recuperar el documento como texto plano si falla el procesamiento
+        try {
+          console.log('Intentando recuperar como texto plano...');
+          template = file.buffer.toString('utf-8');
+          preview = template;
+          filePath = await saveFile(Buffer.from(file.buffer), file.originalname);
+
+          console.log('Documento recuperado como texto plano');
+        } catch (fallbackError) {
+          throw new Error(`No se pudo procesar el documento: ${error.message}`);
+        }
       }
 
       // Si es una carga temporal, devolver el contenido
@@ -400,6 +405,7 @@ export function registerRoutes(app: Express): Server {
         .returning();
 
       res.status(201).json(doc);
+
     } catch (error: any) {
       console.error('Error detallado al procesar el documento:', {
         error,
@@ -411,7 +417,7 @@ export function registerRoutes(app: Express): Server {
         details: error.stack
       });
     }
-  });
+});
   app.post("/api/forms/:formId/documents", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -579,7 +585,6 @@ export function registerRoutes(app: Express): Server {
 
     res.sendStatus(200);
   });
-
   
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
