@@ -527,154 +527,192 @@ export function registerRoutes(app: Express): Server {
   
 app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
-      const user = ensureAuth(req);
-      const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
-      const file = req.file;
+        const user = ensureAuth(req);
+        const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
+        const file = req.file;
 
-      if (!file) {
-        console.error('No se proporcionó archivo');
-        return res.status(400).json({
-          error: "No se ha proporcionado ningún archivo"
-        });
-      }
-
-      console.log('Archivo recibido:', {
-        originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size
-      });
-
-      // Si es un formulario real (no temporal), verificar propiedad
-      if (formId !== null) {
-        // Verify ownership
-        const [form] = await db.select()
-          .from(forms)
-          .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-        if (!form) {
-          console.error('Formulario no encontrado:', { formId });
-          return res.status(404).json({
-            error: "Form not found",
-            formId
-          });
+        if (!file) {
+            console.error('No se proporcionó archivo');
+            return res.status(400).json({
+                error: "No se ha proporcionado ningún archivo"
+            });
         }
-      }
 
-      let template = '';
-      let preview = '';
-      let filePath = '';
-
-      try {
-        console.log('Procesando documento Word...');
-
-        // Asegurar que tenemos un buffer válido
-        const validBuffer = Buffer.from(file.buffer);
-
-        // Primero guardar el archivo original exactamente como se recibió
-        filePath = await saveFile(validBuffer, file.originalname);
-
-        console.log('Archivo original guardado:', {
-          filePath,
-          size: validBuffer.length
+        console.log('Archivo recibido:', {
+            originalname: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size
         });
 
-        // Extraer texto para búsqueda de variables y vista previa
-        const textResult = await mammoth.extractRawText({
-          buffer: validBuffer
-        });
+        // Si es un formulario real (no temporal), verificar propiedad
+        if (formId !== null) {
+            const [form] = await db.select()
+                .from(forms)
+                .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-        // Extraer HTML para vista previa preservando formato
-        const htmlResult = await mammoth.convertToHtml(
-          { buffer: validBuffer },
-          mammothOptions
-        );
+            if (!form) {
+                console.error('Formulario no encontrado:', { formId });
+                return res.status(404).json({
+                    error: "Form not found",
+                    formId
+                });
+            }
+        }
 
-        // Solo guardamos el texto para identificar variables
-        template = textResult.value;
-        preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
+        let template = '';
+        let preview = '';
+        let filePath = '';
 
-        console.log('Documento procesado exitosamente:', {
-          originalName: file.originalname,
-          filePath,
-          templateLength: template.length,
-          previewLength: preview.length
-        });
+        try {
+            console.log('Procesando documento Word...');
 
-      } catch (error: any) {
-        console.error('Error detallado al procesar el documento:', {
-          error,
-          message: error.message,
-          stack: error.stack
-        });
-        throw new Error(`No se pudo procesar el documento: ${error.message}`);
-      }
+            // Asegurar que tenemos un buffer válido
+            const validBuffer = Buffer.from(file.buffer);
 
-      // Si es una carga temporal, devolver el contenido
-      if (formId === null) {
-        const response = {
-          name: file.originalname,
-          template,
-          preview,
-          filePath
+            // Primero guardar el archivo original exactamente como se recibió
+            filePath = await saveFile(validBuffer, file.originalname);
+
+            console.log('Archivo original guardado:', {
+                filePath,
+                size: validBuffer.length
+            });
+
+            try {
+                // Intentar extraer texto primero
+                const textResult = await mammoth.extractRawText({
+                    buffer: validBuffer,
+                    includeDefaultStyleMap: true,
+                    includeEmbeddedStyleMap: true,
+                    convertImage: mammoth.images.imgElement((image) => {
+                        return image.read("base64").then((imageData) => ({
+                            src: `data:${image.contentType};base64,${imageData}`
+                        }));
+                    })
+                });
+
+                template = textResult.value || '';
+
+                // Si el texto se extrajo exitosamente, intentar convertir a HTML
+                const htmlResult = await mammoth.convertToHtml(
+                    { buffer: validBuffer },
+                    {
+                        ...mammothOptions,
+                        transformDocument: (element) => {
+                            // Preservar estructura original
+                            return element;
+                        }
+                    }
+                );
+
+                preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
+
+            } catch (extractError) {
+                console.error('Error al extraer contenido del documento:', extractError);
+                // Si falla la extracción, intentar un método alternativo
+                const doc = new Document({
+                    sections: [{
+                        properties: {},
+                        children: [
+                            new Paragraph({
+                                children: [
+                                    new TextRun("Error al procesar el documento. " +
+                                        "El documento puede contener elementos no soportados.")
+                                ],
+                            }),
+                        ],
+                    }],
+                });
+
+                template = "Documento no procesable";
+                preview = `${previewStyles}<div class="document-preview">
+                    <p class="text-red-500">Error: No se pudo procesar el contenido del documento.</p>
+                    <p>El documento puede contener elementos complejos que no se pueden procesar.</p>
+                    <p>Sin embargo, el documento original se ha guardado y podrá ser usado para el merge.</p>
+                </div>`;
+            }
+
+            console.log('Documento procesado exitosamente:', {
+                originalName: file.originalname,
+                filePath,
+                templateLength: template.length,
+                previewLength: preview.length
+            });
+
+        } catch (error: any) {
+            console.error('Error detallado al procesar el documento:', {
+                error,
+                message: error.message,
+                stack: error.stack
+            });
+            throw new Error(`No se pudo procesar el documento: ${error.message}`);
+        }
+
+        // Si es una carga temporal, devolver el contenido
+        if (formId === null) {
+            const response = {
+                name: file.originalname,
+                template,
+                preview,
+                filePath
+            };
+
+            console.log('Devolviendo documento temporal:', {
+                name: response.name,
+                filePath: response.filePath,
+                templateLength: response.template.length,
+                previewLength: response.preview.length
+            });
+
+            return res.status(200).json(response);
+        }
+
+        // Si llegamos aquí, es un formulario real y debemos guardar el documento
+        const docData = {
+            formId,
+            name: file.originalname,
+            template,
+            preview,
+            filePath
         };
 
-        console.log('Devolviendo documento temporal:', {
-          name: response.name,
-          filePath: response.filePath,
-          templateLength: response.template.length,
-          previewLength: response.preview.length
+        console.log('Guardando documento en la base de datos:', {
+            name: docData.name,
+            filePath: docData.filePath,
+            previewLength: docData.preview.length
         });
 
-        return res.status(200).json(response);
-      }
+        try {
+            const [doc] = await db.insert(documents)
+                .values(docData)
+                .returning();
 
-      // Si llegamos aquí, es un formulario real y debemos guardar el documento
-      const docData = {
-        formId,
-        name: file.originalname,
-        template, // Solo texto para variables
-        preview,
-        filePath  // Ruta al archivo original
-      };
+            console.log('Documento guardado exitosamente:', {
+                id: doc.id,
+                name: doc.name,
+                formId: doc.formId
+            });
 
-      console.log('Guardando documento en la base de datos:', {
-        name: docData.name,
-        filePath: docData.filePath,
-        previewLength: docData.preview.length
-      });
-
-      try {
-        const [doc] = await db.insert(documents)
-          .values(docData)
-          .returning();
-
-        console.log('Documento guardado exitosamente:', {
-          id: doc.id,
-          name: doc.name,
-          formId: doc.formId
-        });
-
-        res.status(201).json(doc);
-      } catch (dbError: any) {
-        console.error('Error al guardar documento en DB:', {
-          error: dbError,
-          message: dbError.message,
-          stack: dbError.stack,
-          docData: { ...docData, preview: 'truncated' }
-        });
-        throw new Error(`Error al guardar documento en base de datos: ${dbError.message}`);
-      }
+            res.status(201).json(doc);
+        } catch (dbError: any) {
+            console.error('Error al guardar documento en DB:', {
+                error: dbError,
+                message: dbError.message,
+                stack: dbError.stack,
+                docData: { ...docData, preview: 'truncated' }
+            });
+            throw new Error(`Error al guardar documento en base de datos: ${dbError.message}`);
+        }
 
     } catch (error: any) {
-      console.error('Error detallado al procesar el documento:', {
-        error,
-        message: error.message,
-        stack: error.stack
-      });
-      return res.status(400).json({
-        error: `Error al procesar el documento: ${error.message}`,
-        details: error.stack
-      });
+        console.error('Error detallado al procesar el documento:', {
+            error,
+            message: error.message,
+            stack: error.stack
+        });
+        return res.status(400).json({
+            error: `Error al procesar el documento: ${error.message}`,
+            details: error.stack
+        });
     }
 });
   app.get("/api/forms/:formId/documents", async (req, res) => {
@@ -835,7 +873,7 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
         return res.status(404).send("Form not found");
       }
 
-      const [doc] = await db.select()
+      const [doc] = awaitdb.select()
         .from(documents)
         .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
 
