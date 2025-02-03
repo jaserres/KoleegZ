@@ -521,7 +521,7 @@ export default function FormEntries() {
     // Store template data in sessionStorage
     const templateData = {
       name: documentName,
-      variables: uniqueVariables,
+      variables: uniqueVariables,  // Ahora incluye tanto las variables iniciales como las de OCR en el formato correcto
       template: documentTemplate,
       preview: documentTemplate,
       filePath: previewContent?.filePath || null,
@@ -532,7 +532,8 @@ export default function FormEntries() {
     console.log('Guardando datos de plantilla:', {
       name: templateData.name,
       variablesCount: templateData.variables.length,
-      templateLength: templateData.template.length
+      templateLength: templateData.template.length,
+      variables: templateData.variables // Agregar log para debugging
     });
 
     sessionStorage.setItem("selectedTemplate", JSON.stringify(templateData));
@@ -540,6 +541,7 @@ export default function FormEntries() {
     // Redirect to form creation page
     setLocation("/forms/new");
   };
+  
 
   const variableLimit = user?.isPremium ? 50 : 10;
   
