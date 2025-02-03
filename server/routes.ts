@@ -467,27 +467,32 @@ export function registerRoutes(app: Express): Server {
         // Asegurar que tenemos un buffer válido
         const validBuffer = Buffer.from(file.buffer);
 
-        // Guardar el archivo original
+        // Primero guardar el archivo original exactamente como se recibió
         filePath = await saveFile(validBuffer, file.originalname);
 
-          // Extraer el contenido preservando el formato
-          const htmlResult = await mammoth.convertToHtml(
-            { buffer: validBuffer },
-              mammothOptions
-          );
-
-        // Extraer texto para búsqueda de variables
-        const textResult = await mammoth.extractRawText({
-          buffer: validBuffer,
-            preserveNumbering: true
+        console.log('Archivo original guardado:', {
+          filePath,
+          size: validBuffer.length
         });
+
+        // Verificar que es un DOCX válido
+        if (validBuffer[0] !== 0x50 || validBuffer[1] !== 0x4B) {
+          throw new Error('El archivo no es un DOCX válido');
+        }
+
+        // Extraer texto para búsqueda de variables y vista previa
+        const textResult = await mammoth.extractRawText({
+          buffer: validBuffer
+        });
+
+        // Extraer HTML para vista previa preservando formato
+        const htmlResult = await mammoth.convertToHtml(
+          { buffer: validBuffer },
+          mammothOptions
+        );
 
         template = textResult.value;
         preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
-
-        if (htmlResult.messages.length > 0) {
-          console.log('Warnings durante la conversión:', htmlResult.messages);
-        }
 
         console.log('Documento procesado exitosamente:', {
           originalName: file.originalname,
@@ -502,18 +507,7 @@ export function registerRoutes(app: Express): Server {
           message: error.message,
           stack: error.stack
         });
-
-        // Intentar recuperar el documento como texto plano si falla el procesamiento
-        try {
-          console.log('Intentando recuperar como texto plano...');
-          template = file.buffer.toString('utf-8');
-          preview = template;
-          filePath = await saveFile(Buffer.from(file.buffer), file.originalname);
-
-          console.log('Documento recuperado como texto plano');
-        } catch (fallbackError) {
-          throw new Error(`No se pudo procesar el documento: ${error.message}`);
-        }
+        throw new Error(`No se pudo procesar el documento: ${error.message}`);
       }
 
       // Si es una carga temporal, devolver el contenido
