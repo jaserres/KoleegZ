@@ -203,7 +203,7 @@ export default function FormEntries() {
     },
     onSuccess: (data, { documentId }) => {
       setMergedResult(data.result);
-      const template = documents?.find((doc: any) => doc.id === documentId);
+      const template = documents?.find((doc) => doc.id === documentId);
       setSelectedTemplate(template);
     },
     onError: (error: Error) => {
