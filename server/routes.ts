@@ -741,40 +741,40 @@ export function registerRoutes(app: Express): Server {
       const documentId = parseInt(req.params.documentId);
       const entryId = parseInt(req.body.entryId);
       const isDownload = req.body.download === true;
-
+  
       // Verificaciones de seguridad y existencia
       const [form] = await db.select()
         .from(forms)
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
+  
       if (!form) {
         return res.status(404).send("Form not found");
       }
-
+  
       const [doc] = await db.select()
         .from(documents)
         .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
-
+  
       if (!doc) {
         return res.status(404).send("Document not found");
       }
-
+  
       const [entry] = await db.select()
         .from(entries)
         .where(and(eq(entries.id, entryId), eq(entries.formId, formId)));
-
+  
       if (!entry) {
         return res.status(404).send("Entry not found");
       }
-
+  
       // Leer el documento original
       const buffer = await readFile(doc.filePath);
-
+  
       // Verificar que es un DOCX válido
       if (buffer[0] !== 0x50 || buffer[1] !== 0x4B) {
         throw new Error('El archivo no es un DOCX válido');
       }
-
+  
       // Realizar el merge preservando la estructura
       const result = await createReport({
         template: buffer,
@@ -794,62 +794,21 @@ export function registerRoutes(app: Express): Server {
         preserveQuickStyles: true,
         preserveNumbering: true,
         preserveOutline: true,
-        preserveStaticContent: true,
-        preprocessTemplate: (template: any) => {
-          // Preserve original XML structure
-          return template;
-        },
-        postprocessTemplate: (template: any) => {
-          // Ensure XML structure is maintained
-          return template;
-        },
-        errorHandler: (error: any, cmdStr: string) => {
-          console.error('Error en comando durante merge:', { error, cmdStr });
-          // Keep original text if there's an error
-          return cmdStr;
-        },
-        additionalJsContext: {
-          formatDate: (date: string) => {
-            try {
-              return new Date(date).toLocaleDateString();
-            } catch (e) {
-              console.error('Error formateando fecha:', e);
-              return date;
-            }
-          },
-          uppercase: (text: string) => `<w:r><w:rPr><w:b/><w:caps w:val="true"/></w:rPr><w:t>${String(text).toUpperCase()}</w:t></w:r>`,
-          lowercase: (text: string) => `<w:r><w:rPr><w:b/><w:smallCaps w:val="true"/></w:rPr><w:t>${String(text).toLowerCase()}</w:t></w:r>`,
-          bold: (text: string) => `<w:r><w:rPr><w:b/></w:rPr><w:t>${text}</w:t></w:r>`,
-          italic: (text: string) => `<w:r><w:rPr><w:i/></w:rPr><w:t>${text}</w:t></w:r>`,
-          underline: (text: string) => `<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>${text}</w:t></w:r>`,
-          paragraph: (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`,
-          pageBreak: () => '<w:p><w:r><w:br w:type="page"/></w:r></w:p>',
-          indent: (text: string, level: number = 1) => `<w:p><w:pPr><w:ind w:left="${level * 720}"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`,
-          center: (text: string) => `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`,
-          right: (text: string) => `<w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`,
-          formatNumber: (num: number) => {
-            try {
-              return new Intl.NumberFormat().format(num);
-            } catch (e) {
-              console.error('Error formateando número:', e);
-              return String(num);
-            }
-          }
-        }
+        preserveStaticContent: true
       });
-
+  
       const mergedBuffer = Buffer.from(result);
-
+  
       // Verificar que el resultado es un DOCX válido
       if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
         throw new Error('El resultado no es un DOCX válido');
       }
-
+  
       if (isDownload) {
         const baseName = doc.name.toLowerCase().endsWith('.docx') 
           ? doc.name.slice(0, -5)
           : doc.name;
-
+  
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Disposition', `attachment; filename="${baseName}-merged.docx"`);
         return res.send(mergedBuffer);
@@ -858,7 +817,7 @@ export function registerRoutes(app: Express): Server {
           { buffer: mergedBuffer },
           mammothOptions
         );
-
+  
         return res.json({
           result: `${previewStyles}<div class="document-preview">${result.value}</div>`
         });
