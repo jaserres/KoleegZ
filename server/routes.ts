@@ -741,74 +741,91 @@ export function registerRoutes(app: Express): Server {
       const documentId = parseInt(req.params.documentId);
       const entryId = parseInt(req.body.entryId);
       const isDownload = req.body.download === true;
-  
+
       // Verificaciones de seguridad y existencia
       const [form] = await db.select()
         .from(forms)
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-  
+
       if (!form) {
         return res.status(404).send("Form not found");
       }
-  
+
       const [doc] = await db.select()
         .from(documents)
         .where(and(eq(documents.id, documentId), eq(documents.formId, formId)));
-  
+
       if (!doc) {
         return res.status(404).send("Document not found");
       }
-  
+
       const [entry] = await db.select()
         .from(entries)
         .where(and(eq(entries.id, entryId), eq(entries.formId, formId)));
-  
+
       if (!entry) {
         return res.status(404).send("Entry not found");
       }
-  
+
+      console.log('Iniciando merge con datos:', {
+        documentId,
+        entryId,
+        values: entry.values
+      });
+
       // Leer el documento original
       const buffer = await readFile(doc.filePath);
-  
+
       // Verificar que es un DOCX válido
       if (buffer[0] !== 0x50 || buffer[1] !== 0x4B) {
         throw new Error('El archivo no es un DOCX válido');
       }
-  
-      // Realizar el merge preservando la estructura
-      const result = await createReport({
-        template: buffer,
-        data: entry.values || {},
-        cmdDelimiter: ['{{', '}}'],
-        failFast: false,
-        rejectNullish: false,
-        processLineBreaks: true,
-        processImages: true,
-        processHeadersAndFooters: true,
-        processHyperlinks: true,
-        processTables: true,
-        processStyles: true,
-        processTheme: true,
-        processVariables: true,
-        processNumbering: true,
-        preserveQuickStyles: true,
-        preserveNumbering: true,
-        preserveOutline: true,
-        preserveStaticContent: true
+
+      console.log('Documento leído correctamente:', {
+        size: buffer.length,
+        isBuffer: Buffer.isBuffer(buffer)
       });
-  
-      const mergedBuffer = Buffer.from(result);
-  
+
+      // Realizar el merge
+      let mergedBuffer: Buffer;
+      try {
+        const result = await createReport({
+          template: buffer,
+          data: entry.values || {},
+          cmdDelimiter: ['{{', '}}'],
+          failFast: true
+        });
+
+        if (!result) {
+          throw new Error('createReport devolvió un resultado vacío');
+        }
+
+        mergedBuffer = Buffer.from(result);
+
+        console.log('Merge completado:', {
+          inputSize: buffer.length,
+          outputSize: mergedBuffer.length
+        });
+      } catch (mergeError: any) {
+        console.error('Error detallado en createReport:', {
+          error: mergeError,
+          message: mergeError.message,
+          stack: mergeError.stack,
+          data: entry.values
+        });
+        throw new Error(`Error en el merge: ${mergeError.message}`);
+      }
+
       // Verificar que el resultado es un DOCX válido
       if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
         throw new Error('El resultado no es un DOCX válido');
       }
-  
+
       if (isDownload) {
         const baseName = doc.name.toLowerCase().endsWith('.docx') 
           ? doc.name.slice(0, -5)
           : doc.name;
-  
+
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Disposition', `attachment; filename="${baseName}-merged.docx"`);
         return res.send(mergedBuffer);
@@ -817,7 +834,7 @@ export function registerRoutes(app: Express): Server {
           { buffer: mergedBuffer },
           mammothOptions
         );
-  
+
         return res.json({
           result: `${previewStyles}<div class="document-preview">${result.value}</div>`
         });
