@@ -84,15 +84,35 @@ export default function FormEntries() {
     enabled: !!id,
   });
 
-  const { data: documents = [] } = useQuery<Array<{
+  const { data: documents = [], isLoading: isLoadingDocuments, error: documentsError } = useQuery<Array<{
     id: number;
     name: string;
     template: string;
     originalTemplate: string;
+    preview?: string;
+    filePath?: string;
+    thumbnailPath?: string;
   }>>({
     queryKey: [`/api/forms/${id}/documents`],
     enabled: !!id,
+    onError: (error) => {
+      console.error('Error fetching documents:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las plantillas",
+        variant: "destructive"
+      });
+    }
   });
+
+  useEffect(() => {
+    if (documents) {
+      console.log('Documents loaded:', documents); // Debug log
+      if (documents.length === 0) {
+        console.log('No documents found for form:', id);
+      }
+    }
+  }, [documents, id]);
 
 
   const { trigger: triggerConfetti } = useConfetti();
@@ -866,7 +886,7 @@ export default function FormEntries() {
               </div>
             </div>
           </CardHeader>
-           <CardContent>
+          <CardContent>
             <div className="w-full overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -916,7 +936,11 @@ export default function FormEntries() {
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div className="grid gap-4 grid-cols-2">
-                                  {documents && documents.length > 0 ? (
+                                  {isLoadingDocuments ? (
+                                    <div className="col-span-2 text-center py-4">
+                                      <Spinner />
+                                    </div>
+                                  ) : documents && documents.length > 0 ? (
                                     documents.map((doc) => (
                                       <Card key={doc.id}>
                                         <CardHeader>
@@ -925,6 +949,7 @@ export default function FormEntries() {
                                         <CardContent>
                                           <Button
                                             variant="outline"
+                                            className="w-full"
                                             onClick={() => {
                                               mergeMutation.mutate({
                                                 documentId: doc.id,
@@ -943,8 +968,8 @@ export default function FormEntries() {
                                       </Card>
                                     ))
                                   ) : (
-                                    <div className="text-center py-4 text-muted-foreground">
-                                      No hay plantillas disponibles
+                                    <div className="col-span-2 text-center py-4 text-muted-foreground">
+                                      No hay plantillas disponibles para este formulario
                                     </div>
                                   )}
                                 </div>

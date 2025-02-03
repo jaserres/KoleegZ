@@ -197,7 +197,12 @@ export default function FormBuilder() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`/api/forms/${id || 'temp'}/documents/upload`, {
+      // Si estamos editando un formulario existente, usamos su ID
+      const uploadUrl = id ? 
+        `/api/forms/${id}/documents/upload` : 
+        `/api/forms/documents/upload`;
+
+      const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
       });
@@ -207,19 +212,20 @@ export default function FormBuilder() {
       }
 
       const result = await response.json();
+      console.log('Upload result:', result);
 
       const templateVariables = extractVariables(result.template);
 
-      setFormName(result.name);
+      setFormName(formName || file.name.split('.')[0]);
       setVariables(templateVariables);
       setPreviewContent({
-        name: result.name,
+        name: file.name,
         template: result.template,
-        preview: result.preview,
+        preview: result.preview || result.template,
         variables: templateVariables,
         filePath: result.filePath,
         thumbnailPath: result.thumbnailPath,
-        originalTemplate: result.template 
+        originalTemplate: result.template
       });
 
       setShowEditor(true);
@@ -228,7 +234,7 @@ export default function FormBuilder() {
       console.error('Error al cargar archivo:', error);
       toast({
         title: "Error al cargar archivo",
-        description: error.message || "Error al procesar el archivo",
+        description: error instanceof Error ? error.message : "Error al procesar el archivo",
         variant: "destructive"
       });
     }
@@ -240,9 +246,18 @@ export default function FormBuilder() {
         throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
       }
 
-      // First create the form
+      // Crear el formulario
       const formRes = await apiRequest("POST", "/api/forms", {
         name: formName,
+        // Incluimos la información del documento si existe
+        document: previewContent ? {
+          name: previewContent.name,
+          template: previewContent.template,
+          originalTemplate: previewContent.originalTemplate,
+          preview: previewContent.preview,
+          filePath: previewContent.filePath,
+          thumbnailPath: previewContent.thumbnailPath
+        } : undefined
       });
 
       if (!formRes.ok) {
@@ -253,7 +268,7 @@ export default function FormBuilder() {
       const form = await formRes.json();
 
       try {
-        // Create all variables first
+        // Crear todas las variables
         for (const variable of variables) {
           const variableRes = await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
           if (!variableRes.ok) {
@@ -263,7 +278,7 @@ export default function FormBuilder() {
 
         return form;
       } catch (error) {
-        // If anything fails, delete the form to maintain consistency
+        // Si algo falla, eliminar el formulario para mantener la consistencia
         await apiRequest("DELETE", `/api/forms/${form.id}`);
         throw error;
       }
