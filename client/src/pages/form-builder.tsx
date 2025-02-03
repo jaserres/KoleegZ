@@ -253,23 +253,7 @@ export default function FormBuilder() {
       const form = await formRes.json();
 
       try {
-        // If we have a template, create it first
-        if (previewContent) {
-          const documentRes = await apiRequest("POST", `/api/forms/${form.id}/documents`, {
-            name: previewContent.name,
-            template: previewContent.template,
-            originalTemplate: previewContent.originalTemplate,
-            preview: previewContent.preview,
-            filePath: previewContent.filePath,
-            thumbnailPath: previewContent.thumbnailPath
-          });
-
-          if (!documentRes.ok) {
-            throw new Error("Error al crear la plantilla");
-          }
-        }
-
-        // Then create all variables
+        // Create all variables first
         for (const variable of variables) {
           const variableRes = await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
           if (!variableRes.ok) {
