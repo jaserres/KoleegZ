@@ -536,43 +536,8 @@ const renderPreview = () => {
   );
 };
 
-    const PreviewDialog = () => {
+  const PreviewDialog = () => {
     if (!previewContent) return null;
-
-    const handleDownload = async () => {
-      try {
-        const baseUrl = window.location.origin;
-        const endpoint = `api/forms/${id || 'temp'}/documents/preview/download`;
-        const params = new URLSearchParams({
-          template: previewContent.template,
-          filename: previewContent.name
-        });
-
-        const url = `${baseUrl}/${endpoint}?${params.toString()}`;
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error('Error al descargar el documento');
-        }
-
-        const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = previewContent.name;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(downloadUrl);
-      } catch (error) {
-        console.error('Error downloading document:', error);
-        toast({
-          title: "Error",
-          description: "No se pudo descargar el documento",
-          variant: "destructive"
-        });
-      }
-    };
 
     return (
       <Dialog open={!!previewContent && !showEditor} onOpenChange={() => setPreviewContent(null)}>
@@ -580,9 +545,7 @@ const renderPreview = () => {
           <DialogHeader className="px-6 py-4 border-b">
             <DialogTitle>Vista Previa del Documento</DialogTitle>
             <DialogDescription>
-              {previewContent.preview.includes('Documento Complejo') 
-                ? 'Documento complejo detectado - Se intentará extraer variables mediante OCR'
-                : 'Revise el contenido y las variables detectadas antes de crear el formulario'}
+              Revise el documento y las variables detectadas antes de crear el formulario
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-hidden">
@@ -590,11 +553,7 @@ const renderPreview = () => {
               <div className="p-6 space-y-6">
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-medium">Contenido del Documento</h3>
-                    <Button variant="outline" size="sm" onClick={handleDownload}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Descargar Documento
-                    </Button>
+                    <h3 className="font-medium">Vista Previa del Documento</h3>
                   </div>
                   <div className="bg-muted rounded-md p-4">
                     {renderPreview()}
