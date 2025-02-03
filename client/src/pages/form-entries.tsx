@@ -290,69 +290,70 @@ export default function FormEntries() {
       return variables;
     };
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        // Verificar tipos de archivo permitidos
-        const allowedTypes = [
-          'text/plain',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        ];
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const allowedTypes = [
+        'text/plain',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
 
-        if (!allowedTypes.includes(file.type)) {
-          toast({
-            title: "Error al cargar archivo",
-            description: "Solo se permiten archivos .txt, .doc y .docx",
-            variant: "destructive"
-          });
-          return;
-        }
-
-        try {
-          if (file.type === 'text/plain') {
-            // Procesar archivo .txt como antes
-            const text = await file.text();
-            const sanitizedText = text
-              .replace(/\0/g, '')
-              .replace(/[^\x20-\x7E\x0A\x0D]/g, '');
-
-            setDocumentTemplate(sanitizedText);
-          } else {
-            // Para archivos .doc y .docx, usar el nuevo endpoint
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const response = await fetch(`/api/forms/${id}/documents/upload`, {
-              method: 'POST',
-              body: formData,
-            });
-
-            if (!response.ok) {
-              throw new Error(await response.text());
-            }
-
-            const doc = await response.json();
-            setDocumentTemplate(doc.template);
-             setPreviewContent(doc);
-          }
-
-          // Extraer variables y usar el nombre del archivo
-          const variables = extractVariables(documentTemplate);
-          setDetectedVariables(variables);
-
-          if (!documentName) {
-            setDocumentName(file.name.split('.')[0]);
-          }
-        } catch (error) {
-          toast({
-            title: "Error al cargar archivo",
-            description: error.message || "Error al procesar el archivo",
-            variant: "destructive"
-          });
-        }
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: "Error al cargar archivo",
+          description: "Solo se permiten archivos .txt, .doc y .docx",
+          variant: "destructive"
+        });
+        return;
       }
-    };
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`/api/forms/${id}/documents/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+
+        const doc = await response.json();
+
+        // Convertir inmediatamente las variables OCR al formato correcto
+        const ocrVariables = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
+          name: varName,
+          label: varName
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' '),
+          type: 'text'
+        })) : [];
+
+        setPreviewContent({
+          ...doc,
+          variables: ocrVariables  // Guardar las variables ya formateadas
+        });
+
+        setDocumentTemplate(doc.template);
+        setDetectedVariables(extractVariables(doc.template));
+
+        if (!documentName) {
+          setDocumentName(file.name.split('.')[0]);
+        }
+      } catch (error) {
+        console.error('Error al cargar archivo:', error);
+        toast({
+          title: "Error al cargar archivo",
+          description: error.message || "Error al procesar el archivo",
+          variant: "destructive"
+        });
+      }
+    }
+  };
 
   const handleCreateDocument = async () => {
     if (!documentName || !documentTemplate) {
@@ -400,7 +401,7 @@ export default function FormEntries() {
     createEntryMutation.mutate(values);
   };
   
-  const handleOCRExtraction = async () => {
+    const handleOCRExtraction = async () => {
       if (!previewContent?.thumbnailPath) return;
 
       try {
@@ -472,35 +473,11 @@ export default function FormEntries() {
 
   const handleCreateFormFromTemplate = () => {
     // Obtener todas las variables disponibles
-    const hasInitialVariables = detectedVariables.length > 0;
-    const hasOCRVariables = previewContent?.extractedVariables && previewContent.extractedVariables.length > 0;
-
-    if (!hasInitialVariables && !hasOCRVariables) {
-      toast({
-        title: "Error",
-        description: "No se detectaron variables en la plantilla",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Convertir las variables de OCR al formato correcto
-    const ocrVariables = previewContent?.extractedVariables 
-      ? previewContent.extractedVariables.map(varName => ({
-          name: varName,
-          label: varName
-            .split('_')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' '),
-          type: 'text'
-        }))
-      : [];
+    const initialVariables = detectedVariables;
+    const ocrVariables = previewContent?.variables || [];
 
     // Combinar todas las variables detectadas
-    const allVariables = [
-      ...detectedVariables,
-      ...ocrVariables
-    ];
+    const allVariables = [...initialVariables, ...ocrVariables];
 
     // Eliminar duplicados basados en el nombre de la variable
     const uniqueVariables = Array.from(
@@ -508,11 +485,10 @@ export default function FormEntries() {
     );
 
     // Check if number of variables exceeds limit
-    const variableLimit = user?.isPremium ? 50 : 10;
     if (uniqueVariables.length > variableLimit) {
       toast({
         title: "Límite de variables excedido",
-        description: `Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario. Actualiza a premium para aumentar este límite.`,
+        description: `Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`,
         variant: "destructive"
       });
       return;
@@ -521,7 +497,7 @@ export default function FormEntries() {
     // Store template data in sessionStorage
     const templateData = {
       name: documentName,
-      variables: uniqueVariables,  // Ahora incluye tanto las variables iniciales como las de OCR en el formato correcto
+      variables: uniqueVariables,
       template: documentTemplate,
       preview: documentTemplate,
       filePath: previewContent?.filePath || null,
@@ -532,13 +508,11 @@ export default function FormEntries() {
     console.log('Guardando datos de plantilla:', {
       name: templateData.name,
       variablesCount: templateData.variables.length,
-      templateLength: templateData.template.length,
-      variables: templateData.variables // Agregar log para debugging
+      variables: templateData.variables,
+      ocr_variables: ocrVariables.length
     });
 
     sessionStorage.setItem("selectedTemplate", JSON.stringify(templateData));
-
-    // Redirect to form creation page
     setLocation("/forms/new");
   };
   
