@@ -41,6 +41,197 @@ function generatePreview(template: string, maxLength: number = 200): string {
   return template.slice(0, maxLength) + (template.length > maxLength ? '...' : '');
 }
 
+// Configuración de estilos Word a HTML mejorada
+const wordStyleMap = [
+  "p[style-name='Normal'] => p:fresh",
+  "p[style-name='Heading 1'] => h1:fresh",
+  "p[style-name='Heading 2'] => h2:fresh",
+  "p[style-name='Heading 3'] => h3:fresh",
+  "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
+  "r[style-name='Strong'] => strong",
+  "r[style-name='Emphasis'] => em",
+  "r[style-name='style1'] => strong",
+  "r[style-name='style2'] => em",
+  "b => strong",
+  "i => em",
+  "u => u",
+  "strike => s",
+  "tab => span.tab",
+  "br => br",
+  "table => table.word-table",
+  "tr => tr",
+  "td => td",
+  "p[style-name='Footer'] => div.footer > p:fresh",
+  "p[style-name='Header'] => div.header > p:fresh",
+  // Estilos adicionales para mayor fidelidad
+  "r[style-name='Hyperlink'] => a",
+  "p[style-name='Title'] => h1.title:fresh",
+  "p[style-name='Subtitle'] => h2.subtitle:fresh",
+  "p[style-name='Quote'] => blockquote:fresh",
+  "r[style-name='Intense Emphasis'] => em.intense",
+  "r[style-name='Book Title'] => span.book-title",
+  "p[style-name='TOC Heading'] => h1.toc-heading:fresh",
+  "p[style-name='TOC 1'] => p.toc-1:fresh",
+  "p[style-name='TOC 2'] => p.toc-2:fresh",
+  "p[style-name='Caption'] => p.caption:fresh",
+  "r[style-name='Subtle Emphasis'] => em.subtle",
+  "p[style-name='Intense Quote'] => blockquote.intense:fresh",
+  "p[style-name='Subtitle'] => p.subtitle:fresh",
+    "r[style-name='Subtle Reference'] => span.subtle-reference",
+  "p[style-name='Bibliography'] => p.bibliography:fresh"
+];
+
+// Mejorar la función de transformación de documento
+const transformDocument = (element: any) => {
+  if (element.type === 'paragraph') {
+    // Preservar todos los atributos de párrafo
+    const style: any = {};
+    if (element.alignment) style.textAlign = element.alignment;
+    if (element.indent) {
+      style.marginLeft = `${element.indent.left || 0}pt`;
+      style.marginRight = `${element.indent.right || 0}pt`;
+      style.textIndent = `${element.indent.firstLine || 0}pt`;
+    }
+    if (element.numbering) {
+      style.listStyleType = element.numbering.type;
+      style.listStylePosition = 'inside';
+    }
+    element.style = style;
+  }
+
+  if (element.type === 'run') {
+    // Preservar todos los atributos de texto
+    const style: any = {};
+    if (element.font) style.fontFamily = element.font;
+    if (element.size) style.fontSize = `${element.size}pt`;
+    if (element.color) style.color = element.color;
+    if (element.highlight) style.backgroundColor = element.highlight;
+    if (element.verticalAlignment) style.verticalAlign = element.verticalAlignment;
+    if (element.bold) style.fontWeight = 'bold';
+    if (element.italic) style.fontStyle = 'italic';
+    if (element.underline) style.textDecoration = 'underline';
+    element.style = style;
+  }
+
+  return element;
+};
+
+// En la función de subida de documento y merge, actualizar las opciones de mammoth
+const mammothOptions = {
+  styleMap: wordStyleMap,
+  includeDefaultStyleMap: true,
+  transformDocument,
+  convertImage: mammoth.images.imgElement((image: any) => {
+    return image.read("base64").then((imageData: string) => {
+      const contentType = image.contentType || 'image/png';
+      return {
+        src: `data:${contentType};base64,${imageData}`,
+        class: 'word-image',
+        style: `width: ${image.width || 'auto'}; height: ${image.height || 'auto'};`
+      };
+    });
+  }),
+    ignoreEmptyParagraphs: false,
+    preserveNumbering: true
+};
+
+// CSS mejorado para la vista previa
+const previewStyles = `
+<style>
+  .document-preview {
+    font-family: 'Calibri', 'Arial', sans-serif;
+    line-height: 1.15;
+    max-width: 816px; /* Ancho estándar de página Word */
+    margin: 1in auto; /* Márgenes estándar Word */
+    padding: 0;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    color: #000000;
+    font-size: 11pt;
+  }
+
+  /* Estilos base Word */
+  .document-preview p {
+    margin: 0;
+    padding: 0;
+    line-height: 1.15;
+  }
+
+  .document-preview h1 { font-size: 16pt; font-weight: bold; margin: 24pt 0 12pt; }
+  .document-preview h2 { font-size: 14pt; font-weight: bold; margin: 20pt 0 10pt; }
+  .document-preview h3 { font-size: 12pt; font-weight: bold; margin: 16pt 0 8pt; }
+
+  /* Tablas Word */
+  .document-preview .word-table {
+    border-collapse: collapse;
+    margin: 8pt 0;
+    width: 100%;
+  }
+
+  .document-preview .word-table td {
+    border: 1px solid #000;
+    padding: 5pt;
+    vertical-align: top;
+  }
+
+  /* Listas Word */
+  .document-preview .list-paragraph {
+    margin-left: 0.5in;
+    text-indent: -0.25in;
+  }
+
+  /* Imágenes Word */
+  .document-preview .word-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 8pt auto;
+  }
+
+  /* Encabezados y pies de página */
+  .document-preview .header,
+  .document-preview .footer {
+    position: relative;
+    margin: 12pt 0;
+    padding: 8pt 0;
+    border-top: 1pt solid #000;
+  }
+
+  /* Elementos específicos Word */
+  .document-preview .tab { display: inline-block; width: 0.5in; }
+  .document-preview .title { font-size: 26pt; text-align: center; }
+  .document-preview .subtitle { font-size: 16pt; text-align: center; color: #666; }
+  .document-preview blockquote { margin: 12pt 24pt; font-style: italic; }
+  .document-preview .caption { font-size: 9pt; color: #666; text-align: center; }
+
+  /* Preservación de estilos inline */
+    .document-preview [style] { all: revert; }
+  .document-preview [style*="text-align"] { text-align: inherit !important; }
+  .document-preview [style*="margin"] { margin: inherit !important; }
+  .document-preview [style*="text-indent"] { text-indent: inherit !important; }
+  .document-preview [style*="font-family"] { font-family: inherit !important; }
+  .document-preview [style*="font-size"] { font-size: inherit !important; }
+  .document-preview [style*="color"] { color: inherit !important; }
+  .document-preview [style*="background"] { background: inherit !important; }
+
+  /* Formato de texto */
+  .document-preview strong { font-weight: bold !important; }
+  .document-preview em { font-style: italic !important; }
+  .document-preview u { text-decoration: underline !important; }
+  .document-preview s { text-decoration: line-through !important; }
+
+  /* Ajustes de impresión */
+  @media print {
+    .document-preview {
+      box-shadow: none;
+      margin: 0;
+      max-width: none;
+    }
+  }
+</style>`;
+
+
+
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
@@ -280,70 +471,20 @@ export function registerRoutes(app: Express): Server {
         // Guardar el archivo original
         filePath = await saveFile(validBuffer, file.originalname);
 
-        // Extraer el contenido preservando el formato
-        const htmlResult = await mammoth.convertToHtml(
-          { buffer: validBuffer },
-          {
-            styleMap: [
-              "p[style-name='Normal'] => p:fresh",
-              "p[style-name='Heading 1'] => h1:fresh",
-              "p[style-name='Heading 2'] => h2:fresh",
-              "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
-              "r[style-name='Strong'] => strong",
-              "r[style-name='Emphasis'] => em",
-              "r[style-name='style1'] => strong",
-              "r[style-name='style2'] => em",
-              "b => strong",
-              "i => em",
-              "u => u",
-              "strike => s",
-              "tab => span.tab",
-              "br => br",
-              "table => table",
-              "tr => tr",
-              "td => td",
-              "p[style-name='Footer'] => div.footer > p:fresh",
-              "p[style-name='Header'] => div.header > p:fresh"
-            ],
-            includeDefaultStyleMap: true,
-            transformDocument: (element) => {
-              // Preservar todos los estilos originales
-              if (element.type === 'paragraph' && element.styleId) {
-                element.alignment = element.styleId.alignment;
-                element.indent = element.styleId.indent;
-                element.numbering = element.styleId.numbering;
-                element.styleId = element.styleId.name;
-              }
-              if (element.type === 'run' && element.styleId) {
-                element.isBold = element.styleId.bold;
-                element.isItalic = element.styleId.italic;
-                element.isUnderline = element.styleId.underline;
-                element.font = element.styleId.font;
-                element.size = element.styleId.size;
-                element.color = element.styleId.color;
-              }
-              return element;
-            },
-            convertImage: mammoth.images.imgElement((image) => {
-              return image.read("base64").then((imageData) => {
-                const contentType = image.contentType || 'image/png';
-                return {
-                  src: `data:${contentType};base64,${imageData}`,
-                  alt: image.altText || ''
-                };
-              });
-            })
-          }
-        );
+          // Extraer el contenido preservando el formato
+          const htmlResult = await mammoth.convertToHtml(
+            { buffer: validBuffer },
+              mammothOptions
+          );
 
         // Extraer texto para búsqueda de variables
-        const textResult = await mammoth.extractRawText({ 
+        const textResult = await mammoth.extractRawText({
           buffer: validBuffer,
-          preserveNumbering: true
+            preserveNumbering: true
         });
 
         template = textResult.value;
-        preview = htmlResult.value;
+        preview = `${previewStyles}<div class="document-preview">${htmlResult.value}</div>`;
 
         if (htmlResult.messages.length > 0) {
           console.log('Warnings durante la conversión:', htmlResult.messages);
@@ -417,7 +558,7 @@ export function registerRoutes(app: Express): Server {
         details: error.stack
       });
     }
-});
+  });
   app.post("/api/forms/:formId/documents", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -688,40 +829,40 @@ export function registerRoutes(app: Express): Server {
             processImages: true,
             processHeadersAndFooters: true,
             processHyperlinks: true,
-            processTables: true,
-            processListItems: true,
-            processPageBreaks: true,
-            preserveQuickStyles: true,
-            preserveNumbering: true,
-            preserveOutline: true,
-            processContentControls: true,
-            processSmartTags: true,
+              processTables: true,
+              processListItems: true,
+              processPageBreaks: true,
+              preserveQuickStyles: true,
+              preserveNumbering: true,
+              preserveOutline: true,
+              processContentControls: true,
+              processSmartTags: true,
             errorHandler: (error, cmdStr) => {
               console.error('Error en comando durante merge:', { error, cmdStr });
               return '';
             },
-            additionalJsContext: {
-              formatDate: (date: string) => {
-                try {
-                  return new Date(date).toLocaleDateString();
-                } catch (e) {
-                  return date;
-                }
-              },
-              uppercase: (text: string) => String(text).toUpperCase(),
-              lowercase: (text: string) => String(text).toLowerCase(),
-              formatNumber: (num: number) => {
-                try {
-                  return new Intl.NumberFormat().format(num);
-                } catch (e) {
-                  return String(num);
+              additionalJsContext: {
+                  formatDate: (date: string) => {
+                      try {
+                          return new Date(date).toLocaleDateString();
+                      } catch (e) {
+                          return date;
+                      }
+                  },
+                  uppercase: (text: string) => String(text).toUpperCase(),
+                  lowercase: (text: string) => String(text).toLowerCase(),
+                formatNumber: (num: number) => {
+                  try {
+                    return new Intl.NumberFormat().format(num);
+                  } catch (e) {
+                    return String(num);
+                  }
                 }
               }
-            }
           });
 
           // Asegurarnos de que el resultado es un Buffer válido
-          mergedBuffer = Buffer.from(result);
+            mergedBuffer = Buffer.from(result);
 
           console.log('Merge completado:', {
             resultSize: mergedBuffer.length,
@@ -750,8 +891,8 @@ export function registerRoutes(app: Express): Server {
 
         if (isDownload) {
           // Para descarga, enviar el archivo DOCX
-          const baseName = doc.name.toLowerCase().endsWith('.docx') 
-            ? doc.name.slice(0, -5) 
+          const baseName = doc.name.toLowerCase().endsWith('.docx')
+            ? doc.name.slice(0, -5)
             : doc.name;
 
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -760,114 +901,13 @@ export function registerRoutes(app: Express): Server {
         } else {
           // Para vista previa, convertir a HTML preservando todos los estilos
           const result = await mammoth.convertToHtml(
-            { buffer: mergedBuffer },
-            {
-              styleMap: [
-                "p[style-name='Normal'] => p:fresh",
-                "p[style-name='Heading 1'] => h1:fresh",
-                "p[style-name='Heading 2'] => h2:fresh",
-                "p[style-name='Heading 3'] => h3:fresh",
-                "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
-                "r[style-name='Strong'] => strong",
-                "r[style-name='Emphasis'] => em",
-                "r[style-name='style1'] => strong",
-                "r[style-name='style2'] => em",
-                "b => strong",
-                "i => em",
-                "u => u",
-                "strike => s",
-                "tab => span.tab",
-                "br => br",
-                "table => table",
-                "tr => tr",
-                "td => td",
-                "p[style-name='Footer'] => div.footer > p:fresh",
-                "p[style-name='Header'] => div.header > p:fresh"
-              ],
-              includeDefaultStyleMap: true,
-              transformDocument: (element) => {
-                // Preservar los estilos originales del documento
-                if (element.type === 'paragraph' && element.styleId) {
-                  element.alignment = element.styleId.alignment;
-                  element.indent = element.styleId.indent;
-                  element.numbering = element.styleId.numbering;
-                  element.styleId = element.styleId.name;
-                }
-                if (element.type === 'run' && element.styleId) {
-                  element.isBold = element.styleId.bold;
-                  element.isItalic = element.styleId.italic;
-                  element.isUnderline = element.styleId.underline;
-                  element.font = element.styleId.font;
-                  element.size = element.styleId.size;
-                  element.color = element.styleId.color;
-                }
-                return element;
-              }
-            }
+              { buffer: mergedBuffer },
+              mammothOptions
           );
 
-          const styledHtml = `
-            <style>
-              .document-preview {
-                font-family: 'Calibri', sans-serif;
-                line-height: 1.5;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 20px;
-                background: white;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-              }
-              .document-preview p {
-                margin: 0;
-                padding: 0.5em 0;
-                text-align: justify;
-                white-space: pre-wrap;
-              }
-              .document-preview h1 { font-size: 24px; font-weight: bold; margin: 24px 0 12px; }
-              .document-preview h2 { font-size: 20px; font-weight: bold; margin: 20px 0 10px; }
-              .document-preview h3 { font-size: 16px; font-weight: bold; margin: 16px 0 8px; }
-              .document-preview .tab { display: inline-block; width: 36px; }
-              .document-preview table {
-                border-collapse: collapse;
-                width: 100%;
-                margin: 1em 0;
-              }
-              .document-preview td, .document-preview th {
-                border: 1px solid #ddd;
-                padding: 8px;
-                vertical-align: top;
-              }
-              .document-preview .list-paragraph { margin-left: 24px; }
-              .document-preview .header {
-                position: relative;
-                margin-bottom: 20px;
-                padding-bottom: 10px;
-                border-bottom: 1px solid #eee;
-              }
-              .document-preview .footer {
-                position: relative;
-                margin-top: 20px;
-                padding-top: 10px;
-                border-top: 1px solid #eee;
-              }
-              /* Estilos adicionales para preservar formato */
-              .document-preview [style*="text-align:"] { text-align: inherit; }
-              .document-preview [style*="margin-left:"] { margin-left: inherit; }
-              .document-preview [style*="text-indent:"] { text-indent: inherit; }
-              .document-preview [style*="font-family:"] { font-family: inherit; }
-              .document-preview [style*="font-size:"] { font-size: inherit; }
-              .document-preview [style*="color:"] { color: inherit; }
-              .document-preview [style*="background-color:"] { background-color: inherit; }
-              .document-preview strong { font-weight: bold; }
-              .document-preview em { font-style: italic; }
-              .document-preview u { text-decoration: underline; }
-              .document-preview s { text-decoration: line-through; }
-            </style>
-            <div class="document-preview">
-              ${result.value}
-            </div>`;
-
-          return res.json({ result: styledHtml });
+            return res.json({
+                result: `${previewStyles}<div class="document-preview">${result.value}</div>`
+            });
         }
       } catch (mergeError: any) {
         console.error('Error en el merge:', {
