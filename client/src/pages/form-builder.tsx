@@ -198,9 +198,9 @@ export default function FormBuilder() {
       formData.append('file', file);
 
       // Si estamos editando un formulario existente, usamos su ID
-      const uploadUrl = id ? 
-        `/api/forms/${id}/documents/upload` : 
-        `/api/forms/documents/upload`;
+      const uploadUrl = `/api/forms${id ? `/${id}` : ''}/documents/upload`;
+
+      console.log('Uploading to:', uploadUrl); // Debug log
 
       const response = await fetch(uploadUrl, {
         method: 'POST',
