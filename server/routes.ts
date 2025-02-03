@@ -567,21 +567,20 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Leer el archivo DOCX original
+      // Leer el archivo DOCX
       const documentBuffer = await readFile(doc.filePath);
 
-      // Asegurarse de que entry.values sea un objeto válido
+      // Asegurarse de que entry.values sea un objeto válido y transformar los valores
       const rawValues = entry.values || {};
-      const mergeData: Record<string, any> = {};
+      const mergeData: Record<string, string> = {};
 
-      // Transformar valores manteniendo el tipo de dato original
+      // Transformar todos los valores a string y validar que no sean undefined
       Object.entries(rawValues).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-              // Mantener el tipo de dato original
-              mergeData[key] = value;
-          } else {
-              mergeData[key] = ''; // Valor por defecto para campos vacíos
-          }
+        if (value !== undefined && value !== null) {
+          mergeData[key] = String(value);
+        } else {
+          mergeData[key] = ''; // Valor por defecto para campos vacíos
+        }
       });
 
       console.log('Datos preparados para merge:', {
@@ -592,21 +591,21 @@ export function registerRoutes(app: Express): Server {
         mergeData
       });
 
+      // Realizar el merge con manejo de errores más detallado
       try {
-        // Configuración mejorada para preservar formatos
         const mergedBuffer = await createReport({
           template: documentBuffer,
           data: mergeData,
           cmdDelimiter: ['{{', '}}'],
           failFast: false,
           rejectNullish: false,
-          fixSmartQuotes: false, // Desactivar para mantener comillas originales
+          fixSmartQuotes: true,
           processLineBreaks: true,
-          preserveQuickStyles: true, // Preservar estilos rápidos de Word
-          lineBreakReplacement: '\n', // Usar salto de línea nativo
+          processStyles: true, // Activar procesamiento de estilos
+          preserveFormatting: true, // Preservar formato
           errorHandler: (error, cmdStr) => {
             console.error('Error en comando:', { error, cmdStr });
-            return undefined; // Retornar undefined para mantener el texto original en caso de error
+            return ''; // Retornar string vacío en caso de error
           }
         });
 
@@ -622,7 +621,6 @@ export function registerRoutes(app: Express): Server {
           res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
           return res.send(mergedBuffer);
         } else {
-          // Para la vista previa, convertir a HTML manteniendo más formatos
           const result = await mammoth.convertToHtml({
             buffer: mergedBuffer,
             options: {
@@ -647,18 +645,122 @@ export function registerRoutes(app: Express): Server {
               ],
               includeDefaultStyleMap: true,
               preserveEmptyParagraphs: true,
-              ignoreEmptyParagraphs: false
+              ignoreEmptyParagraphs: false,
+              idPrefix: 'doc-',
+              convertImage: mammoth.images.imgElement(function(image) {
+                return image.read().then(function(imageBuffer) {
+                  const base64Image = imageBuffer.toString('base64');
+                  return {
+                    src: `data:${image.contentType};base64,${base64Image}`,
+                    class: 'doc-image'
+                  };
+                });
+              })
             }
           });
 
-          return res.json({ result: result.value });
+          const styledHtml = `
+            <style>
+              .document-preview {
+                font-family: 'Calibri', sans-serif;
+                line-height: 1.5;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                background: white;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+              }
+              .document-preview p {
+                margin: 0;
+                padding: 0.5em 0;
+                text-align: justify;
+                white-space: pre-wrap;
+              }
+              .document-preview h1 {
+                font-size: 24px;
+                font-weight: bold;
+                margin: 24px 0 12px;
+              }
+              .document-preview h2 {
+                font-size: 20px;
+                font-weight: bold;
+                margin: 20px 0 10px;
+              }
+              .document-preview h3 {
+                font-size: 16px;
+                font-weight: bold;
+                margin: 16px 0 8px;
+              }
+              .document-preview .tab {
+                display: inline-block;
+                width: 36px;
+              }
+              .document-preview table {
+                border-collapse: collapse;
+                width: 100%;
+                margin: 1em 0;
+                page-break-inside: avoid;
+              }
+              .document-preview td, .document-preview th {
+                border: 1px solid #ddd;
+                padding: 8px;
+                vertical-align: top;
+              }
+              .document-preview .doc-image {
+                max-width: 100%;
+                height: auto;
+                margin: 1em 0;
+                display: block;
+              }
+              .document-preview .list-paragraph {
+                margin-left: 24px;
+              }
+              .document-preview .header {
+                position: relative;
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #eee;
+              }
+              .document-preview .footer {
+                position: relative;
+                margin-top: 20px;
+                padding-top: 10px;
+                border-top: 1px solid #eee;
+              }
+              @media print {
+                .document-preview {
+                  box-shadow: none;
+                  margin: 0;
+                  padding: 0;
+                }
+                .document-preview .header {
+                  position: fixed;
+                  top: 0;
+                }
+                .document-preview .footer {
+                  position: fixed;
+                  bottom: 0;
+                }
+              }
+            </style>
+            <div class="document-preview">
+              ${result.value}
+            </div>`;
+
+          // Log el HTML generado para diagnóstico
+          console.log('HTML generado:', result.value.substring(0, 500));
+
+          return res.json({ result: styledHtml });
         }
       } catch (mergeError: any) {
         console.error('Error específico en el merge:', mergeError);
+        // Agregar más información de diagnóstico en la respuesta
         return res.status(500).json({
           error: `Error en el proceso de merge: ${mergeError.message}`,
           details: mergeError.stack,
-          data: mergeData
+          data: mergeData,
+          template: doc.template ? doc.template.substring(0, 200) + '...' : 'No template', // Mostrar primeros 200 caracteres del template
+          delimiters: ['{{', '}}']
         });
       }
     } catch (error: any) {
