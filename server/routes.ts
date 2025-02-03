@@ -796,10 +796,6 @@ export function registerRoutes(app: Express): Server {
           throw new Error('El archivo template no es un DOCX válido');
         }
 
-        // Guardar una copia temporal del archivo original
-        const workingCopyPath = `temp-${Date.now()}-${doc.name}`;
-        await saveFile(originalBuffer, workingCopyPath);
-
         // Preparar datos para el merge
         const mergeData: Record<string, any> = {};
         Object.entries(entry.values || {}).forEach(([key, value]) => {
@@ -818,8 +814,7 @@ export function registerRoutes(app: Express): Server {
 
         console.log('Realizando merge con datos:', {
           originalSize: originalBuffer.length,
-          variables: Object.keys(mergeData),
-          workingCopy: workingCopyPath
+          variables: Object.keys(mergeData)
         });
 
         // Realizar el merge preservando la estructura DOCX
@@ -832,6 +827,7 @@ export function registerRoutes(app: Express): Server {
             cmdDelimiter: ['{{', '}}'],
             failFast: false,
             rejectNullish: false,
+            linebreaks: true,
             processLineBreaks: true,
             processImages: true,
             processHeadersAndFooters: true,
@@ -843,18 +839,13 @@ export function registerRoutes(app: Express): Server {
             processContentControls: true,
             processSmartTags: true,
             preprocessTemplate: (template) => {
-              // Preservar estructura XML original
-              console.log('Preservando estructura XML original...');
               return template;
             },
             postprocessTemplate: (template) => {
-              // Asegurar que se mantiene la estructura después del merge
-              console.log('Verificando estructura post-merge...');
               return template;
             },
             errorHandler: (error, cmdStr) => {
               console.error('Error en comando durante merge:', { error, cmdStr });
-              // Mantener el texto original si hay error
               return cmdStr;
             },
             additionalJsContext: {
@@ -871,7 +862,7 @@ export function registerRoutes(app: Express): Server {
               formatNumber: (num: number) => {
                 try {
                   return new Intl.NumberFormat().format(num);
-                }                catch (e) {
+                } catch (e) {
                   console.error('Error formateando número:', e);
                   return String(num);
                 }
@@ -881,15 +872,6 @@ export function registerRoutes(app: Express): Server {
 
           mergedBuffer = Buffer.from(result);
 
-          // Validaciones de tamaño y estructura
-          console.log('Validando resultado del merge:', {
-            originalSize: originalBuffer.length,
-            mergedSize: mergedBuffer.length,
-            ratio: (mergedBuffer.length / originalBuffer.length).toFixed(2),
-            isBuffer: Buffer.isBuffer(mergedBuffer),
-            firstBytes: mergedBuffer.slice(0, 4).toString('hex')
-          });
-
           // Validar pérdida significativa de datos
           if (mergedBuffer.length < originalBuffer.length * 0.8) {
             console.warn('Advertencia: Pérdida significativa de datos en el merge', {
@@ -898,12 +880,9 @@ export function registerRoutes(app: Express): Server {
               ratio: mergedBuffer.length / originalBuffer.length
             });
 
-            // Usar el archivo original como respaldo
-            console.log('Usando archivo original como respaldo y reintentando merge...');
-            const backupBuffer = await readFile(workingCopyPath);
-            if (backupBuffer.length > mergedBuffer.length) {
-              mergedBuffer = backupBuffer;
-            }
+            // Si hay pérdida significativa, usar el archivo original
+            console.log('Pérdida de datos detectada, usando archivo original...');
+            mergedBuffer = originalBuffer;
           }
 
         } catch (createReportError: any) {
@@ -923,13 +902,6 @@ export function registerRoutes(app: Express): Server {
         // Verificar que el resultado es un DOCX válido
         if (mergedBuffer[0] !== 0x50 || mergedBuffer[1] !== 0x4B) {
           throw new Error('El documento generado no es un DOCX válido');
-        }
-
-        // Limpiar archivo temporal
-        try {
-          await deleteFile(workingCopyPath);
-        } catch (cleanupError) {
-          console.error('Error limpiando archivo temporal:', cleanupError);
         }
 
         if (isDownload) {
