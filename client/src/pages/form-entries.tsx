@@ -420,11 +420,21 @@ export default function FormEntries() {
     }
 
     // Store template data in sessionStorage
-    sessionStorage.setItem("selectedTemplate", JSON.stringify({
+    const templateData = {
       name: documentName,
       variables: detectedVariables,
-      template: documentTemplate
-    }));
+      template: documentTemplate,
+      preview: documentTemplate, // Asegurarnos de incluir el preview
+      filePath: null // El backend generará esto
+    };
+
+    console.log('Guardando datos de plantilla:', {
+      name: templateData.name,
+      variablesCount: templateData.variables.length,
+      templateLength: templateData.template.length
+    });
+
+    sessionStorage.setItem("selectedTemplate", JSON.stringify(templateData));
 
     // Redirect to form creation page
     setLocation("/forms/new");

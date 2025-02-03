@@ -47,6 +47,7 @@ export default function FormBuilder() {
     template: string;
     preview: string;
     variables: Array<Partial<SelectVariable>>;
+    filePath?: string;
   } | null>(null);
 
   const variableLimit = user?.isPremium ? 50 : 10;
@@ -99,41 +100,47 @@ export default function FormBuilder() {
       if (variables.length > variableLimit) {
         throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
       }
-
+  
+      const templateData = sessionStorage.getItem("selectedTemplate");
+      let documentData = null;
+  
+      if (templateData) {
+        const parsedTemplate = JSON.parse(templateData);
+        documentData = {
+          name: formName,
+          template: parsedTemplate.template,
+          preview: parsedTemplate.preview,
+          filePath: parsedTemplate.filePath
+        };
+      }
+  
       const res = await apiRequest("POST", "/api/forms", {
         name: formName,
-        theme: formTheme
+        theme: formTheme,
+        document: documentData
       });
       const form = await res.json();
-
+  
       // Create variables
       try {
         for (const variable of variables) {
           await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
         }
-
-        // Si hay una plantilla cargada, crear el documento
-        if (templateContent) {
-          await apiRequest("POST", `/api/forms/${form.id}/documents`, {
-            name: formName,
-            template: templateContent,
-          });
-        }
       } catch (error) {
-        // If variable or document creation fails, delete the form to maintain consistency
+        // If variable creation fails, delete the form to maintain consistency
         await apiRequest("DELETE", `/api/forms/${form.id}`);
         throw error;
       }
-
+  
+      // Limpiar datos de la plantilla temporal
+      sessionStorage.removeItem("selectedTemplate");
       return form;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/forms"] });
       toast({
         title: "Éxito",
-        description: templateContent
-          ? "Formulario y plantilla creados exitosamente"
-          : "Formulario creado exitosamente",
+        description: "Formulario creado exitosamente"
       });
       setLocation("/");
     },
@@ -260,7 +267,8 @@ export default function FormBuilder() {
             name: file.name.split('.')[0],
             template: text,
             preview: generatePreview(text),
-            variables: detectedVariables
+            variables: detectedVariables,
+            filePath: null
           });
         } else {
           const formData = new FormData();
@@ -277,12 +285,20 @@ export default function FormBuilder() {
 
           const result = await response.json();
           const detectedVariables = extractVariables(result.template);
-          setPreviewContent({
+
+          // Guardar toda la información incluyendo el filePath
+          const previewData = {
             name: result.name,
             template: result.template,
             preview: result.preview,
-            variables: detectedVariables
-          });
+            variables: detectedVariables,
+            filePath: result.filePath
+          };
+
+          setPreviewContent(previewData);
+
+          // Guardar en sessionStorage para uso posterior
+          sessionStorage.setItem("selectedTemplate", JSON.stringify(previewData));
         }
       } catch (error) {
         console.error('Error al cargar archivo:', error);
