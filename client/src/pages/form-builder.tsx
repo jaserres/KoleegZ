@@ -563,6 +563,31 @@ export default function FormBuilder() {
                           <Wand2 className="mr-2 h-4 w-4" />
                           Detectar Variables con OCR
                         </Button>
+
+                        {/* Variables detectadas */}
+                        <div className="mt-4">
+                          {variables.length > 0 ? (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                              <p className="text-green-700 font-medium mb-2">Variables Detectadas:</p>
+                              <div className="grid gap-2">
+                                {variables.map((variable, index) => (
+                                  <div key={index} className="flex items-center gap-2 text-sm">
+                                    <code className="bg-green-100 px-2 py-1 rounded text-green-800">
+                                      {`{{${variable.name}}}`}
+                                    </code>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                              <p className="text-yellow-800 font-medium">No se detectaron variables</p>
+                              <p className="text-sm text-yellow-600 mt-1">
+                                Por favor, agregue las variables manualmente basándose en el documento original.
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
