@@ -615,16 +615,42 @@ export function registerRoutes(app: Express): Server {
           // Asegurarnos de que el template es un Buffer válido
           const validTemplateBuffer = Buffer.from(templateBuffer);
 
-          // Realizar el merge con el buffer validado
+          // Realizar el merge con el buffer validado y opciones para preservar formato
           const result = await createReport({
             template: validTemplateBuffer,
             data: mergeData,
             cmdDelimiter: ['{{', '}}'],
             failFast: false,
             rejectNullish: false,
+            processLineBreaks: true,
+            processStyles: true,
+            processImages: true,
+            processHeadersAndFooters: true,
+            processHyperlinks: true,
+            processTables: true,
+            processListItems: true,
+            processPageBreaks: true,
             errorHandler: (error, cmdStr) => {
               console.error('Error en comando durante merge:', { error, cmdStr });
               return '';
+            },
+            additionalJsContext: {
+              formatDate: (date: string) => {
+                try {
+                  return new Date(date).toLocaleDateString();
+                } catch (e) {
+                  return date;
+                }
+              },
+              uppercase: (text: string) => String(text).toUpperCase(),
+              lowercase: (text: string) => String(text).toLowerCase(),
+              formatNumber: (num: number) => {
+                try {
+                  return new Intl.NumberFormat().format(num);
+                } catch (e) {
+                  return String(num);
+                }
+              }
             }
           });
 
@@ -666,7 +692,7 @@ export function registerRoutes(app: Express): Server {
           res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
           return res.send(mergedBuffer);
         } else {
-          // Para vista previa, convertir a HTML
+          // Para vista previa, convertir a HTML preservando el formato
           const result = await mammoth.convertToHtml(
             { buffer: mergedBuffer },
             {
@@ -676,13 +702,22 @@ export function registerRoutes(app: Express): Server {
                 "p[style-name='Heading 2'] => h2:fresh",
                 "p[style-name='Heading 3'] => h3:fresh",
                 "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
+                "r[style-name='Strong'] => strong",
+                "r[style-name='Emphasis'] => em",
                 "b => strong",
                 "i => em",
                 "u => u",
                 "strike => s",
-                "tab => span.tab"
+                "tab => span.tab",
+                "table => table",
+                "tr => tr",
+                "td => td",
+                "p[style-name='Footer'] => div.footer > p:fresh",
+                "p[style-name='Header'] => div.header > p:fresh"
               ],
-              includeDefaultStyleMap: true
+              includeDefaultStyleMap: true,
+              preserveEmptyParagraphs: true,
+              ignoreEmptyParagraphs: false
             }
           );
 
@@ -718,6 +753,18 @@ export function registerRoutes(app: Express): Server {
                 vertical-align: top;
               }
               .document-preview .list-paragraph { margin-left: 24px; }
+              .document-preview .header {
+                position: relative;
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #eee;
+              }
+              .document-preview .footer {
+                position: relative;
+                margin-top: 20px;
+                padding-top: 10px;
+                border-top: 1px solid #eee;
+              }
             </style>
             <div class="document-preview">
               ${result.value}
