@@ -424,7 +424,46 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Documents endpoints
-    app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
+  app.post("/api/forms/:formId/documents", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
+
+      // Verify ownership
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+      if (!form) {
+        return res.status(404).send("Form not found");
+      }
+
+      // Si no hay archivo adjunto, simplemente retornamos OK
+      // Esto permite que el guardado del formulario continúe sin error
+      if (!req.body.filePath) {
+        return res.status(200).json({ message: "No document to create" });
+      }
+
+      // Si hay un intento de crear documento sin usar /upload, entonces sí redirigimos
+      return res.status(400).json({
+        error: "Los documentos solo pueden ser creados a través del endpoint /upload",
+        message: "Por favor usa el endpoint /api/forms/:formId/documents/upload para subir documentos"
+      });
+
+    } catch (error: any) {
+      console.error('Error handling document request:', {
+        error,
+        message: error.message,
+        stack: error.stack
+      });
+      res.status(500).json({
+        error: `Error handling document request: ${error.message}`,
+        details: error.stack
+      });
+    }
+  });
+
+app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
       const user = ensureAuth(req);
       const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
@@ -443,6 +482,7 @@ export function registerRoutes(app: Express): Server {
         size: file.size
       });
 
+      // Si es un formulario real (no temporal), verificar propiedad
       if (formId !== null) {
         // Verify ownership
         const [form] = await db.select()
@@ -475,11 +515,6 @@ export function registerRoutes(app: Express): Server {
           filePath,
           size: validBuffer.length
         });
-
-        // Verificar que es un DOCX válido
-        if (validBuffer[0] !== 0x50 || validBuffer[1] !== 0x4B) {
-          throw new Error('El archivo no es un DOCX válido');
-        }
 
         // Extraer texto para búsqueda de variables y vista previa
         const textResult = await mammoth.extractRawText({
@@ -522,7 +557,7 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Guardamos la referencia al documento original y el texto para variables
+      // Si llegamos aquí, es un formulario real y debemos guardar el documento
       const docData = {
         formId,
         name: file.originalname,
@@ -537,11 +572,27 @@ export function registerRoutes(app: Express): Server {
         previewLength: docData.preview.length
       });
 
-      const [doc] = await db.insert(documents)
-        .values(docData)
-        .returning();
+      try {
+        const [doc] = await db.insert(documents)
+          .values(docData)
+          .returning();
 
-      res.status(201).json(doc);
+        console.log('Documento guardado exitosamente:', {
+          id: doc.id,
+          name: doc.name,
+          formId: doc.formId
+        });
+
+        res.status(201).json(doc);
+      } catch (dbError: any) {
+        console.error('Error al guardar documento en DB:', {
+          error: dbError,
+          message: dbError.message,
+          stack: dbError.stack,
+          docData: { ...docData, preview: 'truncated' }
+        });
+        throw new Error(`Error al guardar documento en base de datos: ${dbError.message}`);
+      }
 
     } catch (error: any) {
       console.error('Error detallado al procesar el documento:', {
@@ -551,44 +602,6 @@ export function registerRoutes(app: Express): Server {
       });
       return res.status(400).json({
         error: `Error al procesar el documento: ${error.message}`,
-        details: error.stack
-      });
-    }
-  });
-  app.post("/api/forms/:formId/documents", async (req, res) => {
-    try {
-      const user = ensureAuth(req);
-      const formId = parseInt(req.params.formId);
-
-      // Verify ownership
-      const [form] = await db.select()
-        .from(forms)
-        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-      if (!form) {
-        return res.status(404).send("Form not found");
-      }
-
-      // Si no hay archivo adjunto, simplemente retornamos OK
-      // Esto permite que el guardado del formulario continúe sin error
-      if (!req.body.filePath) {
-        return res.status(200).json({ message: "No document to create" });
-      }
-
-      // Si hay un intento de crear documento sin usar /upload, entonces sí redirigimos
-      return res.status(400).json({
-        error: "Los documentos solo pueden ser creados a través del endpoint /upload",
-        message: "Por favor usa el endpoint /api/forms/:formId/documents/upload para subir documentos"
-      });
-
-    } catch (error: any) {
-      console.error('Error handling document request:', {
-        error,
-        message: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({
-        error: `Error handling document request: ${error.message}`,
         details: error.stack
       });
     }
@@ -841,8 +854,7 @@ export function registerRoutes(app: Express): Server {
               console.error('Error en comando durante merge:', { error, cmdStr });
               // Keep original text if there's an error
               return cmdStr;
-            },
-            additionalJsContext: {
+            },additionalJsContext: {
               formatDate: (date: string) => {
                 try {
                   return new Date(date).toLocaleDateString();
