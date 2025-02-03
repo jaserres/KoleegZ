@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText, Wand2, Save } from "lucide-react";
+import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -34,7 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download, Upload, FileDown } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -921,8 +921,7 @@ export default function FormEntries() {
                                               entryId: entry.id,
                                             });
                                             setSelectedTemplate(doc);
-                                          }}
-                                          disabled={mergeMutation.isPending}
+                                          }}                                          disabled={mergeMutation.isPending}
                                         >
                                           {mergeMutation.isPending ? (
                                             <Spinner variant="dots" size="sm" className="mr-2" />
@@ -937,23 +936,27 @@ export default function FormEntries() {
                               {mergedResult && (
                                 <div className="space-y-4">
                                   <div className="flex justify-between items-center">
-                                    <h3 className="text-lg font-medium">
-                                      Vista Previa del Documento
-                                    </h3>
-                                    <Button
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleDownloadMerge(selectedTemplate.id, entry.id)
-                                      }
-                                    >
-                                      <Download className="mr-2 h-4 w-4" />
-                                      Descargar
-                                    </Button>
+                                    <Label>Vista Previa</Label>
+                                    {selectedTemplate && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleDownloadMerge(selectedTemplate.id, selectedEntry)}
+                                      >
+                                        <FileDown className="mr-2 h-4 w-4" />
+                                        Descargar
+                                      </Button>
+                                    )}
                                   </div>
-                                  <Textarea
-                                    value={mergedResult}
-                                    readOnly
-                                    className="h-[300px] font-mono"
+                                  <div 
+                                    className="p-4 border rounded-md bg-white"
+                                    style={{ 
+                                      minHeight: "200px",
+                                      maxHeight: "400px",
+                                      overflowY: "auto",
+                                      whiteSpace: "pre-wrap"
+                                    }}
+                                    dangerouslySetInnerHTML={{ __html: mergedResult }}
                                   />
                                 </div>
                               )}
