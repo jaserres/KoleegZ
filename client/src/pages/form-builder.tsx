@@ -592,5 +592,6 @@ export default function FormBuilder() {
         )}
       </div>
     </div>
+    </>
   );
 }
