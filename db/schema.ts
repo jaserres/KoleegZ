@@ -25,8 +25,7 @@ export const variables = pgTable("variables", {
   name: text("name").notNull(),
   label: text("label").notNull(),
   type: text("type").notNull(),
-  type: text("type").notNull(),
-  alternateNames: jsonb("alternate_names").default([]).notNull(),
+  alternateNames: jsonb("alternate_names").default({}).notNull(),
 });
 
 export const entries = pgTable("entries", {
