@@ -28,12 +28,8 @@ export default function FormBuilder() {
   const [showEditor, setShowEditor] = useState(false);
   const [previewContent, setPreviewContent] = useState<{
     name: string;
-    template: string;
-    preview: string;
-    variables: Array<Partial<SelectVariable>>;
-    filePath?: string;
+    filePath: string;
     thumbnailPath?: string;
-    originalTemplate?: string;
     extractedVariables?: string[];
   } | null>(null);
 
@@ -84,15 +80,13 @@ export default function FormBuilder() {
     if (!file) return;
 
     const allowedTypes = [
-      'text/plain',
-      'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ];
 
     if (!allowedTypes.includes(file.type)) {
       toast({
         title: "Error al cargar archivo",
-        description: "Solo se permiten archivos .txt, .doc y .docx",
+        description: "Solo se permiten archivos .docx",
         variant: "destructive"
       });
       return;
@@ -101,9 +95,8 @@ export default function FormBuilder() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('preserveOriginal', 'true'); // Tell server to keep original file
+      formData.append('preserveOriginal', 'true');
 
-      // Usamos una ruta temporal para subir documentos cuando no hay ID
       const uploadUrl = id ? 
         `/api/forms/${id}/documents/upload` : 
         `/api/forms/temp/documents/upload`;
@@ -124,9 +117,8 @@ export default function FormBuilder() {
       const doc = await response.json();
       console.log('Upload response:', doc);
 
-      // Extract variables from template if available, otherwise use OCR variables
-      const templateVariables = doc.template ? extractVariables(doc.template) : [];
-      const ocrVariables = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
+      // Process detected variables
+      const templateVariables = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
         name: varName,
         label: varName
           .split('_')
@@ -135,19 +127,13 @@ export default function FormBuilder() {
         type: 'text'
       })) : [];
 
-      const combinedVariables = [...templateVariables, ...ocrVariables];
-      const uniqueVariables = Array.from(
-        new Map(combinedVariables.map(v => [v.name, v])).values()
-      );
-
-      setAllVariables(uniqueVariables);
-      setVariables(uniqueVariables);
+      setAllVariables(templateVariables);
+      setVariables(templateVariables);
       setPreviewContent({
-        ...doc,
         name: file.name.split('.')[0],
-        variables: uniqueVariables,
-        extractedVariables: uniqueVariables.map(v => v.name),
-        originalTemplate: doc.originalTemplate || doc.template // Handle potential absence of originalTemplate
+        filePath: doc.filePath,
+        thumbnailPath: doc.thumbnailPath,
+        extractedVariables: doc.extractedVariables
       });
 
       setShowEditor(true);
@@ -160,45 +146,6 @@ export default function FormBuilder() {
         variant: "destructive"
       });
     }
-  };
-
-  const extractVariables = (template: string) => {
-    const variableRegex = /{{([^}]+)}}/g;
-    const matches = template.match(variableRegex) || [];
-    const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
-    const invalidVariables: string[] = [];
-    const validVariables = new Set<string>();
-
-    matches.forEach(match => {
-      const varName = match.slice(2, -2).trim();
-      const normalizedName = varName
-        .replace(/[\s-]+/g, '_')
-        .replace(/[^a-zA-Z0-9_]/g, '');
-
-      if (normalizedName && validVariableRegex.test(normalizedName)) {
-        validVariables.add(normalizedName);
-      } else {
-        invalidVariables.push(varName);
-      }
-    });
-
-    if (invalidVariables.length > 0) {
-      toast({
-        title: "Variables no válidas detectadas",
-        description: `Las siguientes variables no pudieron ser normalizadas: ${invalidVariables.join(", ")}. Las variables deben comenzar con una letra y pueden contener letras, números y guiones bajos.`,
-        variant: "destructive"
-      });
-      return [];
-    }
-
-    return Array.from(validVariables).map(varName => ({
-      name: varName,
-      label: varName
-        .split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' '),
-      type: 'text'
-    }));
   };
 
   const handleOCRExtraction = async () => {
@@ -259,22 +206,17 @@ export default function FormBuilder() {
     }
   };
 
-
   const createFormMutation = useMutation({
     mutationFn: async () => {
       if (variables.length > variableLimit) {
         throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
       }
 
-      // Crear el formulario
+      // Create form
       const formRes = await apiRequest("POST", "/api/forms", {
         name: formName,
-        // Incluimos la información del documento si existe
         document: previewContent ? {
           name: previewContent.name,
-          template: previewContent.template,
-          originalTemplate: previewContent.originalTemplate,
-          preview: previewContent.preview,
           filePath: previewContent.filePath,
           thumbnailPath: previewContent.thumbnailPath
         } : undefined
@@ -288,7 +230,7 @@ export default function FormBuilder() {
       const form = await formRes.json();
 
       try {
-        // Crear todas las variables
+        // Create variables
         for (const variable of variables) {
           const variableRes = await apiRequest("POST", `/api/forms/${form.id}/variables`, variable);
           if (!variableRes.ok) {
@@ -298,7 +240,7 @@ export default function FormBuilder() {
 
         return form;
       } catch (error) {
-        // Si algo falla, eliminar el formulario para mantener la consistencia
+        // If something fails, delete the form to maintain consistency
         await apiRequest("DELETE", `/api/forms/${form.id}`);
         throw error;
       }
@@ -331,8 +273,8 @@ export default function FormBuilder() {
       await apiRequest("PATCH", `/api/forms/${id}`, {
         name: formName,
         document: previewContent ? {
-          template: previewContent.template,
-          originalTemplate: previewContent.originalTemplate
+          filePath: previewContent.filePath,
+          thumbnailPath: previewContent.thumbnailPath
         } : undefined
       });
 
@@ -382,7 +324,7 @@ export default function FormBuilder() {
                   <div className="space-y-4">
                     <Input
                       type="file"
-                      accept=".txt,.doc,.docx"
+                      accept=".docx"
                       onChange={handleFileUpload}
                       className="hidden"
                       id="document-upload"
@@ -393,7 +335,7 @@ export default function FormBuilder() {
                       onClick={() => document.getElementById('document-upload')?.click()}
                     >
                       <Upload className="mr-2 h-4 w-4" />
-                      Subir Documento (.txt, .doc, .docx)
+                      Subir Documento (.docx)
                     </Button>
                   </div>
                 </CardContent>
