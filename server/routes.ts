@@ -34,16 +34,23 @@ async function extractTextFromImage(imagePath: string): Promise<string> {
 function detectVariables(text: string): string[] {
   const variablePattern = /{{([^}]+)}}/g;
   const matches = text.match(variablePattern) || [];
-  const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
+  const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
   const invalidVariables: string[] = [];
   const validVariables = new Set<string>();
 
   matches.forEach(match => {
-    const varName = match.slice(2, -2).trim();
-    // Convertir espacios y guiones a guiones bajos
+    // Normalizar el texto completamente
+    const varName = match.slice(2, -2)
+      .trim()
+      .normalize('NFKD') // Normaliza caracteres especiales
+      .replace(/[\u0300-\u036f]/g, '') // Elimina diacríticos
+      .replace(/[^\x00-\x7F]/g, ''); // Solo caracteres ASCII
+
+    // Convertir a formato válido
     const normalizedName = varName
       .replace(/[\s-]+/g, '_')
-      .replace(/[^a-zA-Z0-9_]/g, '');
+      .replace(/[^a-zA-Z0-9_]/g, '')
+      .toLowerCase(); // Asegura consistencia en el caso
 
     if (normalizedName && validVariableRegex.test(normalizedName)) {
       validVariables.add(normalizedName);
