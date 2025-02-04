@@ -452,11 +452,15 @@ export default function FormEntries({isSharedAccess = false}) {
     const values: Record<string, any> = {};
 
     form?.variables?.forEach((variable: any) => {
-      const value = formData.get(variable.name);
-      if (value) {
-        values[variable.name] = variable.type === "number"
-          ? Number(value)
-          : value;
+      if (variable.type === "number" && variable.autoNumber?.enabled) {
+        const min = parseInt(variable.autoNumber.min) || 0;
+        const max = parseInt(variable.autoNumber.max) || 100;
+        values[variable.name] = Math.floor(Math.random() * (max - min + 1)) + min;
+      } else {
+        const value = formData.get(variable.name);
+        if (value) {
+          values[variable.name] = variable.type === "number" ? Number(value) : value;
+        }
       }
     });
 
