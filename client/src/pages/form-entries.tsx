@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown } from "lucide-react";
+import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown, Upload, Download } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -34,7 +34,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -107,7 +106,7 @@ export default function FormEntries() {
 
   useEffect(() => {
     if (documents) {
-      console.log('Documents loaded:', documents); // Debug log
+      console.log('Documents loaded:', documents);
       if (documents.length === 0) {
         console.log('No documents found for form:', id);
       }
@@ -225,6 +224,16 @@ export default function FormEntries() {
       setMergedResult(data.result);
       const template = documents?.find((doc) => doc.id === documentId);
       setSelectedTemplate(template);
+
+      // Automatically trigger download if merge was successful
+      if (data.downloadUrl) {
+        window.location.href = data.downloadUrl;
+      }
+
+      toast({
+        title: "Éxito",
+        description: "Documento generado correctamente"
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -573,41 +582,47 @@ export default function FormEntries() {
   };
   
     const handleDownloadMerge = async (templateId: number, entryId: number) => {
-      try {
-        const response = await fetch(`/api/forms/${id}/documents/${templateId}/merge`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            entryId,
-            download: true
-          })
-        });
+    try {
+      const response = await fetch(`/api/forms/${id}/documents/${templateId}/merge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          entryId,
+          useOriginalTemplate: true,
+          download: true
+        })
+      });
 
-        if (!response.ok) {
-          throw new Error('Error al descargar el documento');
-        }
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const fileName = selectedTemplate.name.replace(/\.docx/gi, '');
-        link.download = `${fileName}.docx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      } catch (error) {
-        console.error('Error downloading document:', error);
-        toast({
-          title: "Error",
-          description: "No se pudo descargar el documento",
-          variant: "destructive"
-        });
+      if (!response.ok) {
+        throw new Error('Error al descargar el documento');
       }
-    };
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = selectedTemplate?.name.replace(/\.docx$/i, '') || 'document';
+      link.download = `${fileName}-merged.docx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Éxito",
+        description: "Documento generado y descargado correctamente"
+      });
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo descargar el documento",
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
     <div className="container mx-auto py-8" style={form?.theme ? {
@@ -931,7 +946,7 @@ export default function FormEntries() {
                               <DialogHeader>
                                 <DialogTitle>Seleccionar Plantilla</DialogTitle>
                                 <DialogDescription>
-                                  Seleccione una plantilla para generar el documento
+                                  Seleccione una plantilla para generarel documento
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
@@ -942,11 +957,34 @@ export default function FormEntries() {
                                     </div>
                                   ) : documents && documents.length > 0 ? (
                                     documents.map((doc) => (
-                                      <Card key={doc.id}>
+                                      <Card key={doc.id} className="overflow-hidden">
                                         <CardHeader>
-                                          <CardTitle>{doc.name}</CardTitle>
+                                          <CardTitle className="flex items-center justify-between">
+                                            <span>{doc.name}</span>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => window.open(`/api/forms/${id}/documents/${doc.id}/download`, '_blank')}
+                                              title="Descargar plantilla original"
+                                            >
+                                              <Download className="h-4 w-4" />
+                                            </Button>
+                                          </CardTitle>
                                         </CardHeader>
-                                        <CardContent>
+                                        <CardContent className="space-y-4">
+                                          {doc.thumbnailPath ? (
+                                            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border">
+                                              <img
+                                                src={`/thumbnails/${doc.thumbnailPath}`}
+                                                alt="Vista previa del documento"
+                                                className="object-cover w-full h-full"
+                                              />
+                                            </div>
+                                          ) : (
+                                            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border bg-muted flex items-center justify-center">
+                                              <FileText className="h-12 w-12 text-muted-foreground" />
+                                            </div>
+                                          )}
                                           <Button
                                             variant="outline"
                                             className="w-full"
@@ -954,6 +992,7 @@ export default function FormEntries() {
                                               mergeMutation.mutate({
                                                 documentId: doc.id,
                                                 entryId: entry.id,
+                                                useOriginalTemplate: true
                                               });
                                               setSelectedTemplate(doc);
                                             }}
@@ -961,8 +1000,10 @@ export default function FormEntries() {
                                           >
                                             {mergeMutation.isPending ? (
                                               <Spinner variant="dots" size="sm" className="mr-2"/>
-                                            ) : null}
-                                            Merge with this template
+                                            ) : (
+                                              <FileText className="mr-2 h-4 w-4" />
+                                            )}
+                                            Generar documento
                                           </Button>
                                         </CardContent>
                                       </Card>
