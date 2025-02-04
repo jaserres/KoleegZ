@@ -31,13 +31,13 @@ async function extractTextFromImage(imagePath: string): Promise<string> {
 }
 
 // Función para detectar variables en texto con mejor procesamiento
-function detectVariables(text: string): string[] {
+function detectVariables(text: string): {valid: string[], invalid: string[]} {
   // Detectar variables incluso con formato (cursivas, negritas)
   const variablePattern = /{{[\s]*([^}\s]+)[\s]*}}|<[^>]+>{{[\s]*([^}\s]+)[\s]*}}/g;
   const matches = text.match(variablePattern) || [];
   const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
   const invalidVariables: string[] = [];
-  const validVariables = new Set<string>();
+  const validVariables: string[] = [];
 
   // Función para normalizar nombres de variables
   const normalizeVariableName = (name: string) => {
@@ -56,13 +56,13 @@ function detectVariables(text: string): string[] {
     }
     const normalizedName = normalizeVariableName(varName);
     if (normalizedName && validVariableRegex.test(normalizedName)) {
-      validVariables.add(normalizedName);
+      validVariables.push(normalizedName);
     } else {
       invalidVariables.push(varName);
     }
   });
 
-  return Array.from(validVariables);
+  return {valid: validVariables, invalid: invalidVariables};
 }
 
 // Configurar multer para manejar archivos
@@ -324,7 +324,7 @@ async function generateThumbnail(buffer: Buffer): Promise<{thumbnailPath: string
       console.log('OCR Text extracted:', extractedText);
 
       // Detectar variables en el texto extraído
-      const extractedVariables = detectVariables(extractedText);
+      const extractedVariables = detectVariables(extractedText).valid;
       console.log('Variables detected from OCR:', extractedVariables);
 
       return {
@@ -784,7 +784,7 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
     console.log('OCR Text extracted:', extractedText);
 
     // Detectar variables en el texto extraído
-    const extractedVariables = detectVariables(extractedText);
+    const extractedVariables = detectVariables(extractedText).valid;
     console.log('Variables detected from OCR:', extractedVariables);
 
     res.json({
@@ -1023,11 +1023,11 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
         // Preparar datos para el merge verificando tipos
         const mergeData: Record<string, any> = {};
-        
+
         // Extraer y normalizar variables del template
         const templateContent = await mammoth.extractRawText({ buffer: copiedBuffer });
         const templateText = templateContent.value;
-        
+
         // Función para normalizar nombres de variables
         const normalizeVarName = (name: string) => {
           return name.replace(/\s+/g, '').toLowerCase();
@@ -1035,17 +1035,17 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
         // Extraer y normalizar todas las variables
         const variableRegex = /{{([^{}]+)}}/g;
-        const rawVars = new Set();
         let match;
-        
+
         // Extraer variables del texto limpio
+        const rawVars = new Set();
         while ((match = variableRegex.exec(templateText)) !== null) {
           const varName = match[1].trim().split(/[\s\n]+/)[0]; // Tomar solo la primera parte antes de espacios o saltos
           if (varName && !varName.includes('CMD_NODE')) {
             rawVars.add(varName);
           }
         }
-        
+
         // Extraer variables del template original
         variableRegex.lastIndex = 0; // Reset regex index
         while ((match = variableRegex.exec(doc.template)) !== null) {
