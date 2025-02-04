@@ -1054,15 +1054,18 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveNumbering: true,
             preserveOutline: true,
             preserveStaticContent: true,
+            preserveItalics: true,
+            preserveStyles: true,
             preprocessHtml: (html: string) => {
-              return html.replace(/{{([^}]+)}}/g, (match, variable) => {
-                return `<w:r><w:rPr><w:i w:val="1"/></w:rPr><w:t>${match}</w:t></w:r>`;
-              });
+              return html;
             },
+            processLineBreaks: true,
             postprocessRun: (run: any) => {
-              if (run.text && run.text.includes('{{') && run.text.includes('}}')) {
+              // Preservar el estilo original del run
+              if (run.text) {
                 const style = run.style || {};
                 if (run.italic) style.italic = true;
+                if (run.bold) style.bold = true;
                 run.style = style;
               }
               return run;
