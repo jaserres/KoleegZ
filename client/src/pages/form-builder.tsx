@@ -581,6 +581,81 @@ export default function FormBuilder() {
                                 </SelectContent>
                               </Select>
                             </div>
+                            {variable.type === 'number' && (
+                              <div className="space-y-4">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`auto-${index}`}
+                                    checked={variable.autoNumber?.enabled}
+                                    onCheckedChange={(checked) =>
+                                      setVariables(
+                                        variables.map((v, i) =>
+                                          i === index
+                                            ? {
+                                                ...v,
+                                                autoNumber: {
+                                                  enabled: !!checked,
+                                                  min: v.autoNumber?.min || 0,
+                                                  max: v.autoNumber?.max || 100,
+                                                },
+                                              }
+                                            : v
+                                        )
+                                      )
+                                    }
+                                  />
+                                  <Label htmlFor={`auto-${index}`}>Auto</Label>
+                                </div>
+                                {variable.autoNumber?.enabled && (
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <Label>Mínimo</Label>
+                                      <Input
+                                        type="number"
+                                        value={variable.autoNumber?.min || 0}
+                                        onChange={(e) =>
+                                          setVariables(
+                                            variables.map((v, i) =>
+                                              i === index
+                                                ? {
+                                                    ...v,
+                                                    autoNumber: {
+                                                      ...v.autoNumber!,
+                                                      min: parseInt(e.target.value),
+                                                    },
+                                                  }
+                                                : v
+                                            )
+                                          )
+                                        }
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label>Máximo</Label>
+                                      <Input
+                                        type="number"
+                                        value={variable.autoNumber?.max || 100}
+                                        onChange={(e) =>
+                                          setVariables(
+                                            variables.map((v, i) =>
+                                              i === index
+                                                ? {
+                                                    ...v,
+                                                    autoNumber: {
+                                                      ...v.autoNumber!,
+                                                      max: parseInt(e.target.value),
+                                                    },
+                                                  }
+                                                : v
+                                            )
+                                          )
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <Button
                             variant="ghost"

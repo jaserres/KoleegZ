@@ -79,7 +79,15 @@ export type SelectForm = typeof forms.$inferSelect;
 
 export const insertVariableSchema = createInsertSchema(variables);
 export const selectVariableSchema = createSelectSchema(variables);
-export type InsertVariable = typeof variables.$inferInsert;
+export interface AutoNumber {
+  enabled: boolean;
+  min?: number;
+  max?: number;
+}
+
+export type InsertVariable = typeof variables.$inferInsert & {
+  autoNumber?: AutoNumber;
+};
 export type SelectVariable = typeof variables.$inferSelect;
 
 export const insertEntrySchema = createInsertSchema(entries);
