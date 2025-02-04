@@ -7,8 +7,8 @@ import { useConfetti } from "@/hooks/use-confetti";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown, Upload, Download, Trash2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown, Upload, Download, Trash2, Share } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -39,7 +39,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-export default function FormEntries() {
+export default function FormEntries({isSharedAccess = false}) {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -55,6 +55,8 @@ export default function FormEntries() {
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const [previewContent, setPreviewContent] = useState<any>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareLink, setShareLink] = useState('');
 
   const user = {
     isPremium: true,
@@ -82,7 +84,7 @@ export default function FormEntries() {
     enabled: !!id,
   });
 
-  const { data: documents = [], isLoading: isLoadingDocuments } = useQuery<Array<{
+  const { data: documents = [], isLoading: isLoadingDocuments, isError: isErrorDocuments } = useQuery<Array<{
     id: number;
     name: string;
     filePath: string;
@@ -243,7 +245,7 @@ export default function FormEntries() {
       });
     },
   });
-    
+
   const updateEntryMutation = useMutation({
     mutationFn: async (values: Record<string, any>) => {
       const res = await apiRequest("PATCH", `/api/forms/${id}/entries/${selectedRowId}`, values);
@@ -604,6 +606,32 @@ export default function FormEntries() {
     }
   };
 
+  const shareFormMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("GET", `/api/forms/${id}/share`);
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al compartir el formulario");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      const path = `/forms/${id}/entries`.replace(/\/+/g, '/');
+      const url = new URL(path, window.location.origin);
+      url.searchParams.set('share', data.token);
+      setShareLink(url.toString().replace(/([^:]\/)\/+/g, '$1'));
+      setShowShareDialog(true);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo compartir el formulario",
+        variant: "destructive",
+      });
+    }
+  });
+
+
   return (
     <div className="container mx-auto py-8" style={form?.theme ? {
       '--primary': form.theme.primary,
@@ -719,6 +747,14 @@ export default function FormEntries() {
             <div className="flex justify-between items-center">
               <CardTitle>Entradas y Documentos</CardTitle>
               <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => shareFormMutation.mutate()}
+                  disabled={shareFormMutation.isPending}
+                >
+                  <Share className="mr-2 h-4 w-4" />
+                  Compartir Formulario
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline">
@@ -738,146 +774,6 @@ export default function FormEntries() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <FileText className="mr-2 h-4 w-4" />
-                      Nueva Plantilla
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[400px] h-[90vh] flex flex-col p-0">
-                    <DialogHeader className="px-6 py-4 border-b">
-                      <DialogTitle>Crear Nueva Plantilla</DialogTitle>
-                    </DialogHeader>
-                    <div className="flex-1 overflow-hidden">
-                      <ScrollArea className="h-full">
-                        <div className="p-6 space-y-4">
-                          {detectedVariables.length > variableLimit && (
-                            <Alert>
-                              <AlertDescription>
-                                <p className="mb-2">
-                                  Su plantilla tiene {detectedVariables.length} variables, pero su plan {user?.isPremium ? 'premium' : 'gratuito'} permite hasta {variableLimit}.
-                                </p>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={removeExcessVariables}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Eliminar variables excedentes
-                                </Button>
-                              </AlertDescription>
-                            </Alert>
-                          )}
-                          <div>
-                            <Label>Nombre de la Plantilla</Label>
-                            <Input
-                              value={documentName}
-                              onChange={(e) => setDocumentName(e.target.value)}
-                              placeholder="Ej: Carta de Presentación"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <Label>Contenido de la Plantilla</Label>
-                            <div className="text-sm text-muted-foreground mb-2">
-                              Usa {'{'}{'{'}<span className="font-mono">nombre_variable</span>{'}'}{'}'}  para insertar variables
-                            </div>
-                            <div className="space-y-4">
-                              <Textarea
-                                value={documentTemplate}
-                                onChange={(e) => setDocumentTemplate(e.target.value)}
-                                className="h-32"
-                                placeholder="Ej: Estimado {{nombre}}, ..."
-                                required
-                              />
-                              <div className="flex items-center space-x-2">
-                                <Input
-                                  id="file-upload"
-                                  type="file"
-                                  accept=".txt,.doc,.docx"
-                                  className="flex-1"
-                                  onChange={handleFileUpload}
-                                />
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() => {
-                                    const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-                                    fileInput?.click();
-                                  }}
-                                >
-                                  <Upload className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                          {(detectedVariables.length > 0 || (previewContent?.extractedVariables && previewContent.extractedVariables.length > 0)) ? (
-                            <div className="mt-4 w-full max-w-md">
-                              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                                <p className="text-green-700 font-medium mb-2">Variables Detectadas:</p>
-                                <div className="grid gap-2">
-                                  {detectedVariables.map((variable, index) => (
-                                    <div key={`initial-${index}`} className="flex items-center gap-2 text-sm">
-                                      <code className="bg-green-100 px-2 py-1 rounded text-green-800">
-                                        {'{{'}{variable.name}{'}}'}</code>
-                                    </div>
-                                  ))}
-                                  {previewContent?.extractedVariables && previewContent.extractedVariables.map((variable, index) => (
-                                    <div key={`ocr-${index}`} className="flex items-center gap-2 text-sm">
-                                      <code className="bg-green-100 px-2 py-1 rounded text-green-800">
-                                        {'{{'}{variable}{'}}'}
-                                      </code>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="mt-4 w-full max-w-md">
-                              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                                <p className="text-yellow-800 font-medium">No se detectaron variables</p>
-                                <p className="text-sm text-yellow-600 mt-1">
-                                  Por favor, agregue las variables manualmente basándose en el documento original.
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {previewContent?.thumbnailPath && (
-                            <div className="mt-4">
-                              <Button 
-                                  variant="outline"
-                                  onClick={handleOCRExtraction}
-                                  className="mt-2"
-                                >
-                                  <Plus className="mr-2 h-4 w-4" />
-                                  Intentar extraer más variables con OCR
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                    <div className="flex justify-between items-center px-6 py-4 border-t bg-background">
-                      <Button
-                        variant="outline"
-                        onClick={handleCreateFormFromTemplate}
-                        disabled={allVariables.length === 0}
-                      >
-                        <Wand2 className="mr-2 h-4 w-4" />
-                        Crear Form
-                      </Button>
-                      <Button 
-                        onClick={handleCreateDocument}
-                        disabled={createDocumentMutation.isPending || !documentName || !documentTemplate}
-                      >
-                        {createDocumentMutation.isPending ? "Creando..." : "Crear"}
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
               </div>
             </div>
           </CardHeader>
@@ -917,6 +813,7 @@ export default function FormEntries() {
                               <Button
                                 variant="outline"
                                 onClick={() => setSelectedEntry(entry.id)}
+                                disabled={isSharedAccess}
                               >
                                 <FileText className="mr-2 h-4 w-4" />
                                 Merge
@@ -941,19 +838,21 @@ export default function FormEntries() {
                                           <CardTitle>
                                             <div className="flex items-center justify-between">
                                               <span>{doc.name}</span>
-                                              <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
-                                                    deleteDocumentMutation.mutate(doc.id);
-                                                  }
-                                                }}
-                                              >
-                                                <Trash2 className="h-4 w-4" />
-                                              </Button>
+                                              {!isSharedAccess && (
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
+                                                      deleteDocumentMutation.mutate(doc.id);
+                                                    }
+                                                  }}
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              )}
                                             </div>
                                           </CardTitle>
                                         </CardHeader>
@@ -1019,23 +918,25 @@ export default function FormEntries() {
                               )}
                             </DialogContent>
                           </Dialog>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                            onClick={() => {
-                              if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
-                                deleteEntryMutation.mutate(entry.id);
-                              }
-                            }}
-                            disabled={deleteEntryMutation.isPending}
-                          >
-                            {deleteEntryMutation.isPending ? (
-                              <Spinner variant="pulse" size="sm" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
+                          {!isSharedAccess && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                              onClick={() => {
+                                if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
+                                  deleteEntryMutation.mutate(entry.id);
+                                }
+                              }}
+                              disabled={deleteEntryMutation.isPending}
+                            >
+                              {deleteEntryMutation.isPending ? (
+                                <Spinner variant="pulse" size="sm" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1044,94 +945,52 @@ export default function FormEntries() {
               </Table>
             </div>
           </CardContent>
-          <div className="mt-4">
-            <h3 className="text-lg font-medium mb-2">Plantillas Disponibles</h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              {documents.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-muted-foreground text-center">
-                      No hay plantillas disponibles. Crea una nueva plantilla para comenzar.
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                 documents.map((doc) => (
-                   <Card key={doc.id}>
-                     <CardHeader>
-                       <div className="flex justify-between items-center">
-                         <CardTitle>{doc.name}</CardTitle>
-                         <Button
-                           variant="outline"
-                           size="icon"
-                           className="text-red-500 hover:text-red-700"
-                           onClick={() => {
-                             if (window.confirm("¿Estás seguro de que quieres eliminar esta plantilla?")) {
-                               deleteDocumentMutation.mutate(doc.id);
-                             }
-                           }}
-                           disabled={deleteDocumentMutation.isPending}
-                         >
-                           {deleteDocumentMutation.isPending ? (
-                             <Spinner variant="pulse" size="sm" />
-                           ) : (
-                             <Trash2 className="h-4 w-4" />
-                           )}
-                         </Button>
-                       </div>
-                     </CardHeader>
-                     <CardContent>
-                       <div className="space-y-4">
-                         <div className="relative aspect-[3/4] w-full mb-4">
-                           {doc.thumbnailPath && (
-                             <img
-                               src={`/thumbnails/${doc.thumbnailPath}`}
-                               alt={`Vista previa de ${doc.name}`}
-                               className="absolute inset-0 w-full h-full object-cover rounded-md"
-                             />
-                           )}
-                         </div>
-                         <div className="text-sm text-muted-foreground">
-                           Creada el {format(new Date(doc.createdAt), "PPp")}
-                         </div>
-                         <Button
-                           variant="outline"
-                           onClick={() => {
-                             setSelectedTemplate(doc);
-                             setShowTemplateDialog(true);
-                           }}
-                         >
-                           Ver Plantilla
-                         </Button>
-                       </div>
-                     </CardContent>
-                   </Card>
-                 ))
-              )}
-            </div>
-          </div>
         </Card>
       </div>
-        <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>{selectedTemplate?.name}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Contenido de la Plantilla</Label>
-                <Textarea
-                  value={selectedTemplate?.template || ""}
-                  readOnly
-                  className="h-40 font-mono"
-                />
-              </div>
-              <Button variant="outline" onClick={() => setShowTemplateDialog(false)}>
-                Cerrar
-              </Button>
+      <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>{selectedTemplate?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Contenido de la Plantilla</Label>
+              <Textarea
+                value={selectedTemplate?.template || ""}
+                readOnly
+                className="h-40 font-mono"
+              />
             </div>
-          </DialogContent>
-        </Dialog>
+            <Button variant="outline" onClick={() => setShowTemplateDialog(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Compartir Formulario</DialogTitle>
+            <DialogDescription>
+              Comparta este enlace para dar acceso al formulario:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input value={shareLink} readOnly />
+            <Button
+              onClick={() => {
+                navigator.clipboard.writeText(shareLink);
+                toast({
+                  title: "Copiado",
+                  description: "Enlace copiado al portapapeles"
+                });
+              }}
+            >
+              Copiar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
