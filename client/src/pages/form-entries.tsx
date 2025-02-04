@@ -616,10 +616,9 @@ export default function FormEntries({isSharedAccess = false}) {
       return res.json();
     },
     onSuccess: (data) => {
-      const baseUrl = window.location.origin;
-      const cleanPath = `/forms/${id}/entries`.replace(/\/+/g, '/');
-      const shareUrl = `${baseUrl}${cleanPath}?share=${data.token}`;
-      setShareLink(shareUrl);
+      const url = new URL(`/forms/${id}/entries`, window.location.origin);
+      url.searchParams.set('share', data.token);
+      setShareLink(url.toString());
       setShowShareDialog(true);
     },
     onError: (error: Error) => {

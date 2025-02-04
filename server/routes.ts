@@ -413,30 +413,36 @@ export function registerRoutes(app: Express): Server {
     // Regular auth check
     const user = ensureAuth(req);
 
-app.post("/api/forms/:formId/share", async (req, res) => {
+app.get("/api/forms/:formId/share", async (req, res) => {
   const user = ensureAuth(req);
   const formId = parseInt(req.params.formId);
 
-  // Verify ownership
-  const [form] = await db.select()
-    .from(forms)
-    .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+  try {
+    // Verify ownership
+    const [form] = await db.select()
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-  if (!form) {
-    return res.status(404).send("Form not found");
+    if (!form) {
+      return res.status(404).send("Form not found");
+    }
+
+    // Generate shorter token
+    const token = crypto.randomBytes(16).toString('hex');
+
+    // Create share record
+    await db.insert(formShares)
+      .values({
+        formId,
+        token
+      });
+
+    res.json({ token });
+  } catch (error) {
+    console.error('Error sharing form:', error);
+    res.status(500).send("Error sharing form");
   }
-
-  // Generate unique token
-  const token = crypto.randomBytes(32).toString('hex');
-
-  // Create share record
-  await db.insert(formShares)
-    .values({
-      formId,
-      token
-    });
-
-  res.json({ token });
+});s.json({ token });
 });
 
 
