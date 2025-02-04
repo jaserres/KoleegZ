@@ -1057,26 +1057,27 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveItalics: true,
             preserveStyles: true,
             preprocessHtml: (html: string) => {
-              // Normalizar todas las variables a minúsculas sin importar el formato
               const processVariables = (text: string) => {
                 return text.replace(/{{([^}]+)}}/g, (match, variable) => {
-                  const normalized = variable.trim().toLowerCase();
-                  return `{{${normalized}}}`;
+                  // Limpiar y normalizar nombre de variable
+                  const normalized = variable.trim()
+                    .toLowerCase()
+                    .replace(/\s+/g, '_')
+                    .replace(/[^a-z0-9_]/g, '');
+                  
+                  // Asegurar que sea un nombre de variable válido
+                  if (normalized) {
+                    return `{VAR=${normalized}}`;
+                  }
+                  return match;
                 });
               };
-
-              // Procesar todo el documento manteniendo estilos
-              const processDocument = (content: string) => {
-                const parts = content.split(/({{[^}]+}})/g);
-                return parts.map(part => {
-                  if (part.startsWith('{{')) {
-                    return processVariables(part);
-                  }
-                  return part;
-                }).join('');
-              };
-
-              return processDocument(html);
+              
+              return processVariables(html);
+            },
+            preprocessTemplate: (template: string) => {
+              // Normalizar comandos antes del procesamiento
+              return template.replace(/CMDNODE=([^}]+)/g, 'VAR=$1');
             },
             processLineBreaks: true,
             postprocessRun: (run: any) => {
