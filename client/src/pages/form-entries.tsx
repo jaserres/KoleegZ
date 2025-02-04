@@ -738,7 +738,6 @@ export default function FormEntries() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                          </div>
               </div>
             </div>
           </CardHeader>
