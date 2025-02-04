@@ -959,11 +959,11 @@ export default function FormEntries() {
                                         </CardHeader>
                                         <CardContent>
                                           {doc.thumbnailPath && (
-                                            <div className="relative aspect-[3/4] w-full h-64 mb-4">
+                                            <div className="relative aspect-[3/4] w-full max-h-32 mb-4">
                                               <img
                                                 src={`/thumbnails/${doc.thumbnailPath}`}
                                                 alt={`Vista previa de ${doc.name}`}
-                                                className="absolute inset-0 w-full h-full object-contain rounded-md border border-muted hover:border-primary transition-colors bg-white"
+                                                className="absolute inset-0 w-full h-full object-cover rounded-md"
                                               />
                                             </div>
                                           )}
