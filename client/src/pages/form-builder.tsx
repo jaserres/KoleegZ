@@ -28,8 +28,6 @@ export default function FormBuilder() {
   const [showEditor, setShowEditor] = useState(false);
   const [previewContent, setPreviewContent] = useState<{
     name: string;
-    template?: string;
-    originalTemplate?: string;
     filePath: string;
     thumbnailPath?: string;
     extractedVariables?: string[];
@@ -103,24 +101,19 @@ export default function FormBuilder() {
         `/api/forms/${id}/documents/upload` : 
         `/api/forms/temp/documents/upload`;
 
-      console.log('Uploading to:', uploadUrl);
-
       const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Server response:', errorText);
-        throw new Error(errorText);
+        throw new Error(await response.text());
       }
 
       const doc = await response.json();
-      console.log('Upload response:', doc);
 
-      // Process detected variables from both template and OCR
-      const extractedVars = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
+      // Process detected variables
+      const variables = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
         name: varName,
         label: varName
           .split('_')
@@ -129,12 +122,10 @@ export default function FormBuilder() {
         type: 'text'
       })) : [];
 
-      setAllVariables(extractedVars);
-      setVariables(extractedVars);
+      setAllVariables(variables);
+      setVariables(variables);
       setPreviewContent({
         name: file.name.split('.')[0],
-        template: doc.template,
-        originalTemplate: doc.originalTemplate || doc.template,
         filePath: doc.filePath,
         thumbnailPath: doc.thumbnailPath,
         extractedVariables: doc.extractedVariables
@@ -221,8 +212,6 @@ export default function FormBuilder() {
         name: formName,
         document: previewContent ? {
           name: previewContent.name,
-          template: previewContent.template,
-          originalTemplate: previewContent.originalTemplate,
           filePath: previewContent.filePath,
           thumbnailPath: previewContent.thumbnailPath
         } : undefined
@@ -279,8 +268,6 @@ export default function FormBuilder() {
       await apiRequest("PATCH", `/api/forms/${id}`, {
         name: formName,
         document: previewContent ? {
-          template: previewContent.template,
-          originalTemplate: previewContent.originalTemplate,
           filePath: previewContent.filePath,
           thumbnailPath: previewContent.thumbnailPath
         } : undefined

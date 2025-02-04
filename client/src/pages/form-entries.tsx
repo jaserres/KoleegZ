@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown, Upload, Download } from "lucide-react";
+import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown, Upload, Download, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -38,7 +38,6 @@ import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Trash2 } from "lucide-react";
 
 export default function FormEntries() {
   const { id } = useParams();
@@ -271,8 +270,8 @@ export default function FormEntries() {
         variant: "destructive",
       });
     },
-  });
-  
+  });  
+
   const deleteDocumentMutation = useMutation({
     mutationFn: async (documentId: number) => {
       await apiRequest("DELETE", `/api/forms/${id}/documents/${documentId}`);
@@ -420,8 +419,8 @@ export default function FormEntries() {
     }
 
     await createDocumentMutation.mutateAsync();
-  };
-  
+  };  
+
   const handleFieldChange = (name: string, value: any) => {
     setFormValues((prev) => ({
       ...prev,
@@ -450,8 +449,8 @@ export default function FormEntries() {
     });
 
     createEntryMutation.mutate(values);
-  };
-  
+  };  
+
   const handleOCRExtraction = async () => {
     if (!previewContent?.thumbnailPath) return;
 
@@ -546,11 +545,11 @@ export default function FormEntries() {
 
     sessionStorage.setItem("selectedTemplate", JSON.stringify(templateData));
     setLocation("/forms/new");
-  };
-  
+  };  
 
-  const variableLimit = user?.isPremium ? 50 : 10;
-  
+
+  const variableLimit = user?.isPremium ? 50 : 10;  
+
   const removeExcessVariables = () => {
     const excess = detectedVariables.length - variableLimit;
     if (excess > 0) {
@@ -560,8 +559,8 @@ export default function FormEntries() {
         description: `Se han eliminado ${excess} variables para cumplir con el límite del plan.`,
       });
     }
-  };
-  
+  };  
+
   const handleDownloadMerge = async (templateId: number, entryId: number) => {
     try {
       const response = await fetch(`/api/forms/${id}/documents/${templateId}/merge`, {
@@ -932,65 +931,61 @@ export default function FormEntries() {
                               <div className="space-y-4">
                                 <div className="grid gap-4 grid-cols-2">
                                   {isLoadingDocuments ? (
-                                    <div className="col-span-2 text-center py-4">
+                                    <div className="flex items-center justify-center p-8">
                                       <Spinner />
                                     </div>
                                   ) : documents && documents.length > 0 ? (
                                     documents.map((doc) => (
                                       <Card key={doc.id} className="overflow-hidden">
                                         <CardHeader>
-                                          <CardTitle className="flex items-center justify-between">
-                                            <span>{doc.name}</span>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() => window.open(`/api/forms/${id}/documents/${doc.id}/download`, '_blank')}
-                                              title="Descargar plantilla original"
-                                            >
-                                              <Download className="h-4 w-4" />
-                                            </Button>
+                                          <CardTitle>
+                                            <div className="flex items-center justify-between">
+                                              <span>{doc.name}</span>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
+                                                    deleteDocumentMutation.mutate(doc.id);
+                                                  }
+                                                }}
+                                              >
+                                                <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                            </div>
                                           </CardTitle>
                                         </CardHeader>
-                                        <CardContent className="space-y-4">
-                                          {doc.thumbnailPath ? (
-                                            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border">
+                                        <CardContent>
+                                          {doc.thumbnailPath && (
+                                            <div className="relative aspect-[3/4] w-full max-h-32 mb-4">
                                               <img
                                                 src={`/thumbnails/${doc.thumbnailPath}`}
-                                                alt="Vista previa del documento"
-                                                className="object-cover w-full h-full"
+                                                alt={`Vista previa de ${doc.name}`}
+                                                className="absolute inset-0 w-full h-full object-cover rounded-md"
                                               />
                                             </div>
-                                          ) : (
-                                            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border bg-muted flex items-center justify-center">
-                                              <FileText className="h-12 w-12 text-muted-foreground" />
-                                            </div>
                                           )}
-                                          <Button
-                                            variant="outline"
-                                            className="w-full"
-                                            onClick={() => {
-                                              mergeMutation.mutate({
-                                                documentId: doc.id,
-                                                entryId: entry.id,
-                                                useOriginalTemplate: true
-                                              });
-                                              setSelectedTemplate(doc);
-                                            }}
-                                            disabled={mergeMutation.isPending}
-                                          >
-                                            {mergeMutation.isPending ? (
-                                              <Spinner variant="dots" size="sm" className="mr-2"/>
-                                            ) : (
-                                              <FileText className="mr-2 h-4 w-4" />
-                                            )}
-                                            Generar documento
-                                          </Button>
+                                          <div className="flex justify-end mt-4">
+                                            <Button
+                                              variant="secondary"
+                                              onClick={() => {
+                                                setSelectedTemplate(doc);
+                                                handleDownloadMerge(doc.id, selectedEntry!);
+                                              }}
+                                              disabled={!selectedEntry}
+                                            >
+                                              <FileDown className="mr-2 h-4 w-4" />
+                                              Generar Documento
+                                            </Button>
+                                          </div>
                                         </CardContent>
                                       </Card>
                                     ))
                                   ) : (
-                                    <div className="col-span-2 text-center py-4 text-muted-foreground">
-                                      No hay plantillas disponibles para este formulario
+                                    <div className="text-center p-8 text-muted-foreground">
+                                      No hay plantillas disponibles
                                     </div>
                                   )}
                                 </div>
@@ -1087,10 +1082,14 @@ export default function FormEntries() {
                      </CardHeader>
                      <CardContent>
                        <div className="space-y-4">
-                         <div className="bg-muted p-4 rounded-md">
-                           <pre className="text-xs font-mono whitespace-pre-wrap line-clamp-3">
-                             {doc.preview || doc.template.slice(0, 200)}
-                           </pre>
+                         <div className="relative aspect-[3/4] w-full mb-4">
+                           {doc.thumbnailPath && (
+                             <img
+                               src={`/thumbnails/${doc.thumbnailPath}`}
+                               alt={`Vista previa de ${doc.name}`}
+                               className="absolute inset-0 w-full h-full object-cover rounded-md"
+                             />
+                           )}
                          </div>
                          <div className="text-sm text-muted-foreground">
                            Creada el {format(new Date(doc.createdAt), "PPp")}
