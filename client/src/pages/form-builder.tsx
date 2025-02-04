@@ -444,7 +444,17 @@ export default function FormBuilder() {
                         <div className="mt-4">
                           {variables.length > 0 ? (
                             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                              <p className="text-green-700 font-medium mb-2">Variables Detectadas:</p>
+                              <CardTitle>Variables Detectadas</CardTitle>
+                              <CardDescription>
+                                Variables encontradas en el documento. Por favor, revise cuidadosamente ya que el OCR puede confundir algunos caracteres:
+                                <ul className="mt-2 list-disc list-inside text-sm">
+                                  <li>La letra 'g' puede ser reconocida como 'q'</li>
+                                  <li>La 'I' mayúscula puede ser reconocida como 'l' minúscula</li>
+                                  <li>La 'O' mayúscula puede ser reconocida como '0' (cero)</li>
+                                  <li>Otros caracteres similares pueden confundirse entre sí</li>
+                                </ul>
+                                Compare las variables detectadas con el documento original y corrija manualmente si es necesario.
+                              </CardDescription>
                               <div className="grid gap-2">
                                 {variables.map((variable, index) => (
                                   <div key={index} className="flex items-center gap-2 text-sm">
