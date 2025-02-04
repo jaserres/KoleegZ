@@ -1164,18 +1164,21 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
               processNode(doc.documentElement);
               return doc.documentElement.outerHTML;
             },
-                const varName = extractVariableName(match);
-                if (!varName) return match;
-                
-                const hasItalic = match.includes('<w:i/>');
-                const hasBold = match.includes('<w:b/>');
-                
-                let style = '<w:rPr>';
-                if (hasItalic) style += '<w:i/>';
-                if (hasBold) style += '<w:b/>';
-                style += '</w:rPr>';
-                
-                return `<w:r>${style}<w:t xml:space="preserve">{{${varName}}}</w:t></w:r>`;
+                const cleanText = text.replace(/[^a-zA-Z0-9_{} ]/g, '');
+                if (cleanText.includes('{{')) {
+                  const style = run.style || {};
+                  if (run.italic) {
+                    style.fontStyle = 'italic';
+                    run.italic = true;
+                  }
+                  if (run.bold) {
+                    style.fontWeight = 'bold';
+                    run.bold = true;
+                  }
+                  run.style = style;
+                  run.preserveFormat = true;
+                  run.text = cleanText;
+                }
               });
 
               // Procesar variables en texto normal
