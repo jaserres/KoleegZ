@@ -1066,7 +1066,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
               };
 
               // Procesar variables en texto con formato (cursivas, negritas, etc)
-              let processedHtml = html.replace(/(<w:rPr>.*?<\/w:rPr>.*?{{[^}]+}}.*?<\/w:r>)/g, (match) => {
+              let processedHtml = html.replace(/(<w:rPr>(?:.*?<w:i\/>.*?|.*?)<\/w:rPr>.*?{{[^}]+}}.*?<\/w:r>)/g, (match) => {
                 const normalizedMatch = normalizeVariables(match);
                 return normalizedMatch;
               });
