@@ -3,8 +3,6 @@ import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,7 +27,6 @@ export default function FormBuilder() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [showEditor, setShowEditor] = useState(false);
-  const [showTemplateProcessingDialog, setShowTemplateProcessingDialog] = useState(false);
   const [previewContent, setPreviewContent] = useState<{
     name: string;
     template?: string;
@@ -99,8 +96,6 @@ export default function FormBuilder() {
     }
 
     try {
-      setShowTemplateProcessingDialog(true);
-
       const formData = new FormData();
       formData.append('file', file);
       formData.append('preserveOriginal', 'true');
@@ -112,22 +107,10 @@ export default function FormBuilder() {
       const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
-        headers: {
-          'Accept': 'application/json'
-        }
       });
 
       if (!response.ok) {
-        if (response.status === 502 || response.status === 503) {
-          throw new Error('El servidor no está respondiendo. Por favor intente nuevamente.');
-        }
-        const error = await response.text();
-        throw new Error(error || 'Error al cargar el archivo');
-      }
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Respuesta inválida del servidor');
+        throw new Error(await response.text());
       }
 
       const doc = await response.json();
@@ -154,14 +137,12 @@ export default function FormBuilder() {
       });
 
       setShowEditor(true);
-      setShowTemplateProcessingDialog(false);
 
-    } catch (error: any) {
-      setShowTemplateProcessingDialog(false);
+    } catch (error) {
       console.error('Error al cargar archivo:', error);
       toast({
         title: "Error al cargar archivo",
-        description: error.message || "Error al procesar el archivo",
+        description: error instanceof Error ? error.message : "Error al procesar el archivo",
         variant: "destructive"
       });
     }
@@ -327,20 +308,7 @@ export default function FormBuilder() {
   });
 
   return (
-    <>
-      <Dialog open={showTemplateProcessingDialog} onOpenChange={setShowTemplateProcessingDialog}>
-        <DialogContent className="sm:max-w-md">
-          <div className="flex flex-col items-center justify-center gap-4 py-8">
-            <Spinner size="lg" className="text-primary"/>
-            <DialogTitle>Procesando Plantilla</DialogTitle>
-            <DialogDescription>
-              Extrayendo variables y preparando el documento...
-            </DialogDescription>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <div className="container mx-auto py-8">
+    <div className="container mx-auto py-8">
       <Button variant="ghost" className="mb-8" onClick={() => setLocation("/")}>
         <ArrowLeft className="mr-2 h-4 w-4" />
         Volver a Formularios
@@ -445,17 +413,7 @@ export default function FormBuilder() {
                         <div className="mt-4">
                           {variables.length > 0 ? (
                             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                              <CardTitle>Variables Detectadas</CardTitle>
-                              <CardDescription>
-                                Variables encontradas en el documento. Por favor, revise cuidadosamente ya que el OCR puede confundir algunos caracteres:
-                                <ul className="mt-2 list-disc list-inside text-sm">
-                                  <li>La letra 'g' puede ser reconocida como 'q'</li>
-                                  <li>La 'I' mayúscula puede ser reconocida como 'l' minúscula</li>
-                                  <li>La 'O' mayúscula puede ser reconocida como '0' (cero)</li>
-                                  <li>Otros caracteres similares pueden confundirse entre sí</li>
-                                </ul>
-                                Compare las variables detectadas con el documento original y corrija manualmente si es necesario.
-                              </CardDescription>
+                              <p className="text-green-700 font-medium mb-2">Variables Detectadas:</p>
                               <div className="grid gap-2">
                                 {variables.map((variable, index) => (
                                   <div key={index} className="flex items-center gap-2 text-sm">
@@ -582,50 +540,35 @@ export default function FormBuilder() {
                                 </SelectContent>
                               </Select>
                             </div>
-                            {variable.type === 'number' && (
+                            {variable.type === "number" && (
                               <div className="space-y-4">
                                 <div className="flex items-center space-x-2">
                                   <Checkbox
-                                    id={`auto-${index}`}
-                                    checked={variable.autoNumber?.enabled}
+                                    id={`random-${index}`}
+                                    checked={variable.useRandomInitial}
                                     onCheckedChange={(checked) =>
                                       setVariables(
                                         variables.map((v, i) =>
-                                          i === index
-                                            ? {
-                                                ...v,
-                                                autoNumber: {
-                                                  enabled: !!checked,
-                                                  min: v.autoNumber?.min || 0,
-                                                  max: v.autoNumber?.max || 100,
-                                                },
-                                              }
-                                            : v
+                                          i === index ? { ...v, useRandomInitial: checked } : v
                                         )
                                       )
                                     }
                                   />
-                                  <Label htmlFor={`auto-${index}`}>Auto</Label>
+                                  <Label htmlFor={`random-${index}`}>
+                                    Generar valor inicial aleatorio
+                                  </Label>
                                 </div>
-                                {variable.autoNumber?.enabled && (
+                                {variable.useRandomInitial && (
                                   <div className="grid grid-cols-2 gap-4">
                                     <div>
                                       <Label>Mínimo</Label>
                                       <Input
                                         type="number"
-                                        value={variable.autoNumber?.min || 0}
+                                        value={variable.minValue || ""}
                                         onChange={(e) =>
                                           setVariables(
                                             variables.map((v, i) =>
-                                              i === index
-                                                ? {
-                                                    ...v,
-                                                    autoNumber: {
-                                                      ...v.autoNumber!,
-                                                      min: parseInt(e.target.value),
-                                                    },
-                                                  }
-                                                : v
+                                              i === index ? { ...v, minValue: e.target.value } : v
                                             )
                                           )
                                         }
@@ -635,19 +578,11 @@ export default function FormBuilder() {
                                       <Label>Máximo</Label>
                                       <Input
                                         type="number"
-                                        value={variable.autoNumber?.max || 100}
+                                        value={variable.maxValue || ""}
                                         onChange={(e) =>
                                           setVariables(
                                             variables.map((v, i) =>
-                                              i === index
-                                                ? {
-                                                    ...v,
-                                                    autoNumber: {
-                                                      ...v.autoNumber!,
-                                                      max: parseInt(e.target.value),
-                                                    },
-                                                  }
-                                                : v
+                                              i === index ? { ...v, maxValue: e.target.value } : v
                                             )
                                           )
                                         }
@@ -692,6 +627,5 @@ export default function FormBuilder() {
         )}
       </div>
     </div>
-    </>
   );
 }
