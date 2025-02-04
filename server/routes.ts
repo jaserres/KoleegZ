@@ -1057,26 +1057,23 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveItalics: true,
             preserveStyles: true,
             preprocessHtml: (html: string) => {
-              // Normalizar todas las variables independientemente de su formato
-              const normalizeVariables = (text: string) => {
-                return text.replace(/{{([^}]+)}}/g, (match, variable) => {
-                  const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
-                  return `{{${cleanVariable}}}`;
-                });
-              };
+              // Función para limpiar nombres de variables
+              const cleanVariableName = (name: string) => name.trim().replace(/[^a-zA-Z0-9_]/g, '');
 
-              // Procesar variables en texto con formato (cursivas, negritas, etc)
-              let processedHtml = html.replace(/(<w:rPr>(?:.*?<w:i\/>.*?|.*?)<\/w:rPr>.*?{{[^}]+}}.*?<\/w:r>)/g, (match) => {
-                const normalizedMatch = normalizeVariables(match);
-                return normalizedMatch;
-              });
+              // Primero procesar variables en cursiva
+              let processedHtml = html.replace(/(<w:rPr>[^<]*<w:i\/>[^<]*<\/w:rPr>)<w:t[^>]*>([^<]*?{{[^}]+}}[^<]*?)<\/w:t>/g, 
+                (match, rPr, content) => {
+                  const processedContent = content.replace(/{{([^}]+)}}/g, (_, variable) => 
+                    `{{${cleanVariableName(variable)}}}`
+                  );
+                  return `${rPr}<w:t xml:space="preserve">${processedContent}</w:t>`;
+                }
+              );
 
-              // Procesar variables en texto normal
-              processedHtml = processedHtml.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
-                const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
-                const prefixStr = prefix || '';
-                const suffixStr = suffix || '';
-                return `<w:r><w:t xml:space="preserve">${prefixStr}{{${cleanVariable}}}${suffixStr}</w:t></w:r>`;
+              // Luego procesar el resto de variables
+              processedHtml = processedHtml.replace(/{{([^}]+)}}/g, (match, variable) => {
+                const cleanVariable = cleanVariableName(variable);
+                return `{{${cleanVariable}}}`;
               });
 
               return processedHtml;
