@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown, Upload, Download, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, FileText, Save, FileDown, Upload, Download, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -47,7 +47,6 @@ export default function FormEntries() {
   const [documentName, setDocumentName] = useState("");
   const [documentTemplate, setDocumentTemplate] = useState("");
   const [mergedResult, setMergedResult] = useState("");
-  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   const [detectedVariables, setDetectedVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
   const [allVariables, setAllVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
@@ -167,7 +166,7 @@ export default function FormEntries() {
       });
       setDocumentName("");
       setDocumentTemplate("");
-      setShowTemplateDialog(false);
+      //setShowTemplateDialog(false);
     },
     onError: (error: Error) => {
       toast({
@@ -941,51 +940,82 @@ export default function FormEntries() {
                                           <CardTitle>
                                             <div className="flex items-center justify-between">
                                               <span>{doc.name}</span>
-                                              <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
-                                                    deleteDocumentMutation.mutate(doc.id);
-                                                  }
-                                                }}
-                                              >
-                                                <Trash2 className="h-4 w-4" />
-                                              </Button>
+                                              <div className="flex gap-2">
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  onClick={() => window.open(`/api/forms/${id}/documents/${doc.id}/download`, '_blank')}
+                                                  title="Descargar documento original"
+                                                >
+                                                  <Download className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
+                                                      deleteDocumentMutation.mutate(doc.id);
+                                                    }
+                                                  }}
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              </div>
                                             </div>
                                           </CardTitle>
                                         </CardHeader>
                                         <CardContent>
-                                          {doc.thumbnailPath ? (
-  <div className="relative aspect-[3/4] w-full max-h-32 mb-4">
-    <img
-      src={doc.thumbnailPath.startsWith('/') ? doc.thumbnailPath : `/thumbnails/${doc.thumbnailPath}`}
-      alt={`Vista previa de ${doc.name}`}
-      className="absolute inset-0 w-full h-full object-cover rounded-md"
-      onError={(e) => {
-        console.error('Error loading thumbnail:', doc.thumbnailPath);
-        e.currentTarget.style.display = 'none';
-      }}
-    />
-  </div>
-) : (
-  <div className="relative aspect-[3/4] w-full max-h-32 mb-4 bg-muted flex items-center justify-center">
-    <FileText className="h-12 w-12 text-muted-foreground" />
-  </div>
-)}
-
+                                          <div className="relative aspect-[3/4] w-full max-h-32 mb-4 overflow-hidden">
+                                            {doc.thumbnailPath ? (
+                                              <img
+                                                src={`/thumbnails/${doc.thumbnailPath}`}
+                                                alt={`Vista previa de ${doc.name}`}
+                                                className="w-full h-full object-contain rounded-md"
+                                                onError={(e) => {
+                                                  console.error('Error loading thumbnail:', doc.thumbnailPath);
+                                                  e.currentTarget.parentElement!.innerHTML = `
+                                                    <div class="w-full h-full flex items-center justify-center bg-muted">
+                                                      <svg class="h-12 w-12 text-muted-foreground" viewBox="0 0 24 24">
+                                                        <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/>
+                                                        <path fill="currentColor" d="M14 3v5h5M16 13H8M16 17H8M10 9H8"/>
+                                                      </svg>
+                                                    </div>
+                                                  `;
+                                                }}
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full flex items-center justify-center bg-muted">
+                                                <FileText className="h-12 w-12 text-muted-foreground" />
+                                              </div>
+                                            )}
+                                          </div>
                                           <div className="flex justify-end mt-4">
                                             <Button
                                               variant="secondary"
                                               onClick={() => {
-                                                setSelectedTemplate(doc);
-                                                handleDownloadMerge(doc.id, selectedEntry!);
+                                                if (selectedEntry) {
+                                                  mergeMutation.mutate({
+                                                    documentId: doc.id,
+                                                    entryId: selectedEntry,
+                                                    useOriginalTemplate: true
+                                                  });
+                                                } else {
+                                                  toast({
+                                                    title: "Error",
+                                                    description: "Por favor seleccione una entrada primero",
+                                                    variant: "destructive"
+                                                  });
+                                                }
                                               }}
-                                              disabled={!selectedEntry}
+                                              disabled={!selectedEntry || mergeMutation.isPending}
                                             >
-                                              <FileDown className="mr-2 h-4 w-4" />
+                                              {mergeMutation.isPending ? (
+                                                <Spinner variant="dots" size="sm" className="mr-2" />
+                                              ) : (
+                                                <FileDown className="mr-2 h-4 w-4" />
+                                              )}
                                               Generar Documento
                                             </Button>
                                           </div>
@@ -993,7 +1023,7 @@ export default function FormEntries() {
                                       </Card>
                                     ))
                                   ) : (
-                                    <div className="text-center p-8 text-muted-foreground">
+                                    <div className="col-span-2 text-center p-8 text-muted-foreground">
                                       No hay plantillas disponibles
                                     </div>
                                   )}
@@ -1107,7 +1137,7 @@ export default function FormEntries() {
                            variant="outline"
                            onClick={() => {
                              setSelectedTemplate(doc);
-                             setShowTemplateDialog(true);
+                             //setShowTemplateDialog(true);
                            }}
                          >
                            Ver Plantilla
@@ -1121,26 +1151,7 @@ export default function FormEntries() {
           </div>
         </Card>
       </div>
-        <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>{selectedTemplate?.name}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Contenido de la Plantilla</Label>
-                <Textarea
-                  value={selectedTemplate?.template || ""}
-                  readOnly
-                  className="h-40 font-mono"
-                />
-              </div>
-              <Button variant="outline" onClick={() => setShowTemplateDialog(false)}>
-                Cerrar
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+      {/* Removed showTemplateDialog related Dialog component */}
     </div>
   );
 }
