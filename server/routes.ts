@@ -632,7 +632,7 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
-  
+
 app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
         const user = ensureAuth(req);
@@ -926,7 +926,7 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
 
     res.sendStatus(200);
   });
-  
+
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -1054,9 +1054,9 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveNumbering: true,
             preserveOutline: true,
             preserveStaticContent: true,
-            preprocessTemplate: (template: any) => {
-              // Preserve original XML structure
-              return template;
+            preprocessTemplate: (template: string) => {
+              // Asegurar que las variables CMDNODE se traten igual que las normales
+              return template.replace(/CMDNODE=([^}]+)/g, '$1');
             },
             postprocessTemplate: (template: any) => {
               // Ensure XML structure is maintained
@@ -1299,7 +1299,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
     res.json(entry);
   });
-  
+
     app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
