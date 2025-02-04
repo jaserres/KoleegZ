@@ -1150,20 +1150,35 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
               const processTextNodes = (node) => {
                 if (node.nodeType === 3 && node.nodeValue.includes('{{')) {
                   const parentRun = node.parentNode.parentNode; // w:r element
+                  if (!parentRun || parentRun.nodeName !== 'w:r') return;
+
+                  // Preservar todos los elementos de estilo existentes
                   const rPr = parentRun.getElementsByTagName('w:rPr')[0];
+                  const styles = [];
                   
                   if (rPr) {
-                    const isItalic = rPr.getElementsByTagName('w:i').length > 0;
-                    const isBold = rPr.getElementsByTagName('w:b').length > 0;
-                    
-                    let style = '<w:rPr>';
-                    if (isItalic) style += '<w:i/>';
-                    if (isBold) style += '<w:b/>';
-                    style += '</w:rPr>';
-                    
-                    const varName = node.nodeValue.match(/{{([^}]+)}}/)[1].trim();
-                    parentRun.innerHTML = `${style}<w:t xml:space="preserve">{{${varName}}}</w:t>`;
+                    // Copiar todos los elementos de estilo existentes
+                    Array.from(rPr.childNodes).forEach(child => {
+                      if (child.nodeName) {
+                        styles.push(child.nodeName);
+                      }
+                    });
                   }
+
+                  // Crear nuevo rPr con todos los estilos
+                  let newStyle = '<w:rPr>';
+                  styles.forEach(style => {
+                    if (style === 'w:i' || style === 'w:b' || style === 'w:u' || style === 'w:color' || style === 'w:sz') {
+                      newStyle += `<${style}/>`;
+                    }
+                  });
+                  newStyle += '</w:rPr>';
+                  
+                  const varName = node.nodeValue.match(/{{([^}]+)}}/)[1].trim();
+                  const newText = `${newStyle}<w:t xml:space="preserve">{{${varName}}}</w:t>`;
+                  
+                  // Reemplazar contenido manteniendo el nodo w:r
+                  parentRun.innerHTML = newText;
                 }
                 
                 // Procesar hijos recursivamente
