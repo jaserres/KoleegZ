@@ -687,10 +687,12 @@ export default function FormEntries({isSharedAccess = false}) {
                             variable.type === "number" ? "number" : "text"}
                       value={formValues[variable.name] || ""}
                       onChange={(e) => handleFieldChange(variable.name, e.target.value)}
+                      readOnly={variable.type === "number" && variable.autoNumber?.enabled}
                       className="w-full"
                       style={form?.theme ? {
                         '--primary': form.theme.primary,
-                        borderColor: `${form.theme.primary}20`
+                        borderColor: `${form.theme.primary}20`,
+                        backgroundColor: variable.type === "number" && variable.autoNumber?.enabled ? "#f3f4f6" : undefined
                       } as React.CSSProperties : undefined}
                     />
                   </div>
