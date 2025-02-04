@@ -577,7 +577,6 @@ app.get("/api/forms/:formId/share", async (req, res) => {
         name: req.body.name,
         label: req.body.label,
         type: req.body.type,
-        options: req.body.options || [],
       })
       .returning();
 
