@@ -1034,10 +1034,26 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
         };
 
         // Extraer y normalizar todas las variables
-        const rawVars = new Set([
-          ...(templateText.match(/{{([^}]+)}}/g) || []).map(v => v.slice(2, -2).trim()),
-          ...(doc.template.match(/{{([^}]+)}}/g) || []).map(v => v.slice(2, -2).trim())
-        ]);
+        const variableRegex = /{{([^{}]+)}}/g;
+        const rawVars = new Set();
+        let match;
+        
+        // Extraer variables del texto limpio
+        while ((match = variableRegex.exec(templateText)) !== null) {
+          const varName = match[1].trim().split(/[\s\n]+/)[0]; // Tomar solo la primera parte antes de espacios o saltos
+          if (varName && !varName.includes('CMD_NODE')) {
+            rawVars.add(varName);
+          }
+        }
+        
+        // Extraer variables del template original
+        variableRegex.lastIndex = 0; // Reset regex index
+        while ((match = variableRegex.exec(doc.template)) !== null) {
+          const varName = match[1].trim().split(/[\s\n]+/)[0];
+          if (varName && !varName.includes('CMD_NODE')) {
+            rawVars.add(varName);
+          }
+        }
 
         // Crear un mapa de nombres normalizados a nombres originales
         const varMap = new Map();
@@ -1078,11 +1094,14 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             failFast: false,
             rejectNullish: false,
             preprocessTemplate: (template) => {
-              const formattedVars = Object.keys(mergeData).reduce((acc, key) => {
-                acc[key] = mergeData[key] || '';
-                return acc;
-              }, {});
-              return template;
+              // Limpiar variables mal formadas
+              return template.replace(/{{([^{}]+)}}/g, (match, varName) => {
+                const cleanVarName = varName.trim().split(/[\s\n]+/)[0];
+                if (cleanVarName && mergeData[cleanVarName] !== undefined) {
+                  return `{{${cleanVarName}}}`;
+                }
+                return match;
+              });
             },
             processLineBreaks: true,
             processImages: true,
