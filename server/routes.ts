@@ -882,7 +882,7 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
   app.delete("/api/forms/:formId/documents/:documentId", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
-    const documentId = parseInt(req.params.documentId);
+    const documentId =parseInt(req.params.documentId);
 
     try {
       // Verify ownership
