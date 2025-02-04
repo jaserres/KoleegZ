@@ -317,31 +317,50 @@ export default function FormBuilder() {
         {!id && !showEditor ? (
           <>
             <h1 className="text-3xl font-bold">Crear Nuevo Formulario</h1>
-            <Card className="cursor-pointer hover:bg-accent transition-colors">
-              <CardHeader>
-                <CardTitle>Cargar Documento</CardTitle>
-                <CardDescription>Crear formulario desde un documento existente</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <Input
-                    type="file"
-                    accept=".docx"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="document-upload"
-                  />
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => document.getElementById('document-upload')?.click()}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    Subir Documento (.docx)
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <Card className="cursor-pointer hover:bg-accent transition-colors">
+                <CardHeader>
+                  <CardTitle>Cargar Documento</CardTitle>
+                  <CardDescription>Crear formulario desde un documento existente</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <Input
+                      type="file"
+                      accept=".docx"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      id="document-upload"
+                    />
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => document.getElementById('document-upload')?.click()}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      Subir Documento (.docx)
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card
+                className="cursor-pointer hover:bg-accent transition-colors"
+                onClick={() => {
+                  setFormName("");
+                  setVariables([]);
+                  setShowEditor(true);
+                }}
+              >
+                <CardHeader>
+                  <CardTitle>Formulario en Blanco</CardTitle>
+                  <CardDescription>Crear un formulario desde cero</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Plus className="h-8 w-8 text-muted-foreground" />
+                </CardContent>
+              </Card>
+            </div>
           </>
         ) : (
           <>
