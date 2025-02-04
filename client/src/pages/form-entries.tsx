@@ -108,9 +108,19 @@ export default function FormEntries({isSharedAccess = false}) {
 
   const createEntryMutation = useMutation({
     mutationFn: async (values: Record<string, any>) => {
-      const res = await apiRequest("POST", `/api/forms/${id}/entries`, {
-        values,
-      });
+      // Generate random numbers for auto number variables
+      const valuesWithAutoNumbers = { ...values };
+      if (form?.variables) {
+        form.variables.forEach((variable) => {
+          if (variable.type === 'number' && variable.autoNumber?.enabled) {
+            const min = variable.autoNumber.min || 0;
+            const max = variable.autoNumber.max || 100;
+            valuesWithAutoNumbers[variable.name] = Math.floor(Math.random() * (max - min + 1)) + min;
+          }
+        });
+      }
+
+      const res = await apiRequest("POST", `/api/forms/${id}/entries`, valuesWithAutoNumbers);
       if (!res.ok) {
         const error = await res.text();
         throw new Error(error || "Error al crear la entrada");
