@@ -632,7 +632,7 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
-
+  
 app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
         const user = ensureAuth(req);
@@ -926,7 +926,7 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
 
     res.sendStatus(200);
   });
-
+  
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -1054,9 +1054,58 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveNumbering: true,
             preserveOutline: true,
             preserveStaticContent: true,
-            preprocessTemplate: (template: string) => {
-              // Asegurar que las variables CMDNODE se traten igual que las normales
-              return template.replace(/CMDNODE=([^}]+)/g, '$1');
+            preserveItalics: true,
+            preserveStyles: true,
+            preprocessHtml: (html: string) => {
+              // Normalizar todas las variables independientemente de su formato
+              const normalizeVariables = (text: string) => {
+                return text.replace(/{{([^}]+)}}/g, (match, variable) => {
+                  const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
+                  return `{{${cleanVariable}}}`;
+                });
+              };
+
+              // Procesar variables en texto con formato (cursivas, negritas, etc)
+              let processedHtml = html.replace(/(<w:rPr>(?:.*?<w:i\/>.*?|.*?)<\/w:rPr>.*?{{[^}]+}}.*?<\/w:r>)/g, (match) => {
+                const normalizedMatch = normalizeVariables(match);
+                return normalizedMatch;
+              });
+
+              // Procesar variables en texto normal
+              processedHtml = processedHtml.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
+                const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
+                const prefixStr = prefix || '';
+                const suffixStr = suffix || '';
+                return `<w:r><w:t xml:space="preserve">${prefixStr}{{${cleanVariable}}}${suffixStr}</w:t></w:r>`;
+              });
+
+              return processedHtml;
+            },
+            processLineBreaks: true,
+            postprocessRun: (run: any) => {
+              if (run.text) {
+                // Limpiar el texto de caracteres invisibles o especiales
+                const cleanText = run.text.replace(/[^a-zA-Z0-9_{} ]/g, '');
+                if (cleanText.includes('{{')) {
+                  const style = run.style || {};
+                  if (run.italic) {
+                    style.fontStyle = 'italic';
+                    run.italic = true;
+                  }
+                  if (run.bold) {
+                    style.fontWeight = 'bold';
+                    run.bold = true;
+                  }
+                  run.style = style;
+                  run.preserveFormat = true;
+                  run.text = cleanText;
+                }
+              }
+              return run;
+            },
+            preprocessTemplate: (template: any) => {
+              // Preserve original XML structure
+              return template;
             },
             postprocessTemplate: (template: any) => {
               // Ensure XML structure is maintained
@@ -1299,7 +1348,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
     res.json(entry);
   });
-
+  
     app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
