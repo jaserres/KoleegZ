@@ -1057,12 +1057,18 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveItalics: true,
             preserveStyles: true,
             preprocessHtml: (html: string) => {
-              // Busca variables incluso cuando están pegadas a texto o signos
-              return html.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
+              // Procesamiento especial para variables en cursiva
+              const processedHtml = html.replace(/<w:i\/>.*?{{([^}]+)}}.*?(?=<\/w:r>)/g, (match, variable) => {
+                const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
+                return `<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">{{${cleanVariable}}}</w:t></w:r>`;
+              });
+              
+              // Procesamiento para variables normales
+              return processedHtml.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
                 const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
                 const prefixStr = prefix || '';
                 const suffixStr = suffix || '';
-                return `<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">${prefixStr}{{${cleanVariable}}}${suffixStr}</w:t></w:r>`;
+                return `<w:r><w:t xml:space="preserve">${prefixStr}{{${cleanVariable}}}${suffixStr}</w:t></w:r>`;
               });
             },
             processLineBreaks: true,
