@@ -579,9 +579,64 @@ export default function FormBuilder() {
                                   <SelectItem value="number">Número</SelectItem>
                                   <SelectItem value="date">Fecha</SelectItem>
                                   <SelectItem value="time">Hora</SelectItem>
+                                  <SelectItem value="select">Selección Múltiple</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
+                            {variable.type === 'select' && (
+                              <div className="space-y-2 mt-4">
+                                <Label>Opciones (máx. {user?.isPremium ? 20 : 5})</Label>
+                                {(variable.options || []).map((option: string, optionIndex: number) => (
+                                  <div key={optionIndex} className="flex gap-2">
+                                    <Input
+                                      value={option}
+                                      onChange={(e) => {
+                                        const newOptions = [...(variable.options || [])];
+                                        newOptions[optionIndex] = e.target.value;
+                                        setVariables(
+                                          variables.map((v, i) =>
+                                            i === index ? { ...v, options: newOptions } : v
+                                          )
+                                        );
+                                      }}
+                                      placeholder={`Opción ${optionIndex + 1}`}
+                                    />
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                                      onClick={() => {
+                                        const newOptions = (variable.options || []).filter((_, i) => i !== optionIndex);
+                                        setVariables(
+                                          variables.map((v, i) =>
+                                            i === index ? { ...v, options: newOptions } : v
+                                          )
+                                        );
+                                      }}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ))}
+                                {(variable.options || []).length < (user?.isPremium ? 20 : 5) && (
+                                  <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => {
+                                      const newOptions = [...(variable.options || []), ''];
+                                      setVariables(
+                                        variables.map((v, i) =>
+                                          i === index ? { ...v, options: newOptions } : v
+                                        )
+                                      );
+                                    }}
+                                  >
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Agregar Opción
+                                  </Button>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <Button
                             variant="ghost"
