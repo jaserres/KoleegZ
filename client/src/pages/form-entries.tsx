@@ -738,13 +738,6 @@ export default function FormEntries() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <FileText className="mr-2 h-4 w-4" />
-                      Nueva Plantilla
-                    </Button>
-                  </DialogTrigger>
                   <DialogContent className="sm:max-w-[400px] h-[90vh] flex flex-col p-0">
                     <DialogHeader className="px-6 py-4 border-b">
                       <DialogTitle>Crear Nueva Plantilla</DialogTitle>
