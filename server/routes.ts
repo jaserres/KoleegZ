@@ -32,19 +32,29 @@ async function extractTextFromImage(imagePath: string): Promise<string> {
 
 // Función para detectar variables en texto con mejor procesamiento
 function detectVariables(text: string): string[] {
-  const variablePattern = /{{([^}]+)}}/g;
+  // Detectar variables incluso con formato (cursivas, negritas)
+  const variablePattern = /{{[\s]*([^}\s]+)[\s]*}}|<[^>]+>{{[\s]*([^}\s]+)[\s]*}}/g;
   const matches = text.match(variablePattern) || [];
-  const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
+  const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
   const invalidVariables: string[] = [];
   const validVariables = new Set<string>();
 
-  matches.forEach(match => {
-    const varName = match.slice(2, -2).trim();
-    // Convertir espacios y guiones a guiones bajos
-    const normalizedName = varName
-      .replace(/[\s-]+/g, '_')
-      .replace(/[^a-zA-Z0-9_]/g, '');
+  // Función para normalizar nombres de variables
+  const normalizeVariableName = (name: string) => {
+    return name.trim()
+      .replace(/[^a-zA-Z0-9_]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+  };
 
+  matches.forEach(match => {
+    let varName: string;
+    if (match.includes('{{')) {
+        varName = match.split('{{')[1].split('}}')[0].trim();
+    } else {
+        varName = match.split('{{')[1].split('}}')[0].trim();
+    }
+    const normalizedName = normalizeVariableName(varName);
     if (normalizedName && validVariableRegex.test(normalizedName)) {
       validVariables.add(normalizedName);
     } else {
@@ -632,7 +642,7 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
-  
+
 app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
         const user = ensureAuth(req);
@@ -926,7 +936,7 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
 
     res.sendStatus(200);
   });
-  
+
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -1348,7 +1358,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
     res.json(entry);
   });
-  
+
     app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
