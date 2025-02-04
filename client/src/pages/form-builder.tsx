@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -539,6 +540,58 @@ export default function FormBuilder() {
                                 </SelectContent>
                               </Select>
                             </div>
+                            {variable.type === "number" && (
+                              <div className="space-y-4">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`random-${index}`}
+                                    checked={variable.useRandomInitial}
+                                    onCheckedChange={(checked) =>
+                                      setVariables(
+                                        variables.map((v, i) =>
+                                          i === index ? { ...v, useRandomInitial: checked } : v
+                                        )
+                                      )
+                                    }
+                                  />
+                                  <Label htmlFor={`random-${index}`}>
+                                    Generar valor inicial aleatorio
+                                  </Label>
+                                </div>
+                                {variable.useRandomInitial && (
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <Label>Mínimo</Label>
+                                      <Input
+                                        type="number"
+                                        value={variable.minValue || ""}
+                                        onChange={(e) =>
+                                          setVariables(
+                                            variables.map((v, i) =>
+                                              i === index ? { ...v, minValue: e.target.value } : v
+                                            )
+                                          )
+                                        }
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label>Máximo</Label>
+                                      <Input
+                                        type="number"
+                                        value={variable.maxValue || ""}
+                                        onChange={(e) =>
+                                          setVariables(
+                                            variables.map((v, i) =>
+                                              i === index ? { ...v, maxValue: e.target.value } : v
+                                            )
+                                          )
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <Button
                             variant="ghost"
