@@ -243,7 +243,7 @@ export default function FormEntries() {
       });
     },
   });
-    
+
   const updateEntryMutation = useMutation({
     mutationFn: async (values: Record<string, any>) => {
       const res = await apiRequest("PATCH", `/api/forms/${id}/entries/${selectedRowId}`, values);
@@ -738,6 +738,13 @@ export default function FormEntries() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <Dialog> {/*Corrected: Added missing closing tag */}
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Nueva Plantilla
+                    </Button>
+                  </DialogTrigger>
                   <DialogContent className="sm:max-w-[400px] h-[90vh] flex flex-col p-0">
                     <DialogHeader className="px-6 py-4 border-b">
                       <DialogTitle>Crear Nueva Plantilla</DialogTitle>
