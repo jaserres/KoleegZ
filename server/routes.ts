@@ -1057,16 +1057,24 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveItalics: true,
             preserveStyles: true,
             preprocessHtml: (html: string) => {
-              return html;
+              return html.replace(/{{([^}]+)}}/g, (match) => {
+                return `<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">${match}</w:t></w:r>`;
+              });
             },
             processLineBreaks: true,
             postprocessRun: (run: any) => {
-              // Preservar el estilo original del run
-              if (run.text) {
+              if (run.text && run.text.includes('{{')) {
                 const style = run.style || {};
-                if (run.italic) style.italic = true;
-                if (run.bold) style.bold = true;
+                if (run.italic) {
+                  style.fontStyle = 'italic';
+                  run.italic = true;
+                }
+                if (run.bold) {
+                  style.fontWeight = 'bold';
+                  run.bold = true;
+                }
                 run.style = style;
+                run.preserveFormat = true;
               }
               return run;
             },
