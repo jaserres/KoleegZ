@@ -3,6 +3,8 @@ import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -26,6 +28,7 @@ export default function FormBuilder() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [showEditor, setShowEditor] = useState(false);
+  const [showTemplateProcessingDialog, setShowTemplateProcessingDialog] = useState(false);
   const [previewContent, setPreviewContent] = useState<{
     name: string;
     template?: string;
@@ -95,6 +98,8 @@ export default function FormBuilder() {
     }
 
     try {
+      setShowTemplateProcessingDialog(true);
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('preserveOriginal', 'true');
@@ -106,10 +111,22 @@ export default function FormBuilder() {
       const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
+        headers: {
+          'Accept': 'application/json'
+        }
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        if (response.status === 502 || response.status === 503) {
+          throw new Error('El servidor no está respondiendo. Por favor intente nuevamente.');
+        }
+        const error = await response.text();
+        throw new Error(error || 'Error al cargar el archivo');
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Respuesta inválida del servidor');
       }
 
       const doc = await response.json();
@@ -136,12 +153,14 @@ export default function FormBuilder() {
       });
 
       setShowEditor(true);
+      setShowTemplateProcessingDialog(false);
 
-    } catch (error) {
+    } catch (error: any) {
+      setShowTemplateProcessingDialog(false);
       console.error('Error al cargar archivo:', error);
       toast({
         title: "Error al cargar archivo",
-        description: error instanceof Error ? error.message : "Error al procesar el archivo",
+        description: error.message || "Error al procesar el archivo",
         variant: "destructive"
       });
     }
@@ -307,7 +326,20 @@ export default function FormBuilder() {
   });
 
   return (
-    <div className="container mx-auto py-8">
+    <>
+      <Dialog open={showTemplateProcessingDialog} onOpenChange={setShowTemplateProcessingDialog}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex flex-col items-center justify-center gap-4 py-8">
+            <Spinner size="lg" className="text-primary"/>
+            <DialogTitle>Procesando Plantilla</DialogTitle>
+            <DialogDescription>
+              Extrayendo variables y preparando el documento...
+            </DialogDescription>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="container mx-auto py-8">
       <Button variant="ghost" className="mb-8" onClick={() => setLocation("/")}>
         <ArrowLeft className="mr-2 h-4 w-4" />
         Volver a Formularios
@@ -574,5 +606,6 @@ export default function FormBuilder() {
         )}
       </div>
     </div>
+    </>
   );
 }

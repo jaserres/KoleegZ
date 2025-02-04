@@ -31,28 +31,38 @@ async function extractTextFromImage(imagePath: string): Promise<string> {
 }
 
 // Función para detectar variables en texto con mejor procesamiento
-function detectVariables(text: string): string[] {
-  const variablePattern = /{{([^}]+)}}/g;
+function detectVariables(text: string): {valid: string[], invalid: string[]} {
+  // Detectar variables incluso con formato (cursivas, negritas)
+  const variablePattern = /{{[\s]*([^}\s]+)[\s]*}}|<[^>]+>{{[\s]*([^}\s]+)[\s]*}}/g;
   const matches = text.match(variablePattern) || [];
-  const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
+  const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
   const invalidVariables: string[] = [];
-  const validVariables = new Set<string>();
+  const validVariables: string[] = [];
+
+  // Función para normalizar nombres de variables
+  const normalizeVariableName = (name: string) => {
+    return name.trim()
+      .replace(/[^a-zA-Z0-9_]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+  };
 
   matches.forEach(match => {
-    const varName = match.slice(2, -2).trim();
-    // Convertir espacios y guiones a guiones bajos
-    const normalizedName = varName
-      .replace(/[\s-]+/g, '_')
-      .replace(/[^a-zA-Z0-9_]/g, '');
-
+    let varName: string;
+    if (match.includes('{{')) {
+        varName = match.split('{{')[1].split('}}')[0].trim();
+    } else {
+        varName = match.split('{{')[1].split('}}')[0].trim();
+    }
+    const normalizedName = normalizeVariableName(varName);
     if (normalizedName && validVariableRegex.test(normalizedName)) {
-      validVariables.add(normalizedName);
+      validVariables.push(normalizedName);
     } else {
       invalidVariables.push(varName);
     }
   });
 
-  return Array.from(validVariables);
+  return {valid: validVariables, invalid: invalidVariables};
 }
 
 // Configurar multer para manejar archivos
@@ -314,7 +324,7 @@ async function generateThumbnail(buffer: Buffer): Promise<{thumbnailPath: string
       console.log('OCR Text extracted:', extractedText);
 
       // Detectar variables en el texto extraído
-      const extractedVariables = detectVariables(extractedText);
+      const extractedVariables = detectVariables(extractedText).valid;
       console.log('Variables detected from OCR:', extractedVariables);
 
       return {
@@ -632,7 +642,7 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
-  
+
 app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
         const user = ensureAuth(req);
@@ -774,7 +784,7 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
     console.log('OCR Text extracted:', extractedText);
 
     // Detectar variables en el texto extraído
-    const extractedVariables = detectVariables(extractedText);
+    const extractedVariables = detectVariables(extractedText).valid;
     console.log('Variables detected from OCR:', extractedVariables);
 
     res.json({
@@ -926,7 +936,7 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
 
     res.sendStatus(200);
   });
-  
+
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -1013,24 +1023,66 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
         // Preparar datos para el merge verificando tipos
         const mergeData: Record<string, any> = {};
-        Object.entries(entry.values || {}).forEach(([key, value]) => {
+
+        // Extraer y normalizar variables del template
+        const templateContent = await mammoth.extractRawText({ buffer: copiedBuffer });
+        const templateText = templateContent.value;
+
+        // Función para normalizar nombres de variables
+        const normalizeVarName = (name: string) => {
+          return name.replace(/\s+/g, '').toLowerCase();
+        };
+
+        // Extraer y normalizar todas las variables
+        const variableRegex = /{{([^{}]+)}}/g;
+        let match;
+
+        // Extraer variables del texto limpio
+        const rawVars = new Set();
+        while ((match = variableRegex.exec(templateText)) !== null) {
+          const varName = match[1].trim().split(/[\s\n]+/)[0]; // Tomar solo la primera parte antes de espacios o saltos
+          if (varName && !varName.includes('CMD_NODE')) {
+            rawVars.add(varName);
+          }
+        }
+
+        // Extraer variables del template original
+        variableRegex.lastIndex = 0; // Reset regex index
+        while ((match = variableRegex.exec(doc.template)) !== null) {
+          const varName = match[1].trim().split(/[\s\n]+/)[0];
+          if (varName && !varName.includes('CMD_NODE')) {
+            rawVars.add(varName);
+          }
+        }
+
+        // Crear un mapa de nombres normalizados a nombres originales
+        const varMap = new Map();
+        rawVars.forEach(varName => {
+          const normalizedName = normalizeVarName(varName);
+          varMap.set(normalizedName, varName);
+        });
+
+        // Usar nombres únicos normalizados
+        const templateVars = new Set(Array.from(varMap.values()));
+
+        // Luego procesar los valores
+        templateVars.forEach(varName => {
+          const value = entry.values?.[varName];
           if (value !== undefined && value !== null) {
             if (typeof value === 'number') {
-              mergeData[key] = value.toString(); // Convertir números a strings para el merge
+              mergeData[varName] = value.toString();
             } else if (typeof value === 'boolean') {
-              mergeData[key] = value.toString(); // Convertir booleanos a strings
+              mergeData[varName] = value.toString();
             } else {
-              mergeData[key] = String(value); // Asegurar que todo sea string
+              mergeData[varName] = String(value);
             }
           } else {
-            mergeData[key] = ''; // Valor vacío para null/undefined
+            mergeData[varName] = '';
           }
         });
 
-        console.log('Datos preparados para merge:', {
-          variables: Object.keys(mergeData).length,
-          exampleValues: Object.entries(mergeData).slice(0, 3)
-        });
+        console.log('Variables detectadas:', templateVars);
+        console.log('Datos para merge:', mergeData);
 
         // Realizar el merge sobre la copia temporal
         let mergedBuffer: Buffer;
@@ -1041,6 +1093,16 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             cmdDelimiter: ['{{', '}}'],
             failFast: false,
             rejectNullish: false,
+            preprocessTemplate: (template) => {
+              // Limpiar variables mal formadas
+              return template.replace(/{{([^{}]+)}}/g, (match, varName) => {
+                const cleanVarName = varName.trim().split(/[\s\n]+/)[0];
+                if (cleanVarName && mergeData[cleanVarName] !== undefined) {
+                  return `{{${cleanVarName}}}`;
+                }
+                return match;
+              });
+            },
             processLineBreaks: true,
             processImages: true,
             processHeadersAndFooters: true,
@@ -1054,10 +1116,114 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveNumbering: true,
             preserveOutline: true,
             preserveStaticContent: true,
-            preprocessTemplate: (template) => {
-              return template.replace(/{{([^}]+)}}/g, (match, variable) => {
-                return `<w:r><w:rPr><w:rStyle w:val="DefaultParagraphFont"/></w:rPr><w:t>{{${variable}}}</w:t></w:r>`;
+            preserveItalics: true,
+            preserveStyles: true,
+            keepStyles: true,
+            fixSmartQuotes: true,
+            renderFormatting: true,
+            preprocessHtml: (html: string) => {
+              // Función para extraer el nombre de la variable
+              const extractVariableName = (text: string) => {
+                const match = text.match(/{{([^}]+)}}/);
+                return match ? match[1].trim() : '';
+              };
+
+              // Normalizar todas las variables independientemente de su formato
+              const normalizeVariables = (text: string) => {
+                return text.replace(/{{([^}]+)}}/g, (match, variable) => {
+                  const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
+                  return `{{${cleanVariable}}}`;
+                });
+              };
+
+              const DOMParser = require('xmldom').DOMParser;
+              const XMLSerializer = require('xmldom').XMLSerializer;
+              
+              // Crear parser y serializer
+              const parser = new DOMParser();
+              const serializer = new XMLSerializer();
+              
+              // Convertir HTML a DOM
+              const doc = parser.parseFromString(html, 'text/xml');
+              
+              // Función para procesar nodos de texto
+              const processTextNodes = (node) => {
+                if (node.nodeType === 3 && node.nodeValue.includes('{{')) {
+                  const parentRun = node.parentNode.parentNode; // w:r element
+                  if (!parentRun || parentRun.nodeName !== 'w:r') return;
+
+                  // Preservar todos los elementos de estilo existentes
+                  const rPr = parentRun.getElementsByTagName('w:rPr')[0];
+                  const styles = [];
+                  
+                  if (rPr) {
+                    // Copiar todos los elementos de estilo existentes
+                    Array.from(rPr.childNodes).forEach(child => {
+                      if (child.nodeName) {
+                        styles.push(child.nodeName);
+                      }
+                    });
+                  }
+
+                  // Crear nuevo rPr con todos los estilos
+                  let newStyle = '<w:rPr>';
+                  styles.forEach(style => {
+                    if (style === 'w:i' || style === 'w:b' || style === 'w:u' || style === 'w:color' || style === 'w:sz') {
+                      newStyle += `<${style}/>`;
+                    }
+                  });
+                  newStyle += '</w:rPr>';
+                  
+                  const varName = node.nodeValue.match(/{{([^}]+)}}/)[1].trim();
+                  const newText = `${newStyle}<w:t xml:space="preserve">{{${varName}}}</w:t>`;
+                  
+                  // Reemplazar contenido manteniendo el nodo w:r
+                  parentRun.innerHTML = newText;
+                }
+                
+                // Procesar hijos recursivamente
+                for (let child of node.childNodes) {
+                  processTextNodes(child);
+                }
+              };
+              
+              // Procesar documento
+              processTextNodes(doc.documentElement);
+              
+              // Convertir DOM de vuelta a string
+              const processedHtml = serializer.serializeToString(doc);
+
+              // Procesar variables en texto normal
+              processedHtml = processedHtml.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
+                const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
+                const prefixStr = prefix || '';
+                const suffixStr = suffix || '';
+                return `<w:r><w:t xml:space="preserve">${prefixStr}{{${cleanVariable}}}${suffixStr}</w:t></w:r>`;
               });
+
+              return processedHtml;
+            },
+            processLineBreaks: true,
+            postprocessRun: (run: any) => {
+              if (run.text) {
+                // Limpiar el texto de caracteres invisibles o especiales
+                const cleanText = run.text.replace(/[^a-zA-Z0-9_{} ]/g, '');
+                if (cleanText.includes('{{')) {
+                  const style = run.style || {};
+                  if (run.italic) {
+                    style.fontStyle = 'italic';
+                    run.italic = true;
+                  }
+                  if (run.bold) {
+                    style.fontWeight = 'bold';
+                    run.bold = true;
+                  }
+                  run.style = style;
+                  run.preserveFormat = true;
+                  run.text = cleanText;
+                }
+              }
+              return run;
             },
             preprocessTemplate: (template: any) => {
               // Preserve original XML structure
@@ -1304,7 +1470,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
     res.json(entry);
   });
-  
+
     app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);

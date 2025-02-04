@@ -576,30 +576,19 @@ export default function FormEntries() {
       });
 
       if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(errorData || 'Error al descargar el documento');
+        throw new Error('Error al descargar el documento');
       }
 
-      const contentType = response.headers.get('content-type');
-      if (contentType?.includes('application/json')) {
-        const data = await response.json();
-        if (data.downloadUrl) {
-          window.location.href = data.downloadUrl;
-        } else {
-          throw new Error('URL de descarga no disponible');
-        }
-      } else {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const fileName = selectedTemplate?.name?.replace(/\.docx$/i, '') || 'document';
-        link.download = `${fileName}-merged.docx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = selectedTemplate?.name.replace(/\.docx$/i, '') || 'document';
+      link.download = `${fileName}-merged.docx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
       toast({
         title: "Éxito",
@@ -609,7 +598,7 @@ export default function FormEntries() {
       console.error('Error downloading document:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "No se pudo descargar el documento",
+        description: "No se pudo descargar el documento",
         variant: "destructive"
       });
     }
@@ -1055,72 +1044,6 @@ export default function FormEntries() {
               </Table>
             </div>
           </CardContent>
-          <div className="mt-4">
-            <h3 className="text-lg font-medium mb-2">Plantillas Disponibles</h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              {documents.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-muted-foreground text-center">
-                      No hay plantillas disponibles. Crea una nueva plantilla para comenzar.
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                 documents.map((doc) => (
-                   <Card key={doc.id}>
-                     <CardHeader>
-                       <div className="flex justify-between items-center">
-                         <CardTitle>{doc.name}</CardTitle>
-                         <Button
-                           variant="outline"
-                           size="icon"
-                           className="text-red-500 hover:text-red-700"
-                           onClick={() => {
-                             if (window.confirm("¿Estás seguro de que quieres eliminar esta plantilla?")) {
-                               deleteDocumentMutation.mutate(doc.id);
-                             }
-                           }}
-                           disabled={deleteDocumentMutation.isPending}
-                         >
-                           {deleteDocumentMutation.isPending ? (
-                             <Spinner variant="pulse" size="sm" />
-                           ) : (
-                             <Trash2 className="h-4 w-4" />
-                           )}
-                         </Button>
-                       </div>
-                     </CardHeader>
-                     <CardContent>
-                       <div className="space-y-4">
-                         <div className="relative aspect-[3/4] w-full mb-4">
-                           {doc.thumbnailPath && (
-                             <img
-                               src={`/thumbnails/${doc.thumbnailPath}`}
-                               alt={`Vista previa de ${doc.name}`}
-                               className="absolute inset-0 w-full h-full object-cover rounded-md"
-                             />
-                           )}
-                         </div>
-                         <div className="text-sm text-muted-foreground">
-                           Creada el {format(new Date(doc.createdAt), "PPp")}
-                         </div>
-                         <Button
-                           variant="outline"
-                           onClick={() => {
-                             setSelectedTemplate(doc);
-                             setShowTemplateDialog(true);
-                           }}
-                         >
-                           Ver Plantilla
-                         </Button>
-                       </div>
-                     </CardContent>
-                   </Card>
-                 ))
-              )}
-            </div>
-          </div>
         </Card>
       </div>
         <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
