@@ -744,6 +744,14 @@ export default function FormEntries({isSharedAccess = false}) {
             <div className="flex justify-between items-center">
               <CardTitle>Entradas y Documentos</CardTitle>
               <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => shareFormMutation.mutate()}
+                  disabled={shareFormMutation.isPending}
+                >
+                  <Share className="mr-2 h-4 w-4" />
+                  Compartir Formulario
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline">
