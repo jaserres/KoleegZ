@@ -963,7 +963,7 @@ export default function FormEntries() {
                                               <img
                                                 src={`/thumbnails/${doc.thumbnailPath}`}
                                                 alt={`Vista previa de ${doc.name}`}
-                                                className="absolute inset-0 w-full h-full object-contain rounded-md border border-muted hover:border-primary transition-colors"
+                                                className="absolute inset-0 w-full h-full object-contain rounded-md border border-muted hover:border-primary transition-colors bg-white"
                                               />
                                             </div>
                                           )}
