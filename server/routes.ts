@@ -15,14 +15,12 @@ export function registerRoutes(app: express.Express) {
         name: req.body.name,
         label: req.body.label,
         type: req.body.type,
-        useRandomInitial: req.body.useRandomInitial === true,
-        minValue: null,
-        maxValue: null
+        useRandomInitial: req.body.useRandomInitial === true
       };
 
-      if (req.body.type === 'number' && updateData.useRandomInitial) {
-        updateData.minValue = req.body.minValue?.toString();
-        updateData.maxValue = req.body.maxValue?.toString();
+      if (req.body.type === 'number') {
+        updateData.minValue = req.body.useRandomInitial ? req.body.minValue?.toString() : null;
+        updateData.maxValue = req.body.useRandomInitial ? req.body.maxValue?.toString() : null;
       }
 
       await db

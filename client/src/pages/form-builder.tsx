@@ -564,7 +564,7 @@ export default function FormBuilder() {
                                       <Label>Mínimo</Label>
                                       <Input
                                         type="number"
-                                        value={variable.minValue || ""}
+                                        value={variable.minValue ?? ""}
                                         onChange={(e) =>
                                           setVariables(
                                             variables.map((v, i) =>
@@ -578,7 +578,7 @@ export default function FormBuilder() {
                                       <Label>Máximo</Label>
                                       <Input
                                         type="number"
-                                        value={variable.maxValue || ""}
+                                        value={variable.maxValue ?? ""}
                                         onChange={(e) =>
                                           setVariables(
                                             variables.map((v, i) =>
