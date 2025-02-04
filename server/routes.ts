@@ -1023,8 +1023,14 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
         // Preparar datos para el merge verificando tipos
         const mergeData: Record<string, any> = {};
-        // Primero obtener todas las variables del template
-        const templateVars = doc.template.match(/{{([^}]+)}}/g)?.map(v => v.slice(2, -2).trim()) || [];
+        
+        // Extraer variables del template considerando formato
+        const templateContent = await mammoth.extractRawText({ buffer: copiedBuffer });
+        const templateText = templateContent.value;
+        const templateVars = new Set([
+          ...(templateText.match(/{{([^}]+)}}/g) || []).map(v => v.slice(2, -2).trim()),
+          ...(doc.template.match(/{{([^}]+)}}/g) || []).map(v => v.slice(2, -2).trim())
+        ]);
 
         // Luego procesar los valores
         templateVars.forEach(varName => {
@@ -1054,6 +1060,13 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             cmdDelimiter: ['{{', '}}'],
             failFast: false,
             rejectNullish: false,
+            preprocessTemplate: (template) => {
+              const formattedVars = Object.keys(mergeData).reduce((acc, key) => {
+                acc[key] = mergeData[key] || '';
+                return acc;
+              }, {});
+              return template;
+            },
             processLineBreaks: true,
             processImages: true,
             processHeadersAndFooters: true,
@@ -1069,6 +1082,9 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveStaticContent: true,
             preserveItalics: true,
             preserveStyles: true,
+            keepStyles: true,
+            fixSmartQuotes: true,
+            renderFormatting: true,
             preprocessHtml: (html: string) => {
               // Normalizar todas las variables independientemente de su formato
               const normalizeVariables = (text: string) => {
