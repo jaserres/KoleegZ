@@ -7,8 +7,8 @@ import { useConfetti } from "@/hooks/use-confetti";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown, Upload, Download, Trash2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown, Upload, Download, Trash2, Share } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -39,7 +39,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-export default function FormEntries({isSharedAccess = false}) { // Added isSharedAccess prop with default false
+export default function FormEntries({isSharedAccess = false}) {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -55,6 +55,8 @@ export default function FormEntries({isSharedAccess = false}) { // Added isShare
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const [previewContent, setPreviewContent] = useState<any>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareLink, setShareLink] = useState('');
 
   const user = {
     isPremium: true,
@@ -604,6 +606,29 @@ export default function FormEntries({isSharedAccess = false}) { // Added isShare
     }
   };
 
+  const shareFormMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("GET", `/api/forms/${id}/share`);
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al compartir el formulario");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setShareLink(data.link);
+      setShowShareDialog(true);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo compartir el formulario",
+        variant: "destructive",
+      });
+    }
+  });
+
+
   return (
     <div className="container mx-auto py-8" style={form?.theme ? {
       '--primary': form.theme.primary,
@@ -777,7 +802,7 @@ export default function FormEntries({isSharedAccess = false}) { // Added isShare
                               <Button
                                 variant="outline"
                                 onClick={() => setSelectedEntry(entry.id)}
-                                disabled={isSharedAccess} // Disabled Merge button in shared mode
+                                disabled={isSharedAccess}
                               >
                                 <FileText className="mr-2 h-4 w-4" />
                                 Merge
@@ -802,7 +827,7 @@ export default function FormEntries({isSharedAccess = false}) { // Added isShare
                                           <CardTitle>
                                             <div className="flex items-center justify-between">
                                               <span>{doc.name}</span>
-                                              {!isSharedAccess && ( // Conditional rendering for delete button
+                                              {!isSharedAccess && (
                                                 <Button
                                                   variant="ghost"
                                                   size="icon"
@@ -882,7 +907,7 @@ export default function FormEntries({isSharedAccess = false}) { // Added isShare
                               )}
                             </DialogContent>
                           </Dialog>
-                          {!isSharedAccess && ( // Conditional rendering for delete button
+                          {!isSharedAccess && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -911,26 +936,50 @@ export default function FormEntries({isSharedAccess = false}) { // Added isShare
           </CardContent>
         </Card>
       </div>
-        <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>{selectedTemplate?.name}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Contenido de la Plantilla</Label>
-                <Textarea
-                  value={selectedTemplate?.template || ""}
-                  readOnly
-                  className="h-40 font-mono"
-                />
-              </div>
-              <Button variant="outline" onClick={() => setShowTemplateDialog(false)}>
-                Cerrar
-              </Button>
+      <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>{selectedTemplate?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Contenido de la Plantilla</Label>
+              <Textarea
+                value={selectedTemplate?.template || ""}
+                readOnly
+                className="h-40 font-mono"
+              />
             </div>
-          </DialogContent>
-        </Dialog>
+            <Button variant="outline" onClick={() => setShowTemplateDialog(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Compartir Formulario</DialogTitle>
+            <DialogDescription>
+              Comparta este enlace para dar acceso al formulario:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input value={shareLink} readOnly />
+            <Button
+              onClick={() => {
+                navigator.clipboard.writeText(shareLink);
+                toast({
+                  title: "Copiado",
+                  description: "Enlace copiado al portapapeles"
+                });
+              }}
+            >
+              Copiar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

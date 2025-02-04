@@ -413,6 +413,33 @@ export function registerRoutes(app: Express): Server {
     // Regular auth check
     const user = ensureAuth(req);
 
+app.post("/api/forms/:formId/share", async (req, res) => {
+  const user = ensureAuth(req);
+  const formId = parseInt(req.params.formId);
+
+  // Verify ownership
+  const [form] = await db.select()
+    .from(forms)
+    .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+  if (!form) {
+    return res.status(404).send("Form not found");
+  }
+
+  // Generate unique token
+  const token = crypto.randomBytes(32).toString('hex');
+
+  // Create share record
+  await db.insert(formShares)
+    .values({
+      formId,
+      token
+    });
+
+  res.json({ token });
+});
+
+
     const form = await db.query.forms.findFirst({
       where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
       with: {
