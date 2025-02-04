@@ -1129,7 +1129,9 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
               const processNode = (node: Element) => {
                 if (node.nodeName === 'w:t') {
                   const text = node.textContent || '';
-                  if (text.includes('{{')) {
+                  const cleanText = text.replace(/[^a-zA-Z0-9_{} ]/g, '');
+                  
+                  if (cleanText.includes('{{')) {
                     const runElement = node.closest('w:r');
                     if (runElement) {
                       const rPrElement = runElement.querySelector('w:rPr');
@@ -1143,7 +1145,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
                       style += '</w:rPr>';
                       
                       // Extraer y limpiar variable
-                      const varMatch = text.match(/{{([^}]+)}}/);
+                      const varMatch = cleanText.match(/{{([^}]+)}}/);
                       if (varMatch) {
                         const varName = varMatch[1].trim();
                         const cleanVar = varName.replace(/[^a-zA-Z0-9_]/g, '');
@@ -1164,22 +1166,6 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
               processNode(doc.documentElement);
               return doc.documentElement.outerHTML;
             },
-                const cleanText = text.replace(/[^a-zA-Z0-9_{} ]/g, '');
-                if (cleanText.includes('{{')) {
-                  const style = run.style || {};
-                  if (run.italic) {
-                    style.fontStyle = 'italic';
-                    run.italic = true;
-                  }
-                  if (run.bold) {
-                    style.fontWeight = 'bold';
-                    run.bold = true;
-                  }
-                  run.style = style;
-                  run.preserveFormat = true;
-                  run.text = cleanText;
-                }
-              });
 
               // Procesar variables en texto normal
               processedHtml = processedHtml.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
