@@ -1122,6 +1122,12 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             fixSmartQuotes: true,
             renderFormatting: true,
             preprocessHtml: (html: string) => {
+              // Función para extraer el nombre de la variable
+              const extractVariableName = (text: string) => {
+                const match = text.match(/{{([^}]+)}}/);
+                return match ? match[1].trim() : '';
+              };
+
               // Normalizar todas las variables independientemente de su formato
               const normalizeVariables = (text: string) => {
                 return text.replace(/{{([^}]+)}}/g, (match, variable) => {
@@ -1130,10 +1136,20 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
                 });
               };
 
-              // Procesar variables en texto con formato (cursivas, negritas, etc)
-              let processedHtml = html.replace(/(<w:rPr>(?:.*?<w:i\/>.*?|.*?)<\/w:rPr>.*?{{[^}]+}}.*?<\/w:r>)/g, (match) => {
-                const normalizedMatch = normalizeVariables(match);
-                return normalizedMatch;
+              // Procesar variables con formato (cursivas y negritas)
+              let processedHtml = html.replace(/(<w:r>(?:<w:rPr>.*?(?:<w:i\/>|<w:b\/>).*?<\/w:rPr>)?<w:t[^>]*>.*?{{[^}]+}}.*?<\/w:t><\/w:r>)/g, (match) => {
+                const varName = extractVariableName(match);
+                if (!varName) return match;
+                
+                const hasItalic = match.includes('<w:i/>');
+                const hasBold = match.includes('<w:b/>');
+                
+                let style = '<w:rPr>';
+                if (hasItalic) style += '<w:i/>';
+                if (hasBold) style += '<w:b/>';
+                style += '</w:rPr>';
+                
+                return `<w:r>${style}<w:t xml:space="preserve">{{${varName}}}</w:t></w:r>`;
               });
 
               // Procesar variables en texto normal
