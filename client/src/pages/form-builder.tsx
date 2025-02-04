@@ -271,6 +271,7 @@ export default function FormBuilder() {
         title: "Éxito",
         description: "Formulario creado exitosamente"
       });
+      triggerConfetti();
       setLocation("/");
     },
     onError: (error: Error) => {
