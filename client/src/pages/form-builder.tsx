@@ -39,8 +39,6 @@ export default function FormBuilder() {
 
   const [formName, setFormName] = useState("");
   const [variables, setVariables] = useState<Array<Partial<SelectVariable>>>([]);
-  const [documentName, setDocumentName] = useState("");
-  const [documentTemplate, setDocumentTemplate] = useState("");
   const [allVariables, setAllVariables] = useState<Array<Partial<SelectVariable>>>([]);
 
   const variableLimit = user?.isPremium ? 50 : 10;
@@ -103,13 +101,14 @@ export default function FormBuilder() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('preserveOriginal', 'true'); // Tell server to keep original file
 
       // Usamos una ruta temporal para subir documentos cuando no hay ID
       const uploadUrl = id ? 
         `/api/forms/${id}/documents/upload` : 
         `/api/forms/temp/documents/upload`;
 
-      console.log('Uploading to:', uploadUrl); // Debug log
+      console.log('Uploading to:', uploadUrl);
 
       const response = await fetch(uploadUrl, {
         method: 'POST',
@@ -125,7 +124,8 @@ export default function FormBuilder() {
       const doc = await response.json();
       console.log('Upload response:', doc);
 
-      const templateVariables = extractVariables(doc.template);
+      // Extract variables from template if available, otherwise use OCR variables
+      const templateVariables = doc.template ? extractVariables(doc.template) : [];
       const ocrVariables = doc.extractedVariables ? doc.extractedVariables.map((varName: string) => ({
         name: varName,
         label: varName
@@ -147,11 +147,9 @@ export default function FormBuilder() {
         name: file.name.split('.')[0],
         variables: uniqueVariables,
         extractedVariables: uniqueVariables.map(v => v.name),
-        originalTemplate: doc.template 
+        originalTemplate: doc.originalTemplate || doc.template // Handle potential absence of originalTemplate
       });
 
-      setDocumentTemplate(doc.template);
-      setDocumentName(file.name.split('.')[0]);
       setShowEditor(true);
 
     } catch (error) {

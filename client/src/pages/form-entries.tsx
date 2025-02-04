@@ -194,14 +194,16 @@ export default function FormEntries() {
     mutationFn: async ({
       documentId,
       entryId,
+      useOriginalTemplate = true
     }: {
       documentId: number;
       entryId: number;
+      useOriginalTemplate?: boolean;
     }) => {
       console.log('Merging document:', {
         documentId,
         entryId,
-        useOriginalTemplate: true
+        useOriginalTemplate
       });
 
       const res = await apiRequest(
@@ -209,7 +211,8 @@ export default function FormEntries() {
         `/api/forms/${id}/documents/${documentId}/merge`,
         { 
           entryId,
-          useOriginalTemplate: true 
+          useOriginalTemplate: true,
+          download: true
         }
       );
 
@@ -220,11 +223,7 @@ export default function FormEntries() {
 
       return res.json();
     },
-    onSuccess: (data, { documentId }) => {
-      setMergedResult(data.result);
-      const template = documents?.find((doc) => doc.id === documentId);
-      setSelectedTemplate(template);
-
+    onSuccess: (data) => {
       // Automatically trigger download if merge was successful
       if (data.downloadUrl) {
         window.location.href = data.downloadUrl;
@@ -232,7 +231,7 @@ export default function FormEntries() {
 
       toast({
         title: "Éxito",
-        description: "Documento generado correctamente"
+        description: "Documento generado y descargado correctamente"
       });
     },
     onError: (error: Error) => {
@@ -312,51 +311,51 @@ export default function FormEntries() {
     },
   });
 
-    const extractVariables = (template: string) => {
-      const variableRegex = /{{([^}]+)}}/g;
-      const matches = template.match(variableRegex) || [];
-      const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
-      const invalidVariables: string[] = [];
-      const validVariables = new Set<string>();
+  const extractVariables = (template: string) => {
+    const variableRegex = /{{([^}]+)}}/g;
+    const matches = template.match(variableRegex) || [];
+    const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+    const invalidVariables: string[] = [];
+    const validVariables = new Set<string>();
 
-      matches.forEach(match => {
-        const varName = match.slice(2, -2).trim();
-        const normalizedName = varName
-          .replace(/[\s-]+/g, '_')
-          .replace(/[^a-zA-Z0-9_]/g, '');
+    matches.forEach(match => {
+      const varName = match.slice(2, -2).trim();
+      const normalizedName = varName
+        .replace(/[\s-]+/g, '_')
+        .replace(/[^a-zA-Z0-9_]/g, '');
 
-        if (normalizedName && validVariableRegex.test(normalizedName)) {
-          validVariables.add(normalizedName);
-        } else {
-          invalidVariables.push(varName);
-        }
-      });
-
-      if (invalidVariables.length > 0) {
-        toast({
-          title: "Variables no válidas detectadas",
-          description: `Las siguientes variables no pudieron ser normalizadas: ${invalidVariables.join(", ")}. Las variables deben comenzar con una letra y pueden contener letras, números y guiones bajos.`,
-          variant: "destructive"
-        });
-        return [];
+      if (normalizedName && validVariableRegex.test(normalizedName)) {
+        validVariables.add(normalizedName);
+      } else {
+        invalidVariables.push(varName);
       }
+    });
 
-      const variables = Array.from(validVariables).map(varName => ({
-        name: varName,
-        label: varName
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' '),
-        type: 'text'
-      }));
+    if (invalidVariables.length > 0) {
+      toast({
+        title: "Variables no válidas detectadas",
+        description: `Las siguientes variables no pudieron ser normalizadas: ${invalidVariables.join(", ")}. Las variables deben comenzar con una letra y pueden contener letras, números y guiones bajos.`,
+        variant: "destructive"
+      });
+      return [];
+    }
 
-      return variables;
-    };
+    const variables = Array.from(validVariables).map(varName => ({
+      name: varName,
+      label: varName
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' '),
+      type: 'text'
+    }));
 
-    const unifyVariables = (initial: Array<{name: string, label: string, type: string}>, ocr: Array<{name: string, label: string, type: string}> = []) => {
-      const combined = [...initial, ...ocr];
-      return Array.from(new Map(combined.map(v => [v.name, v])).values());
-    };
+    return variables;
+  };
+
+  const unifyVariables = (initial: Array<{name: string, label: string, type: string}>, ocr: Array<{name: string, label: string, type: string}> = []) => {
+    const combined = [...initial, ...ocr];
+    return Array.from(new Map(combined.map(v => [v.name, v])).values());
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -441,18 +440,18 @@ export default function FormEntries() {
     await createDocumentMutation.mutateAsync();
   };
   
-    const handleFieldChange = (name: string, value: any) => {
-      setFormValues((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
-    };
+  const handleFieldChange = (name: string, value: any) => {
+    setFormValues((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
-    const handleRowClick = (entry: any) => {
-      setFormValues(entry.values);
-      setCurrentEntryId(null); 
-      setSelectedRowId(entry.id);
-    };
+  const handleRowClick = (entry: any) => {
+    setFormValues(entry.values);
+    setCurrentEntryId(null); 
+    setSelectedRowId(entry.id);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -471,68 +470,68 @@ export default function FormEntries() {
     createEntryMutation.mutate(values);
   };
   
-    const handleOCRExtraction = async () => {
-      if (!previewContent?.thumbnailPath) return;
+  const handleOCRExtraction = async () => {
+    if (!previewContent?.thumbnailPath) return;
 
-      try {
-        const response = await fetch(`/api/forms/${id || 'temp'}/documents/extract-ocr`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            thumbnailPath: previewContent.thumbnailPath
-          }),
+    try {
+      const response = await fetch(`/api/forms/${id || 'temp'}/documents/extract-ocr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          thumbnailPath: previewContent.thumbnailPath
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al procesar OCR');
+      }
+
+      const result = await response.json();
+
+      if (result.extractedVariables && result.extractedVariables.length > 0) {
+        const newOCRVariables = result.extractedVariables.map((varName: string) => ({
+          name: varName,
+          label: varName
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' '),
+          type: 'text'
+        }));
+
+        const combinedVariables = [...allVariables, ...newOCRVariables];
+        const uniqueVariables = Array.from(
+          new Map(combinedVariables.map(v => [v.name, v])).values()
+        );
+
+        setAllVariables(uniqueVariables);
+        setPreviewContent({
+          ...previewContent,
+          variables: uniqueVariables,
+          extractedVariables: uniqueVariables.map(v => v.name)
         });
 
-        if (!response.ok) {
-          throw new Error('Error al procesar OCR');
-        }
-
-        const result = await response.json();
-
-        if (result.extractedVariables && result.extractedVariables.length > 0) {
-          const newOCRVariables = result.extractedVariables.map((varName: string) => ({
-            name: varName,
-            label: varName
-              .split('_')
-              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-              .join(' '),
-            type: 'text'
-          }));
-
-          const combinedVariables = [...allVariables, ...newOCRVariables];
-          const uniqueVariables = Array.from(
-            new Map(combinedVariables.map(v => [v.name, v])).values()
-          );
-
-          setAllVariables(uniqueVariables);
-          setPreviewContent({
-            ...previewContent,
-            variables: uniqueVariables,
-            extractedVariables: uniqueVariables.map(v => v.name)
-          });
-
-          toast({
-            title: "Variables Detectadas",
-            description: `Se encontraron ${result.extractedVariables.length} nuevas variables.`
-          });
-        } else {
-          toast({
-            title: "OCR Completado",
-            description: "No se detectaron nuevas variables en el documento.",
-            variant: "default"
-          });
-        }
-      } catch (error) {
-        console.error('Error en OCR:', error);
         toast({
-          title: "Error",
-          description: "No se pudo completar el proceso de OCR",
-          variant: "destructive"
+          title: "Variables Detectadas",
+          description: `Se encontraron ${result.extractedVariables.length} nuevas variables.`
+        });
+      } else {
+        toast({
+          title: "OCR Completado",
+          description: "No se detectaron nuevas variables en el documento.",
+          variant: "default"
         });
       }
-    };
+    } catch (error) {
+      console.error('Error en OCR:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo completar el proceso de OCR",
+        variant: "destructive"
+      });
+    }
+  };
 
   const handleCreateFormFromTemplate = () => {
     if (allVariables.length === 0) {
@@ -581,7 +580,7 @@ export default function FormEntries() {
     }
   };
   
-    const handleDownloadMerge = async (templateId: number, entryId: number) => {
+  const handleDownloadMerge = async (templateId: number, entryId: number) => {
     try {
       const response = await fetch(`/api/forms/${id}/documents/${templateId}/merge`, {
         method: 'POST',
@@ -942,11 +941,10 @@ export default function FormEntries() {
                                 Merge
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                              <DialogHeader>
+                            <DialogContent className="max-w-2xl"><DialogHeader>
                                 <DialogTitle>Seleccionar Plantilla</DialogTitle>
                                 <DialogDescription>
-                                  Seleccione una plantilla para generarel documento
+                                  Seleccione una plantilla para generar el documento
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
