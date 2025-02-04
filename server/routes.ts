@@ -412,7 +412,6 @@ export function registerRoutes(app: Express): Server {
 
     // Regular auth check
     const user = ensureAuth(req);
-    const formId = parseInt(req.params.id);
 
     const form = await db.query.forms.findFirst({
       where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
