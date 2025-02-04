@@ -1057,19 +1057,29 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveItalics: true,
             preserveStyles: true,
             preprocessHtml: (html: string) => {
-              // Procesamiento especial para variables en cursiva
-              const processedHtml = html.replace(/<w:i\/>.*?{{([^}]+)}}.*?(?=<\/w:r>)/g, (match, variable) => {
-                const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
-                return `<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">{{${cleanVariable}}}</w:t></w:r>`;
+              // Normalizar todas las variables independientemente de su formato
+              const normalizeVariables = (text: string) => {
+                return text.replace(/{{([^}]+)}}/g, (match, variable) => {
+                  const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
+                  return `{{${cleanVariable}}}`;
+                });
+              };
+
+              // Procesar variables en texto con formato (cursivas, negritas, etc)
+              let processedHtml = html.replace(/(<w:rPr>.*?<\/w:rPr>.*?{{[^}]+}}.*?<\/w:r>)/g, (match) => {
+                const normalizedMatch = normalizeVariables(match);
+                return normalizedMatch;
               });
-              
-              // Procesamiento para variables normales
-              return processedHtml.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
+
+              // Procesar variables en texto normal
+              processedHtml = processedHtml.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
                 const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
                 const prefixStr = prefix || '';
                 const suffixStr = suffix || '';
                 return `<w:r><w:t xml:space="preserve">${prefixStr}{{${cleanVariable}}}${suffixStr}</w:t></w:r>`;
               });
+
+              return processedHtml;
             },
             processLineBreaks: true,
             postprocessRun: (run: any) => {
