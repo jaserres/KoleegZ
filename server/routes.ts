@@ -1024,13 +1024,30 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
         // Preparar datos para el merge verificando tipos
         const mergeData: Record<string, any> = {};
         
-        // Extraer variables del template considerando formato
+        // Extraer y normalizar variables del template
         const templateContent = await mammoth.extractRawText({ buffer: copiedBuffer });
         const templateText = templateContent.value;
-        const templateVars = new Set([
+        
+        // Función para normalizar nombres de variables
+        const normalizeVarName = (name: string) => {
+          return name.replace(/\s+/g, '').toLowerCase();
+        };
+
+        // Extraer y normalizar todas las variables
+        const rawVars = new Set([
           ...(templateText.match(/{{([^}]+)}}/g) || []).map(v => v.slice(2, -2).trim()),
           ...(doc.template.match(/{{([^}]+)}}/g) || []).map(v => v.slice(2, -2).trim())
         ]);
+
+        // Crear un mapa de nombres normalizados a nombres originales
+        const varMap = new Map();
+        rawVars.forEach(varName => {
+          const normalizedName = normalizeVarName(varName);
+          varMap.set(normalizedName, varName);
+        });
+
+        // Usar nombres únicos normalizados
+        const templateVars = new Set(Array.from(varMap.values()));
 
         // Luego procesar los valores
         templateVars.forEach(varName => {
