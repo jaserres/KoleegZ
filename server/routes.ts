@@ -39,12 +39,19 @@ function detectVariables(text: string): {valid: string[], invalid: string[]} {
   const invalidVariables: string[] = [];
   const validVariables: string[] = [];
 
-  // Función para normalizar nombres de variables
+  // Función para limpiar nombres de variables manteniendo mayúsculas/minúsculas
   const normalizeVariableName = (name: string) => {
     return name.trim()
       .replace(/[^a-zA-Z0-9_]/g, '_')
       .replace(/_+/g, '_')
       .replace(/^_|_$/g, '');
+  };
+
+  // Función para preservar el formato original
+  const preserveOriginalFormat = (text: string): string => {
+    return text.replace(/{{([^}]+)}}/g, (match) => {
+      return match; // Mantener el formato original
+    });
   };
 
   matches.forEach(match => {
@@ -1037,12 +1044,14 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
         const variableRegex = /{{([^{}]+)}}/g;
         let match;
 
-        // Extraer variables del texto limpio
+        // Extraer variables manteniendo el formato original
         const rawVars = new Set();
         while ((match = variableRegex.exec(templateText)) !== null) {
-          const varName = match[1].trim().split(/[\s\n]+/)[0]; // Tomar solo la primera parte antes de espacios o saltos
+          const originalVarName = match[1].trim();
+          const varName = originalVarName.split(/[\s\n]+/)[0]; // Tomar solo la primera parte antes de espacios o saltos
           if (varName && !varName.includes('CMD_NODE')) {
-            rawVars.add(varName);
+            // Guardar el nombre original
+            rawVars.add(originalVarName);
           }
         }
 
