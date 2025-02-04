@@ -83,25 +83,14 @@ export default function FormEntries() {
     enabled: !!id,
   });
 
-  const { data: documents = [], isLoading: isLoadingDocuments, error: documentsError } = useQuery<Array<{
+  const { data: documents = [], isLoading: isLoadingDocuments } = useQuery<Array<{
     id: number;
     name: string;
-    template: string;
-    originalTemplate: string;
-    preview?: string;
-    filePath?: string;
+    filePath: string;
     thumbnailPath?: string;
   }>>({
     queryKey: [`/api/forms/${id}/documents`],
-    enabled: !!id,
-    onError: (error) => {
-      console.error('Error fetching documents:', error);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar las plantillas",
-        variant: "destructive"
-      });
-    }
+    enabled: !!id
   });
 
   useEffect(() => {
@@ -200,12 +189,6 @@ export default function FormEntries() {
       entryId: number;
       useOriginalTemplate?: boolean;
     }) => {
-      console.log('Merging document:', {
-        documentId,
-        entryId,
-        useOriginalTemplate
-      });
-
       const res = await apiRequest(
         "POST",
         `/api/forms/${id}/documents/${documentId}/merge`,
@@ -218,13 +201,12 @@ export default function FormEntries() {
 
       if (!res.ok) {
         const error = await res.text();
-        throw new Error(error || 'Error al realizar el merge');
+        throw new Error(error || "Error al realizar el merge");
       }
 
       return res.json();
     },
     onSuccess: (data) => {
-      // Automatically trigger download if merge was successful
       if (data.downloadUrl) {
         window.location.href = data.downloadUrl;
       }
