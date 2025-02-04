@@ -442,7 +442,6 @@ app.get("/api/forms/:formId/share", async (req, res) => {
     console.error('Error sharing form:', error);
     res.status(500).send("Error sharing form");
   }
-});s.json({ token });
 });
 
 
