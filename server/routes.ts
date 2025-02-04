@@ -34,23 +34,16 @@ async function extractTextFromImage(imagePath: string): Promise<string> {
 function detectVariables(text: string): string[] {
   const variablePattern = /{{([^}]+)}}/g;
   const matches = text.match(variablePattern) || [];
-  const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+  const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;  // Permitir guiones bajos
   const invalidVariables: string[] = [];
   const validVariables = new Set<string>();
 
   matches.forEach(match => {
-    // Normalizar el texto completamente
-    const varName = match.slice(2, -2)
-      .trim()
-      .normalize('NFKD') // Normaliza caracteres especiales
-      .replace(/[\u0300-\u036f]/g, '') // Elimina diacríticos
-      .replace(/[^\x00-\x7F]/g, ''); // Solo caracteres ASCII
-
-    // Convertir a formato válido
+    const varName = match.slice(2, -2).trim();
+    // Convertir espacios y guiones a guiones bajos
     const normalizedName = varName
       .replace(/[\s-]+/g, '_')
-      .replace(/[^a-zA-Z0-9_]/g, '')
-      .toLowerCase(); // Asegura consistencia en el caso
+      .replace(/[^a-zA-Z0-9_]/g, '');
 
     if (normalizedName && validVariableRegex.test(normalizedName)) {
       validVariables.add(normalizedName);
@@ -1061,6 +1054,11 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveNumbering: true,
             preserveOutline: true,
             preserveStaticContent: true,
+            preprocessTemplate: (template) => {
+              return template.replace(/{{([^}]+)}}/g, (match, variable) => {
+                return `<w:r><w:rPr><w:rStyle w:val="DefaultParagraphFont"/></w:rPr><w:t>{{${variable}}}</w:t></w:r>`;
+              });
+            },
             preprocessTemplate: (template: any) => {
               // Preserve original XML structure
               return template;
