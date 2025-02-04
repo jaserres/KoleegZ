@@ -11,19 +11,18 @@ export function registerRoutes(app: express.Express) {
       const formId = parseInt(req.params.formId);
       const variableId = req.params.variableId;
 
-      const updateData = {
+      const updateData: any = {
         name: req.body.name,
         label: req.body.label,
         type: req.body.type,
         useRandomInitial: !!req.body.useRandomInitial,
+        minValue: null,
+        maxValue: null
       };
 
       if (req.body.type === 'number' && req.body.useRandomInitial) {
-        updateData.minValue = req.body.minValue?.toString() || '0';
-        updateData.maxValue = req.body.maxValue?.toString() || '100';
-      } else {
-        updateData.minValue = null;
-        updateData.maxValue = null;
+        updateData.minValue = req.body.minValue?.toString();
+        updateData.maxValue = req.body.maxValue?.toString();
       }
 
       await db
