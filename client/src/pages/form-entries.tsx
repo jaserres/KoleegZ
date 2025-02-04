@@ -958,15 +958,24 @@ export default function FormEntries() {
                                           </CardTitle>
                                         </CardHeader>
                                         <CardContent>
-                                          {doc.thumbnailPath && (
-                                            <div className="relative aspect-[3/4] w-full max-h-32 mb-4">
-                                              <img
-                                                src={`/thumbnails/${doc.thumbnailPath}`}
-                                                alt={`Vista previa de ${doc.name}`}
-                                                className="absolute inset-0 w-full h-full object-cover rounded-md"
-                                              />
-                                            </div>
-                                          )}
+                                          {doc.thumbnailPath ? (
+  <div className="relative aspect-[3/4] w-full max-h-32 mb-4">
+    <img
+      src={doc.thumbnailPath.startsWith('/') ? doc.thumbnailPath : `/thumbnails/${doc.thumbnailPath}`}
+      alt={`Vista previa de ${doc.name}`}
+      className="absolute inset-0 w-full h-full object-cover rounded-md"
+      onError={(e) => {
+        console.error('Error loading thumbnail:', doc.thumbnailPath);
+        e.currentTarget.style.display = 'none';
+      }}
+    />
+  </div>
+) : (
+  <div className="relative aspect-[3/4] w-full max-h-32 mb-4 bg-muted flex items-center justify-center">
+    <FileText className="h-12 w-12 text-muted-foreground" />
+  </div>
+)}
+
                                           <div className="flex justify-end mt-4">
                                             <Button
                                               variant="secondary"
