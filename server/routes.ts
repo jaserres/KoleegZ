@@ -1057,24 +1057,30 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveItalics: true,
             preserveStyles: true,
             preprocessHtml: (html: string) => {
-              return html.replace(/{{([^}]+)}}/g, (match) => {
-                return `<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">${match}</w:t></w:r>`;
+              return html.replace(/[{​]*{{([^}]+)}}[}​]*/g, (match, variable) => {
+                const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
+                return `<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">{{${cleanVariable}}}</w:t></w:r>`;
               });
             },
             processLineBreaks: true,
             postprocessRun: (run: any) => {
-              if (run.text && run.text.includes('{{')) {
-                const style = run.style || {};
-                if (run.italic) {
-                  style.fontStyle = 'italic';
-                  run.italic = true;
+              if (run.text) {
+                // Limpiar el texto de caracteres invisibles o especiales
+                const cleanText = run.text.replace(/[^a-zA-Z0-9_{} ]/g, '');
+                if (cleanText.includes('{{')) {
+                  const style = run.style || {};
+                  if (run.italic) {
+                    style.fontStyle = 'italic';
+                    run.italic = true;
+                  }
+                  if (run.bold) {
+                    style.fontWeight = 'bold';
+                    run.bold = true;
+                  }
+                  run.style = style;
+                  run.preserveFormat = true;
+                  run.text = cleanText;
                 }
-                if (run.bold) {
-                  style.fontWeight = 'bold';
-                  run.bold = true;
-                }
-                run.style = style;
-                run.preserveFormat = true;
               }
               return run;
             },
