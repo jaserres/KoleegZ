@@ -1136,21 +1136,47 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
                 });
               };
 
-              // Procesar variables con formato (cursivas y negritas)
-              let processedHtml = html.replace(/(<w:r>(?:<w:rPr>.*?(?:<w:i\/>|<w:b\/>).*?<\/w:rPr>)?<w:t[^>]*>.*?{{[^}]+}}.*?<\/w:t><\/w:r>)/g, (match) => {
-                const varName = extractVariableName(match);
-                if (!varName) return match;
+              const DOMParser = require('xmldom').DOMParser;
+              const XMLSerializer = require('xmldom').XMLSerializer;
+              
+              // Crear parser y serializer
+              const parser = new DOMParser();
+              const serializer = new XMLSerializer();
+              
+              // Convertir HTML a DOM
+              const doc = parser.parseFromString(html, 'text/xml');
+              
+              // Función para procesar nodos de texto
+              const processTextNodes = (node) => {
+                if (node.nodeType === 3 && node.nodeValue.includes('{{')) {
+                  const parentRun = node.parentNode.parentNode; // w:r element
+                  const rPr = parentRun.getElementsByTagName('w:rPr')[0];
+                  
+                  if (rPr) {
+                    const isItalic = rPr.getElementsByTagName('w:i').length > 0;
+                    const isBold = rPr.getElementsByTagName('w:b').length > 0;
+                    
+                    let style = '<w:rPr>';
+                    if (isItalic) style += '<w:i/>';
+                    if (isBold) style += '<w:b/>';
+                    style += '</w:rPr>';
+                    
+                    const varName = node.nodeValue.match(/{{([^}]+)}}/)[1].trim();
+                    parentRun.innerHTML = `${style}<w:t xml:space="preserve">{{${varName}}}</w:t>`;
+                  }
+                }
                 
-                const hasItalic = match.includes('<w:i/>');
-                const hasBold = match.includes('<w:b/>');
-                
-                let style = '<w:rPr>';
-                if (hasItalic) style += '<w:i/>';
-                if (hasBold) style += '<w:b/>';
-                style += '</w:rPr>';
-                
-                return `<w:r>${style}<w:t xml:space="preserve">{{${varName}}}</w:t></w:r>`;
-              });
+                // Procesar hijos recursivamente
+                for (let child of node.childNodes) {
+                  processTextNodes(child);
+                }
+              };
+              
+              // Procesar documento
+              processTextNodes(doc.documentElement);
+              
+              // Convertir DOM de vuelta a string
+              const processedHtml = serializer.serializeToString(doc);
 
               // Procesar variables en texto normal
               processedHtml = processedHtml.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
