@@ -28,6 +28,8 @@ export default function FormBuilder() {
   const [showEditor, setShowEditor] = useState(false);
   const [previewContent, setPreviewContent] = useState<{
     name: string;
+    template?: string;
+    originalTemplate?: string;
     filePath: string;
     thumbnailPath?: string;
     extractedVariables?: string[];
@@ -126,6 +128,8 @@ export default function FormBuilder() {
       setVariables(variables);
       setPreviewContent({
         name: file.name.split('.')[0],
+        template: doc.template,
+        originalTemplate: doc.originalTemplate || doc.template,
         filePath: doc.filePath,
         thumbnailPath: doc.thumbnailPath,
         extractedVariables: doc.extractedVariables
@@ -207,11 +211,13 @@ export default function FormBuilder() {
         throw new Error(`Los usuarios ${user?.isPremium ? 'premium' : 'gratuitos'} pueden crear hasta ${variableLimit} variables por formulario.`);
       }
 
-      // Create form with document info
+      // Create form with complete document info
       const formRes = await apiRequest("POST", "/api/forms", {
         name: formName,
         document: previewContent ? {
           name: previewContent.name,
+          template: previewContent.template,
+          originalTemplate: previewContent.originalTemplate,
           filePath: previewContent.filePath,
           thumbnailPath: previewContent.thumbnailPath
         } : undefined
@@ -268,6 +274,8 @@ export default function FormBuilder() {
       await apiRequest("PATCH", `/api/forms/${id}`, {
         name: formName,
         document: previewContent ? {
+          template: previewContent.template,
+          originalTemplate: previewContent.originalTemplate,
           filePath: previewContent.filePath,
           thumbnailPath: previewContent.thumbnailPath
         } : undefined
