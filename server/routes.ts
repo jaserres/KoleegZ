@@ -1023,24 +1023,27 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
         // Preparar datos para el merge verificando tipos
         const mergeData: Record<string, any> = {};
-        Object.entries(entry.values || {}).forEach(([key, value]) => {
+        // Primero obtener todas las variables del template
+        const templateVars = doc.template.match(/{{([^}]+)}}/g)?.map(v => v.slice(2, -2).trim()) || [];
+
+        // Luego procesar los valores
+        templateVars.forEach(varName => {
+          const value = entry.values?.[varName];
           if (value !== undefined && value !== null) {
             if (typeof value === 'number') {
-              mergeData[key] = value.toString(); // Convertir números a strings para el merge
+              mergeData[varName] = value.toString();
             } else if (typeof value === 'boolean') {
-              mergeData[key] = value.toString(); // Convertir booleanos a strings
+              mergeData[varName] = value.toString();
             } else {
-              mergeData[key] = String(value); // Asegurar que todo sea string
+              mergeData[varName] = String(value);
             }
           } else {
-            mergeData[key] = ''; // Valor vacío para null/undefined
+            mergeData[varName] = '';
           }
         });
 
-        console.log('Datos preparados para merge:', {
-          variables: Object.keys(mergeData).length,
-          exampleValues: Object.entries(mergeData).slice(0, 3)
-        });
+        console.log('Variables detectadas:', templateVars);
+        console.log('Datos para merge:', mergeData);
 
         // Realizar el merge sobre la copia temporal
         let mergedBuffer: Buffer;
