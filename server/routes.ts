@@ -383,7 +383,34 @@ export function registerRoutes(app: Express): Server {
     res.json(userForms);
   });
 
+  // Check if a request has share access to a form
+  async function checkShareAccess(formId: number, token?: string) {
+    if (!token) return false;
+    const [share] = await db.select()
+      .from(formShares)
+      .where(and(eq(formShares.formId, formId), eq(formShares.token, token)));
+    return !!share;
+  }
+
   app.get("/api/forms/:id", async (req, res) => {
+    const shareToken = req.query.share as string;
+    const formId = parseInt(req.params.id);
+
+    // Check for share access first
+    if (shareToken && await checkShareAccess(formId, shareToken)) {
+      const form = await db.query.forms.findFirst({
+        where: eq(forms.id, formId),
+        with: {
+          variables: {
+            orderBy: [asc(variables.id)],
+          },
+        },
+      });
+      if (!form) return res.status(404).send("Form not found");
+      return res.json({ ...form, isSharedAccess: true });
+    }
+
+    // Regular auth check
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
 
@@ -1147,14 +1174,14 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
               const DOMParser = require('xmldom').DOMParser;
               const XMLSerializer = require('xmldom').XMLSerializer;
-              
+
               // Crear parser y serializer
               const parser = new DOMParser();
               const serializer = new XMLSerializer();
-              
+
               // Convertir HTML a DOM
               const doc = parser.parseFromString(html, 'text/xml');
-              
+
               // Función para procesar nodos de texto
               const processTextNodes = (node) => {
                 if (node.nodeType === 3 && node.nodeValue.includes('{{')) {
@@ -1164,7 +1191,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
                   // Preservar todos los elementos de estilo existentes
                   const rPr = parentRun.getElementsByTagName('w:rPr')[0];
                   const styles = [];
-                  
+
                   if (rPr) {
                     // Copiar todos los elementos de estilo existentes
                     Array.from(rPr.childNodes).forEach(child => {
@@ -1182,23 +1209,23 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
                     }
                   });
                   newStyle += '</w:rPr>';
-                  
+
                   const varName = node.nodeValue.match(/{{([^}]+)}}/)[1].trim();
                   const newText = `${newStyle}<w:t xml:space="preserve">{{${varName}}}</w:t>`;
-                  
+
                   // Reemplazar contenido manteniendo el nodo w:r
                   parentRun.innerHTML = newText;
                 }
-                
+
                 // Procesar hijos recursivamente
                 for (let child of node.childNodes) {
                   processTextNodes(child);
                 }
               };
-              
+
               // Procesar documento
               processTextNodes(doc.documentElement);
-              
+
               // Convertir DOM de vuelta a string
               const processedHtml = serializer.serializeToString(doc);
 

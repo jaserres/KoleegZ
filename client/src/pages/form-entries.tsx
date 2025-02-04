@@ -39,7 +39,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-export default function FormEntries() {
+export default function FormEntries({isSharedAccess = false}) { // Added isSharedAccess prop with default false
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -777,6 +777,7 @@ export default function FormEntries() {
                               <Button
                                 variant="outline"
                                 onClick={() => setSelectedEntry(entry.id)}
+                                disabled={isSharedAccess} // Disabled Merge button in shared mode
                               >
                                 <FileText className="mr-2 h-4 w-4" />
                                 Merge
@@ -801,19 +802,21 @@ export default function FormEntries() {
                                           <CardTitle>
                                             <div className="flex items-center justify-between">
                                               <span>{doc.name}</span>
-                                              <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
-                                                    deleteDocumentMutation.mutate(doc.id);
-                                                  }
-                                                }}
-                                              >
-                                                <Trash2 className="h-4 w-4" />
-                                              </Button>
+                                              {!isSharedAccess && ( // Conditional rendering for delete button
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
+                                                      deleteDocumentMutation.mutate(doc.id);
+                                                    }
+                                                  }}
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              )}
                                             </div>
                                           </CardTitle>
                                         </CardHeader>
@@ -879,23 +882,25 @@ export default function FormEntries() {
                               )}
                             </DialogContent>
                           </Dialog>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                            onClick={() => {
-                              if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
-                                deleteEntryMutation.mutate(entry.id);
-                              }
-                            }}
-                            disabled={deleteEntryMutation.isPending}
-                          >
-                            {deleteEntryMutation.isPending ? (
-                              <Spinner variant="pulse" size="sm" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
+                          {!isSharedAccess && ( // Conditional rendering for delete button
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                              onClick={() => {
+                                if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
+                                  deleteEntryMutation.mutate(entry.id);
+                                }
+                              }}
+                              disabled={deleteEntryMutation.isPending}
+                            >
+                              {deleteEntryMutation.isPending ? (
+                                <Spinner variant="pulse" size="sm" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

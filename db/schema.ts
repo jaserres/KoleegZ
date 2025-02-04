@@ -91,3 +91,13 @@ export const insertDocumentSchema = createInsertSchema(documents);
 export const selectDocumentSchema = createSelectSchema(documents);
 export type InsertDocument = typeof documents.$inferInsert;
 export type SelectDocument = typeof documents.$inferSelect;
+
+export const formShares = pgTable("form_shares", {
+  id: serial("id").primaryKey(),
+  formId: integer("form_id").notNull().references(() => forms.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type SelectFormShare = typeof formShares.$inferSelect;
+export type InsertFormShare = typeof formShares.$inferInsert;
