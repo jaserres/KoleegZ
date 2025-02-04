@@ -576,30 +576,19 @@ export default function FormEntries() {
       });
 
       if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(errorData || 'Error al descargar el documento');
+        throw new Error('Error al descargar el documento');
       }
 
-      const contentType = response.headers.get('content-type');
-      if (contentType?.includes('application/json')) {
-        const data = await response.json();
-        if (data.downloadUrl) {
-          window.location.href = data.downloadUrl;
-        } else {
-          throw new Error('URL de descarga no disponible');
-        }
-      } else {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const fileName = selectedTemplate?.name?.replace(/\.docx$/i, '') || 'document';
-        link.download = `${fileName}-merged.docx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = selectedTemplate?.name.replace(/\.docx$/i, '') || 'document';
+      link.download = `${fileName}-merged.docx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
       toast({
         title: "Éxito",
@@ -609,7 +598,7 @@ export default function FormEntries() {
       console.error('Error downloading document:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "No se pudo descargar el documento",
+        description: "No se pudo descargar el documento",
         variant: "destructive"
       });
     }
