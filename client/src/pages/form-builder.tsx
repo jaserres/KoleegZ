@@ -26,6 +26,7 @@ export default function FormBuilder() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [showEditor, setShowEditor] = useState(false);
+  const [showTemplateProcessingDialog, setShowTemplateProcessingDialog] = useState(false);
   const [previewContent, setPreviewContent] = useState<{
     name: string;
     template?: string;
@@ -95,6 +96,8 @@ export default function FormBuilder() {
     }
 
     try {
+      setShowTemplateProcessingDialog(true);
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('preserveOriginal', 'true');
@@ -136,8 +139,10 @@ export default function FormBuilder() {
       });
 
       setShowEditor(true);
+      setShowTemplateProcessingDialog(false);
 
     } catch (error) {
+      setShowTemplateProcessingDialog(false);
       console.error('Error al cargar archivo:', error);
       toast({
         title: "Error al cargar archivo",
@@ -307,7 +312,20 @@ export default function FormBuilder() {
   });
 
   return (
-    <div className="container mx-auto py-8">
+    <>
+      <Dialog open={showTemplateProcessingDialog} onOpenChange={setShowTemplateProcessingDialog}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex flex-col items-center justify-center gap-4 py-8">
+            <Spinner size="lg" className="text-primary"/>
+            <DialogTitle>Procesando Plantilla</DialogTitle>
+            <DialogDescription>
+              Extrayendo variables y preparando el documento...
+            </DialogDescription>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="container mx-auto py-8">
       <Button variant="ghost" className="mb-8" onClick={() => setLocation("/")}>
         <ArrowLeft className="mr-2 h-4 w-4" />
         Volver a Formularios
