@@ -1054,6 +1054,19 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveNumbering: true,
             preserveOutline: true,
             preserveStaticContent: true,
+            preprocessHtml: (html: string) => {
+              return html.replace(/{{([^}]+)}}/g, (match, variable) => {
+                return `<w:r><w:rPr><w:i w:val="1"/></w:rPr><w:t>${match}</w:t></w:r>`;
+              });
+            },
+            postprocessRun: (run: any) => {
+              if (run.text && run.text.includes('{{') && run.text.includes('}}')) {
+                const style = run.style || {};
+                if (run.italic) style.italic = true;
+                run.style = style;
+              }
+              return run;
+            },
             preprocessTemplate: (template: any) => {
               // Preserve original XML structure
               return template;
