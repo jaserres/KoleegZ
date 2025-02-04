@@ -1054,6 +1054,11 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveNumbering: true,
             preserveOutline: true,
             preserveStaticContent: true,
+            preprocessTemplate: (template) => {
+              return template.replace(/{{([^}]+)}}/g, (match, variable) => {
+                return `<w:r><w:rPr><w:rStyle w:val="DefaultParagraphFont"/></w:rPr><w:t>{{${variable}}}</w:t></w:r>`;
+              });
+            },
             preprocessTemplate: (template: any) => {
               // Preserve original XML structure
               return template;
