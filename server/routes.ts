@@ -125,7 +125,6 @@ const wordStyleMap = [
 // Mejorar la función de transformación de documento
 const transformDocument = (element: any) => {
   if (element.type === 'paragraph') {
-    // Preservar todos los atributos de párrafo
     const style: any = {};
     if (element.alignment) style.textAlign = element.alignment;
     if (element.indent) {
@@ -141,17 +140,26 @@ const transformDocument = (element: any) => {
   }
 
   if (element.type === 'run') {
-    // Preservar todos los atributos de texto
     const style: any = {};
+    const text = element.text || '';
+    const hasVariable = text.includes('{{') && text.includes('}}');
+    
+    // Preservar estilos incluso para variables
     if (element.font) style.fontFamily = element.font;
     if (element.size) style.fontSize = `${element.size}pt`;
     if (element.color) style.color = element.color;
     if (element.highlight) style.backgroundColor = element.highlight;
     if (element.verticalAlignment) style.verticalAlign = element.verticalAlignment;
-    if (element.bold) style.fontWeight = 'bold';
+    if (element.bold || (hasVariable && text.trim().startsWith('{{'))) style.fontWeight = 'bold';
     if (element.italic) style.fontStyle = 'italic';
     if (element.underline) style.textDecoration = 'underline';
+    
     element.style = style;
+    
+    // Asegurar que el texto de la variable se preserve
+    if (hasVariable) {
+      element.preserveVariable = true;
+    }
   }
 
   return element;
