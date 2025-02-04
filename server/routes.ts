@@ -632,7 +632,7 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
-  
+
 app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
         const user = ensureAuth(req);
@@ -926,7 +926,7 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
 
     res.sendStatus(200);
   });
-  
+
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -1057,33 +1057,26 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             preserveItalics: true,
             preserveStyles: true,
             preprocessHtml: (html: string) => {
-              // Función para limpiar y normalizar nombres de variables
-              const normalizeVariable = (name: string) => {
-                return name.trim()
-                  .toLowerCase()
-                  .replace(/\s+/g, '_')
-                  .replace(/[^a-z0-9_]/g, '');
+              // Normalizar todas las variables a minúsculas sin importar el formato
+              const processVariables = (text: string) => {
+                return text.replace(/{{([^}]+)}}/g, (match, variable) => {
+                  const normalized = variable.trim().toLowerCase();
+                  return `{{${normalized}}}`;
+                });
               };
 
-              // Procesar variables en cursiva primero
-              let processedHtml = html.replace(
-                /(<w:rPr>[^<]*?<w:i\/?>[^<]*?<\/w:rPr>)<w:t[^>]*>([^<]*?){{([^}]+)}}([^<]*?)<\/w:t>/g,
-                (match, rPr, prefix, variable, suffix) => {
-                  const normalizedVar = normalizeVariable(variable);
-                  return `${rPr}<w:t xml:space="preserve">${prefix}{{${normalizedVar}}}${suffix}</w:t>`;
-                }
-              );
+              // Procesar todo el documento manteniendo estilos
+              const processDocument = (content: string) => {
+                const parts = content.split(/({{[^}]+}})/g);
+                return parts.map(part => {
+                  if (part.startsWith('{{')) {
+                    return processVariables(part);
+                  }
+                  return part;
+                }).join('');
+              };
 
-              // Procesar variables normales después
-              processedHtml = processedHtml.replace(
-                /{{([^}]+)}}/g,
-                (match, variable) => {
-                  const normalizedVar = normalizeVariable(variable);
-                  return `{{${normalizedVar}}}`;
-                }
-              );
-
-              return processedHtml;
+              return processDocument(html);
             },
             processLineBreaks: true,
             postprocessRun: (run: any) => {
@@ -1352,7 +1345,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
     res.json(entry);
   });
-  
+
     app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
