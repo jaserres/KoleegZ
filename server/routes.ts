@@ -1122,50 +1122,35 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             fixSmartQuotes: true,
             renderFormatting: true,
             preprocessHtml: (html: string) => {
-              const parser = new DOMParser();
-              const doc = parser.parseFromString(html, 'application/xml');
-              
-              // Procesar todos los nodos de texto
-              const processNode = (node: Element) => {
-                if (node.nodeName === 'w:t') {
-                  const text = node.textContent || '';
-                  const cleanText = text.replace(/[^a-zA-Z0-9_{} ]/g, '');
-                  
-                  if (cleanText.includes('{{')) {
-                    const runElement = node.closest('w:r');
-                    if (runElement) {
-                      const rPrElement = runElement.querySelector('w:rPr');
-                      const hasItalic = rPrElement?.querySelector('w:i') !== null;
-                      const hasBold = rPrElement?.querySelector('w:b') !== null;
-                      
-                      // Preservar formato
-                      let style = '<w:rPr>';
-                      if (hasItalic) style += '<w:i/>';
-                      if (hasBold) style += '<w:b/>';
-                      style += '</w:rPr>';
-                      
-                      // Extraer y limpiar variable
-                      const varMatch = cleanText.match(/{{([^}]+)}}/);
-                      if (varMatch) {
-                        const varName = varMatch[1].trim();
-                        const cleanVar = varName.replace(/[^a-zA-Z0-9_]/g, '');
-                        node.textContent = text.replace(varMatch[0], `{{${cleanVar}}}`);
-                      }
-                    }
-                  }
-                }
-                
-                // Procesar nodos hijos
-                Array.from(node.children).forEach(child => {
-                  if (child instanceof Element) {
-                    processNode(child);
-                  }
+              // Función para extraer el nombre de la variable
+              const extractVariableName = (text: string) => {
+                const match = text.match(/{{([^}]+)}}/);
+                return match ? match[1].trim() : '';
+              };
+
+              // Normalizar todas las variables independientemente de su formato
+              const normalizeVariables = (text: string) => {
+                return text.replace(/{{([^}]+)}}/g, (match, variable) => {
+                  const cleanVariable = variable.trim().replace(/[^a-zA-Z0-9_]/g, '');
+                  return `{{${cleanVariable}}}`;
                 });
               };
-              
-              processNode(doc.documentElement);
-              return doc.documentElement.outerHTML;
-            },
+
+              // Procesar variables con formato (cursivas y negritas)
+              let processedHtml = html.replace(/(<w:r>(?:<w:rPr>.*?(?:<w:i\/>|<w:b\/>).*?<\/w:rPr>)?<w:t[^>]*>.*?{{[^}]+}}.*?<\/w:t><\/w:r>)/g, (match) => {
+                const varName = extractVariableName(match);
+                if (!varName) return match;
+                
+                const hasItalic = match.includes('<w:i/>');
+                const hasBold = match.includes('<w:b/>');
+                
+                let style = '<w:rPr>';
+                if (hasItalic) style += '<w:i/>';
+                if (hasBold) style += '<w:b/>';
+                style += '</w:rPr>';
+                
+                return `<w:r>${style}<w:t xml:space="preserve">{{${varName}}}</w:t></w:r>`;
+              });
 
               // Procesar variables en texto normal
               processedHtml = processedHtml.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
