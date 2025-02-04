@@ -111,10 +111,22 @@ export default function FormBuilder() {
       const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
+        headers: {
+          'Accept': 'application/json'
+        }
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        if (response.status === 502 || response.status === 503) {
+          throw new Error('El servidor no está respondiendo. Por favor intente nuevamente.');
+        }
+        const error = await response.text();
+        throw new Error(error || 'Error al cargar el archivo');
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Respuesta inválida del servidor');
       }
 
       const doc = await response.json();
@@ -143,12 +155,12 @@ export default function FormBuilder() {
       setShowEditor(true);
       setShowTemplateProcessingDialog(false);
 
-    } catch (error) {
+    } catch (error: any) {
       setShowTemplateProcessingDialog(false);
       console.error('Error al cargar archivo:', error);
       toast({
         title: "Error al cargar archivo",
-        description: error instanceof Error ? error.message : "Error al procesar el archivo",
+        description: error.message || "Error al procesar el archivo",
         variant: "destructive"
       });
     }
