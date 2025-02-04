@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, FileText, Save, FileDown, Upload, Download, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, FileText, Save, FileDown, Upload, Download, Trash2, Wand2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Dialog,
@@ -940,7 +940,7 @@ export default function FormEntries() {
                                           <CardTitle>
                                             <div className="flex items-center justify-between">
                                               <span>{doc.name}</span>
-                                              <div className="flex gap-2">
+                                                                             <div className="flex gap-2">
                                                 <Button
                                                   variant="ghost"
                                                   size="icon"
