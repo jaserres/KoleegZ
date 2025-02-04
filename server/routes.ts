@@ -1037,12 +1037,27 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
         const variableRegex = /{{([^{}]+)}}/g;
         let match;
 
-        // Extraer variables del texto limpio
-        const rawVars = new Set();
+        // Extraer variables con sus estilos
+        const rawVars = new Map();
         while ((match = variableRegex.exec(templateText)) !== null) {
-          const varName = match[1].trim().split(/[\s\n]+/)[0]; // Tomar solo la primera parte antes de espacios o saltos
+          const varName = match[1].trim().split(/[\s\n]+/)[0];
           if (varName && !varName.includes('CMD_NODE')) {
-            rawVars.add(varName);
+            const isItalic = match[0].includes('<w:i/>');
+            const isBold = match[0].includes('<w:b/>');
+
+            if (!rawVars.has(varName)) {
+              rawVars.set(varName, {
+                name: varName,
+                styles: { italic: isItalic, bold: isBold },
+                alternateNames: []
+              });
+            }
+
+            // Si encontramos la misma variable con estilo diferente
+            const existingVar = rawVars.get(varName);
+            if (existingVar && (existingVar.styles.italic !== isItalic || existingVar.styles.bold !== isBold)) {
+              existingVar.alternateNames.push(`${varName}_${isItalic ? 'italic' : ''}${isBold ? 'bold' : ''}`);
+            }
           }
         }
 
@@ -1051,19 +1066,25 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
         while ((match = variableRegex.exec(doc.template)) !== null) {
           const varName = match[1].trim().split(/[\s\n]+/)[0];
           if (varName && !varName.includes('CMD_NODE')) {
-            rawVars.add(varName);
+            rawVars.set(varName, {
+              name: varName,
+              styles: { italic: false, bold: false },
+              alternateNames: []
+            });
           }
         }
 
+
         // Crear un mapa de nombres normalizados a nombres originales
         const varMap = new Map();
-        rawVars.forEach(varName => {
-          const normalizedName = normalizeVarName(varName);
-          varMap.set(normalizedName, varName);
+        rawVars.forEach(varData => {
+          const normalizedName = normalizeVarName(varData.name);
+          varMap.set(normalizedName, varData);
         });
 
         // Usar nombres únicos normalizados
-        const templateVars = new Set(Array.from(varMap.values()));
+        const templateVars = new Set(Array.from(varMap.values()).map(v => v.name));
+        templateVars.forEach(v => templateVars.add(...(varMap.get(normalizeVarName(v))?.alternateNames || [])));
 
         // Luego procesar los valores
         templateVars.forEach(varName => {
@@ -1138,14 +1159,14 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
               const DOMParser = require('xmldom').DOMParser;
               const XMLSerializer = require('xmldom').XMLSerializer;
-              
+
               // Crear parser y serializer
               const parser = new DOMParser();
               const serializer = new XMLSerializer();
-              
+
               // Convertir HTML a DOM
               const doc = parser.parseFromString(html, 'text/xml');
-              
+
               // Función para procesar nodos de texto
               const processTextNodes = (node) => {
                 if (node.nodeType === 3 && node.nodeValue.includes('{{')) {
@@ -1155,7 +1176,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
                   // Preservar todos los elementos de estilo existentes
                   const rPr = parentRun.getElementsByTagName('w:rPr')[0];
                   const styles = [];
-                  
+
                   if (rPr) {
                     // Copiar todos los elementos de estilo existentes
                     Array.from(rPr.childNodes).forEach(child => {
@@ -1173,23 +1194,23 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
                     }
                   });
                   newStyle += '</w:rPr>';
-                  
+
                   const varName = node.nodeValue.match(/{{([^}]+)}}/)[1].trim();
                   const newText = `${newStyle}<w:t xml:space="preserve">{{${varName}}}</w:t>`;
-                  
+
                   // Reemplazar contenido manteniendo el nodo w:r
                   parentRun.innerHTML = newText;
                 }
-                
+
                 // Procesar hijos recursivamente
                 for (let child of node.childNodes) {
                   processTextNodes(child);
                 }
               };
-              
+
               // Procesar documento
               processTextNodes(doc.documentElement);
-              
+
               // Convertir DOM de vuelta a string
               const processedHtml = serializer.serializeToString(doc);
 
