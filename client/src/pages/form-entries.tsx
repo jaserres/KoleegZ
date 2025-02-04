@@ -84,7 +84,7 @@ export default function FormEntries({isSharedAccess = false}) {
     enabled: !!id,
   });
 
-  const { data: documents = [], isLoading: isLoadingDocuments } = useQuery<Array<{
+  const { data: documents = [], isLoading: isLoadingDocuments, isError: isErrorDocuments } = useQuery<Array<{
     id: number;
     name: string;
     filePath: string;
@@ -616,9 +616,10 @@ export default function FormEntries({isSharedAccess = false}) {
       return res.json();
     },
     onSuccess: (data) => {
-      const url = new URL(`/forms/${id}/entries`, window.location.origin);
+      const path = `/forms/${id}/entries`.replace(/\/+/g, '/');
+      const url = new URL(path, window.location.origin);
       url.searchParams.set('share', data.token);
-      setShareLink(url.toString());
+      setShareLink(url.toString().replace(/([^:]\/)\/+/g, '$1'));
       setShowShareDialog(true);
     },
     onError: (error: Error) => {
