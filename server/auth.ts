@@ -166,9 +166,24 @@ export function setupAuth(app: Express) {
           password: '[REDACTED]'
         }
       });
+
+      // Handle specific database errors
+      if (error.code === '23505') { // Unique constraint violation
+        return res.status(400).json({ 
+          error: "El usuario o email ya existe en la base de datos"
+        });
+      }
+      
+      // Handle validation errors
+      if (error.name === 'ValidationError') {
+        return res.status(400).json({ 
+          error: error.message 
+        });
+      }
+
+      // Handle other errors
       res.status(500).json({ 
-        error: "Error during registration",
-        details: error.message 
+        error: "Error durante el registro. Por favor, intente nuevamente."
       });
     }
   });
