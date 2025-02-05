@@ -144,7 +144,12 @@ export default function AuthPage() {
                         const email = formData.get("email") as string;
                         
                         if (!username || !firstName || !lastName || !email || !password) {
-                          throw new Error("Todos los campos son requeridos");
+                          toast({
+                            variant: "destructive",
+                            title: "Error",
+                            description: "Todos los campos son requeridos"
+                          });
+                          return;
                         }
                         
                         await registerMutation.mutateAsync({
@@ -155,7 +160,13 @@ export default function AuthPage() {
                           email
                         });
                         setLocation("/");
-                      } catch {}
+                      } catch (error: any) {
+                        toast({
+                          variant: "destructive",
+                          title: "Error",
+                          description: error.message || "Error durante el registro"
+                        });
+                      }
                     }}
                   >
                     <div className="space-y-2">
