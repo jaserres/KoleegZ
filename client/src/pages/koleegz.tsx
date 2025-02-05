@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Search, UserPlus, Check } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Spinner } from "@/components/ui/spinner";
 
 interface User {
   id: number;
@@ -26,12 +27,21 @@ export default function KoleegZ() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
 
-  const { data: users = [], isLoading } = useQuery<User[]>({
+  const { data: users = [], isLoading, error } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    enabled: true,
+    retry: 3,
+    onError: (err) => {
+      console.error('Error fetching users:', err);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los usuarios",
+        variant: "destructive",
+      });
+    }
   });
 
   useEffect(() => {
+    console.log('Users data received:', users);
     const filtered = users.filter(
       (user) =>
         user.username.toLowerCase().includes(searchTerm.toLowerCase())
@@ -54,7 +64,6 @@ export default function KoleegZ() {
         description: "Ahora sigues a este usuario",
       });
 
-      // Actualizar la lista de usuarios
       const updatedUsers = users.map((user) =>
         user.id === userId ? { ...user, isFollowing: true } : user
       );
@@ -93,7 +102,11 @@ export default function KoleegZ() {
       <ScrollArea className="h-[600px]">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {isLoading ? (
-            <p className="text-center col-span-full">Cargando usuarios...</p>
+            <div className="col-span-full flex justify-center py-8">
+              <Spinner className="h-8 w-8" />
+            </div>
+          ) : error ? (
+            <p className="text-center col-span-full text-red-500">Error al cargar usuarios</p>
           ) : filteredUsers.length === 0 ? (
             <p className="text-center col-span-full">No se encontraron usuarios</p>
           ) : (

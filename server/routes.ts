@@ -419,7 +419,10 @@ export function registerRoutes(app: Express): Server {
         try {
           const user = ensureAuth(req);
 
-          // Seleccionar campos específicos y transformar is_premium a isPremium
+          // Log del usuario actual para debugging
+          console.log('Usuario actual:', user);
+
+          // Consulta básica de usuarios
           const allUsers = await db.select({
             id: users.id,
             username: users.username,
@@ -428,13 +431,18 @@ export function registerRoutes(app: Express): Server {
           .from(users)
           .where(ne(users.id, user.id));
 
-          console.log('Users fetched:', allUsers);
+          console.log('Usuarios encontrados:', allUsers);
+
+          if (!allUsers.length) {
+            console.log('No se encontraron usuarios');
+          }
+
           res.json(allUsers);
         } catch (error) {
           console.error('Error al obtener usuarios:', error);
           res.status(500).json({ error: "Error obteniendo usuarios" });
         }
-      });
+    });
 
     const form = await db.query.forms.findFirst({
       where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
