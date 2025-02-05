@@ -82,11 +82,37 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      const result = insertUserSchema.safeParse(req.body);
-      if (!result.success) {
-        const error = fromZodError(result.error);
-        return res.status(400).json({ error: error.toString() });
+      // Validar todos los campos requeridos
+      if (!req.body.username || !req.body.password || !req.body.firstName || !req.body.lastName || !req.body.email) {
+        return res.status(400).json({ error: "Todos los campos son requeridos" });
       }
+
+      // Validar formato de username
+      if (!/^[a-zA-Z0-9]+$/.test(req.body.username)) {
+        return res.status(400).json({ error: "El username solo puede contener letras y números" });
+      }
+
+      // Validar longitud de contraseña
+      if (req.body.password.length < 8) {
+        return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres" });
+      }
+
+      // Validar formato de email
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.body.email)) {
+        return res.status(400).json({ error: "Email inválido" });
+      }
+
+      // Si todas las validaciones pasan, continuar con el registro
+      const result = {
+        success: true,
+        data: {
+          username: req.body.username,
+          password: req.body.password,
+          firstName: req.body.firstName,
+          lastName: req.body.lastName,
+          email: req.body.email
+        }
+      };
 
       const [existingUser] = await getUserByUsername(result.data.username);
       if (existingUser) {
