@@ -55,12 +55,7 @@ export function setupAuth(app: Express) {
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
-      // Check if input is email or username
-      const isEmail = username.includes('@');
-      const [user] = isEmail 
-        ? await db.select().from(users).where(eq(users.email, username)).limit(1)
-        : await getUserByUsername(username);
-
+      const [user] = await getUserByUsername(username);
       if (!user || !(await comparePasswords(password, user.password))) {
         return done(null, false);
       } else {
@@ -82,58 +77,13 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      console.log('Registration attempt:', {
-        ...req.body,
-        password: '[REDACTED]'
-      });
-      
-      // Validar todos los campos requeridos
-      if (!req.body.username || !req.body.password || !req.body.firstName || !req.body.lastName || !req.body.email) {
-        console.error('Missing required fields:', {
-          hasUsername: !!req.body.username,
-          hasPassword: !!req.body.password,
-          hasFirstName: !!req.body.firstName,
-          hasLastName: !!req.body.lastName,
-          hasEmail: !!req.body.email
-        });
-        return res.status(400).json({ error: "Todos los campos son requeridos" });
+      const result = insertUserSchema.safeParse(req.body);
+      if (!result.success) {
+        const error = fromZodError(result.error);
+        return res.status(400).json({ error: error.toString() });
       }
 
-      // Validar formato de username
-      if (!/^[a-zA-Z0-9]+$/.test(req.body.username)) {
-        return res.status(400).json({ error: "El username solo puede contener letras y números" });
-      }
-
-      // Validar longitud de contraseña
-      if (req.body.password.length < 8) {
-        return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres" });
-      }
-
-      // Validar formato de email
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.body.email)) {
-        return res.status(400).json({ error: "Email inválido" });
-      }
-
-      // Verificar email duplicado
-      const [existingEmail] = await db.select()
-        .from(users)
-        .where(eq(users.email, req.body.email))
-        .limit(1);
-
-      if (existingEmail) {
-        return res.status(400).json({ error: "El email ya está registrado" });
-      }
-
-      // Si todas las validaciones pasan, continuar con el registro
-      const userData = {
-        username: req.body.username,
-        password: req.body.password,
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        email: req.body.email
-      };
-
-      const [existingUser] = await getUserByUsername(userData.username);
+      const [existingUser] = await getUserByUsername(result.data.username);
       if (existingUser) {
         return res.status(400).json({ error: "Username already exists" });
       }
@@ -141,12 +91,9 @@ export function setupAuth(app: Express) {
       const [user] = await db
         .insert(users)
         .values({
-          username: userData.username,
-          password: await hashPassword(userData.password),
-          first_name: userData.firstName,
-          last_name: userData.lastName,
-          email: userData.email,
-          is_premium: false
+          ...result.data,
+          password: await hashPassword(result.data.password),
+          isPremium: false
         })
         .returning();
 
@@ -157,34 +104,9 @@ export function setupAuth(app: Express) {
         }
         res.status(201).json(user);
       });
-    } catch (error: any) {
-      console.error('Registration error:', {
-        error: error.message,
-        stack: error.stack,
-        body: {
-          ...req.body,
-          password: '[REDACTED]'
-        }
-      });
-
-      // Handle specific database errors
-      if (error.code === '23505') { // Unique constraint violation
-        return res.status(400).json({ 
-          error: "El usuario o email ya existe en la base de datos"
-        });
-      }
-      
-      // Handle validation errors
-      if (error.name === 'ValidationError') {
-        return res.status(400).json({ 
-          error: error.message 
-        });
-      }
-
-      // Handle other errors
-      res.status(500).json({ 
-        error: "Error durante el registro. Por favor, intente nuevamente."
-      });
+    } catch (error) {
+      console.error('Registration error:', error);
+      res.status(500).json({ error: "Error during registration" });
     }
   });
 
