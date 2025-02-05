@@ -418,26 +418,22 @@ export function registerRoutes(app: Express): Server {
     app.get("/api/users", async (req, res) => {
         try {
           const user = ensureAuth(req);
-          console.log('Current user in /api/users:', user);
 
-          // Consulta más simple para depuración
-          const allUsers = await db.select({
-            id: users.id,
-            username: users.username,
-            email: users.email
-          })
-          .from(users)
-          .where(ne(users.id, user.id)); // Excluir solo el usuario actual
+          // Consulta más simple y directa
+          const allUsers = await db.query.users.findMany({
+            where: ne(users.id, user.id),
+            columns: {
+              id: true,
+              username: true,
+              email: true,
+            }
+          });
 
           console.log('Users fetched:', allUsers);
           res.json(allUsers);
         } catch (error) {
-          console.error('Error detallado al obtener usuarios:', {
-            error,
-            message: error.message,
-            stack: error.stack
-          });
-          res.status(500).json({ error: "Error obteniendo usuarios", details: error.message });
+          console.error('Error detallado al obtener usuarios:', error);
+          res.status(500).json({ error: "Error obteniendo usuarios" });
         }
       });
 
