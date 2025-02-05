@@ -1135,12 +1135,7 @@ export default function FormEntries({isSharedAccess = false}) {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>teText(shareLink);
-                toast({
-                  title: "Copiado",
-                  description: "Enlace copiado al portapapeles"
-                });
-              }}
+      </Dialog>
             >
               Copiar
             </Button>
