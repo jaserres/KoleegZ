@@ -1175,6 +1175,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             processImages: true,
             processHeadersAndFooters: true,
             processHyperlinks: true,
+            processLineBreaks: true,
             processTables: true,
             processStyles: true,
             processTheme: true,
