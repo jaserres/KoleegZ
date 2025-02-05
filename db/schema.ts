@@ -74,9 +74,10 @@ export const documentsRelations = relations(documents, ({ one }) => ({
 export const insertUserSchema = createInsertSchema(users, {
   username: z.string().min(1).regex(/^[a-zA-Z0-9]+$/, "Solo letras y números permitidos"),
   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
-  firstName: z.string().min(1, "El nombre es requerido"),
-  lastName: z.string().min(1, "El apellido es requerido"),
+  first_name: z.string().min(1, "El nombre es requerido"),
+  last_name: z.string().min(1, "El apellido es requerido"),
   email: z.string().email("Email inválido"),
+  is_premium: z.boolean().optional()
 });
 export const selectUserSchema = createSelectSchema(users);
 export type InsertUser = typeof users.$inferInsert;
