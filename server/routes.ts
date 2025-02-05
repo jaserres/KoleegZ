@@ -418,18 +418,12 @@ export function registerRoutes(app: Express): Server {
 app.get("/api/users", async (req, res) => {
   try {
     const user = ensureAuth(req);
-    const searchTerm = req.query.username as string;
-
-    if (!searchTerm) {
-      return res.json([]);
-    }
-
     const allUsers = await db.select({
       id: users.id,
       username: users.username
     })
     .from(users)
-    .where(sql`${users.username} ILIKE ${`%${searchTerm}%`} AND ${users.id} != ${user.id}`);
+    .where(eq(users.id, user.id, false));
     
     console.log('Users fetched:', allUsers);
     res.json(allUsers);
