@@ -419,13 +419,13 @@ export function registerRoutes(app: Express): Server {
         try {
           const user = ensureAuth(req);
 
-          // Consulta más simple y directa
+          // Consulta ajustada para usar solo los campos que existen
           const allUsers = await db.query.users.findMany({
             where: ne(users.id, user.id),
             columns: {
               id: true,
               username: true,
-              email: true,
+              isPremium: true
             }
           });
 
@@ -435,7 +435,7 @@ export function registerRoutes(app: Express): Server {
           console.error('Error detallado al obtener usuarios:', error);
           res.status(500).json({ error: "Error obteniendo usuarios" });
         }
-      });
+    });
 
     const form = await db.query.forms.findFirst({
       where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
@@ -869,7 +869,7 @@ export function registerRoutes(app: Express): Server {
     console.log('Consultando documentos para formulario:', {
       formId,
       userId: user.id
-    });
+        });
 
     // Verify ownership
     const [form] = await db.select()

@@ -10,14 +10,14 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, UserPlus, Check, Share2 } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Search, UserPlus, Check } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface User {
   id: number;
   username: string;
-  email: string;
+  isPremium: boolean;
   isFollowing?: boolean;
 }
 
@@ -34,8 +34,7 @@ export default function KoleegZ() {
   useEffect(() => {
     const filtered = users.filter(
       (user) =>
-        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+        user.username.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredUsers(filtered);
   }, [searchTerm, users]);
@@ -108,8 +107,14 @@ export default function KoleegZ() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 space-y-1">
-                      <h4 className="text-sm font-semibold">{user.username}</h4>
-                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                      <h4 className="text-sm font-semibold">
+                        {user.username}
+                        {user.isPremium && (
+                          <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                            Premium
+                          </span>
+                        )}
+                      </h4>
                     </div>
                   </div>
                 </CardHeader>
@@ -131,9 +136,6 @@ export default function KoleegZ() {
                         Seguir
                       </>
                     )}
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <Share2 className="h-4 w-4" />
                   </Button>
                 </CardContent>
               </Card>
