@@ -625,7 +625,7 @@ export default function FormEntries({isSharedAccess = false}) {
   const [canShare, setCanShare] = useState(false);
   const [canViewEntries, setCanViewEntries] = useState(false);
 
-  const { data: users = [] } = useQuery({
+  const { data: users = [], refetch: refetchUsers } = useQuery({
     queryKey: ["/api/users"],
     enabled: showShareDialog,
     retry: 1,
@@ -1117,10 +1117,16 @@ export default function FormEntries({isSharedAccess = false}) {
                   placeholder="Buscar usuario..."
                   onChange={(e) => {
                     const search = e.target.value.toLowerCase();
-                    const filtered = users.filter((user: any) => 
-                      user.username.toLowerCase().includes(search)
-                    );
-                    setFilteredUsers(filtered);
+                    if (search.length === 0) {
+                      setFilteredUsers(users);
+                      return;
+                    }
+                    if (search.length >= 2) {
+                      const filtered = users.filter((user: any) => 
+                        user.username.toLowerCase().includes(search)
+                      );
+                      setFilteredUsers(filtered);
+                    }
                   }}
                   className="mb-2"
                 />
