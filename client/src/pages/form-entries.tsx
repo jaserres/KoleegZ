@@ -793,8 +793,7 @@ export default function FormEntries({isSharedAccess = false}) {
               <div className="flex gap-2">
                 <Button 
                   variant="outline"
-                  onClick={() => shareFormMutation.mutate()}
-                  disabled={shareFormMutation.isPending}
+                  onClick={() => setShowShareDialog(true)}
                 >
                   <Share className="mr-2 h-4 w-4" />
                   Compartir Formulario
@@ -973,7 +972,7 @@ export default function FormEntries({isSharedAccess = false}) {
                                                   size="icon"
                                                   className="text-red-500 hover:text-red-700 hover:bg-red-100"
                                                   onClick={(e) => {
-                                                    e.stopPropagation();
+                                                                                                        e.stopPropagation();
                                                     if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
                                                       deleteDocumentMutation.mutate(doc.id);
                                                     }
