@@ -25,6 +25,9 @@ export function Navbar() {
               <Link href="/forms/new">
                 <Button variant="ghost">Nuevo Formulario</Button>
               </Link>
+              <Link href="/koleegz">
+                <Button variant="ghost">Otros KoleegZ</Button>
+              </Link>
             </div>
           </div>
           <div className="flex items-center space-x-4">
