@@ -114,19 +114,26 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ error: "Email inválido" });
       }
 
+      // Verificar email duplicado
+      const [existingEmail] = await db.select()
+        .from(users)
+        .where(eq(users.email, req.body.email))
+        .limit(1);
+
+      if (existingEmail) {
+        return res.status(400).json({ error: "El email ya está registrado" });
+      }
+
       // Si todas las validaciones pasan, continuar con el registro
-      const result = {
-        success: true,
-        data: {
-          username: req.body.username,
-          password: req.body.password,
-          firstName: req.body.firstName,
-          lastName: req.body.lastName,
-          email: req.body.email
-        }
+      const userData = {
+        username: req.body.username,
+        password: req.body.password,
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        email: req.body.email
       };
 
-      const [existingUser] = await getUserByUsername(result.data.username);
+      const [existingUser] = await getUserByUsername(userData.username);
       if (existingUser) {
         return res.status(400).json({ error: "Username already exists" });
       }
