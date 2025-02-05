@@ -420,7 +420,7 @@ app.get("/api/users", async (req, res) => {
     const user = ensureAuth(req);
     const allUsers = await db.select({ id: users.id, username: users.username })
       .from(users)
-      .where(eq(users.id, user.id, false)); // Don't filter out any users
+      .where(sql`${users.id} != ${user.id}`); // Excluir solo el usuario actual
     console.log('Users fetched:', allUsers);
     res.json(allUsers);
   } catch (error) {
