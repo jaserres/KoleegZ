@@ -123,10 +123,22 @@ export default function AuthPage() {
                     onSubmit={async (e) => {
                       e.preventDefault();
                       const formData = new FormData(e.currentTarget);
+                      const password = formData.get("password") as string;
+                      const confirmPassword = formData.get("confirmPassword") as string;
+                      
+                      if (password !== confirmPassword) {
+                        toast({
+                          variant: "destructive",
+                          title: "Error",
+                          description: "Las contraseñas no coinciden"
+                        });
+                        return;
+                      }
+
                       try {
                         await registerMutation.mutateAsync({
                           username: formData.get("username") as string,
-                          password: formData.get("password") as string,
+                          password: password,
                           firstName: formData.get("firstName") as string,
                           lastName: formData.get("lastName") as string,
                           email: formData.get("email") as string,
@@ -152,6 +164,35 @@ export default function AuthPage() {
                         type="password"
                         required
                         autoComplete="new-password"
+                        onChange={(e) => {
+                          const password = e.target.value;
+                          const strength = {
+                            length: password.length >= 8,
+                            hasNumber: /\d/.test(password),
+                            hasLower: /[a-z]/.test(password),
+                            hasUpper: /[A-Z]/.test(password),
+                            hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+                          };
+                          const strengthLevel = Object.values(strength).filter(Boolean).length;
+                          e.target.setCustomValidity(strengthLevel < 3 ? "La contraseña debe contener al menos 8 caracteres, incluir mayúsculas, minúsculas, números o caracteres especiales" : "");
+                        }}
+                      />
+                      <div className="text-xs text-gray-500">
+                        La contraseña debe tener al menos 8 caracteres y combinar mayúsculas, minúsculas, números o caracteres especiales
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirmar Password</Label>
+                      <Input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type="password"
+                        required
+                        autoComplete="new-password"
+                        onChange={(e) => {
+                          const password = (document.getElementById('password') as HTMLInputElement).value;
+                          e.target.setCustomValidity(e.target.value !== password ? "Las contraseñas no coinciden" : "");
+                        }}
                       />
                     </div>
                     <div className="space-y-2">
