@@ -423,7 +423,7 @@ app.get("/api/users", async (req, res) => {
       username: users.username 
     })
     .from(users)
-    .where(eq(users.id, user.id, false)); // Use drizzle's eq operator to exclude current user
+    .where(sql`${users.id} != ${user.id}`); // Excluir solo el usuario actual
     
     console.log('Users fetched:', allUsers);
     res.json(allUsers);
