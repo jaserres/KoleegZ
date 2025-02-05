@@ -426,16 +426,11 @@ export function registerRoutes(app: Express): Server {
             username: users.username,
             email: users.email
           })
-          .from(users);
+          .from(users)
+          .where(ne(users.id, user.id)); // Excluir solo el usuario actual
 
-          console.log('Raw SQL query:', allUsers.toSQL()); // Imprimir la consulta SQL
-          console.log('Users fetched raw:', allUsers);
-
-          // Filtrar el usuario actual después para verificar que hay datos
-          const filteredUsers = allUsers.filter(u => u.id !== user.id);
-          console.log('Filtered users:', filteredUsers);
-
-          res.json(filteredUsers);
+          console.log('Users fetched:', allUsers);
+          res.json(allUsers);
         } catch (error) {
           console.error('Error detallado al obtener usuarios:', {
             error,
@@ -1609,6 +1604,33 @@ export function registerRoutes(app: Express): Server {
   });
   // Agregar endpoint para servir thumbnails
   app.use('/thumbnails', express.static(THUMBNAIL_DIR));
+
+  app.post("/api/users/:userId/follow", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      const userId = parseInt(req.params.userId);
+
+      // Verificar que el usuario existe
+      const [targetUser] = await db.select()
+        .from(users)
+        .where(eq(users.id, userId));
+
+      if (!targetUser) {
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
+
+      if (user.id === userId) {
+        return res.status(400).json({ error: "No puedes seguirte a ti mismo" });
+      }
+
+      // Por ahora solo retornamos éxito
+      // En una futura iteración implementaremos la tabla de seguidores
+      res.status(200).json({ message: "Usuario seguido exitosamente" });
+    } catch (error) {
+      console.error('Error following user:', error);
+      res.status(500).json({ error: "Error al seguir usuario" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

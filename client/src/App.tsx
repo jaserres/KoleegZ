@@ -7,6 +7,7 @@ import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import FormBuilder from "@/pages/form-builder";
 import FormEntries from "@/pages/form-entries";
+import KoleegZ from "@/pages/koleegz";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 
@@ -18,6 +19,7 @@ function Router() {
       <ProtectedRoute path="/forms/new" component={FormBuilder} />
       <ProtectedRoute path="/forms/:id" component={FormBuilder} />
       <ProtectedRoute path="/forms/:id/entries" component={FormEntries} />
+      <ProtectedRoute path="/koleegz" component={KoleegZ} />
       <Route component={NotFound} />
     </Switch>
   );
