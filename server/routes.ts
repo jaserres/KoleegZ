@@ -415,9 +415,18 @@ export function registerRoutes(app: Express): Server {
     // Regular auth check
     const user = ensureAuth(req);
 
-app.get("/api/forms/:formId/share", async (req, res) => {
+app.get("/api/users", async (req, res) => {
+  const user = ensureAuth(req);
+  const allUsers = await db.select({ id: users.id, username: users.username })
+    .from(users)
+    .where(sql`${users.id} != ${user.id}`);
+  res.json(allUsers);
+});
+
+app.post("/api/forms/:formId/share", async (req, res) => {
   const user = ensureAuth(req);
   const formId = parseInt(req.params.formId);
+  const { userId, permissions } = req.body;
 
   try {
     // Verify ownership
@@ -429,17 +438,25 @@ app.get("/api/forms/:formId/share", async (req, res) => {
       return res.status(404).send("Form not found");
     }
 
-    // Generate shorter token
-    const token = crypto.randomBytes(16).toString('hex');
+    // Check if share already exists
+    const [existingShare] = await db.select()
+      .from(formShares)
+      .where(and(eq(formShares.formId, formId), eq(formShares.userId, userId)));
 
-    // Create share record
-    await db.insert(formShares)
-      .values({
-        formId,
-        token
-      });
+    if (existingShare) {
+      await db.update(formShares)
+        .set(permissions)
+        .where(and(eq(formShares.formId, formId), eq(formShares.userId, userId)));
+    } else {
+      await db.insert(formShares)
+        .values({
+          formId,
+          userId,
+          ...permissions
+        });
+    }
 
-    res.json({ token });
+    res.sendStatus(200);
   } catch (error) {
     console.error('Error sharing form:', error);
     res.status(500).send("Error sharing form");

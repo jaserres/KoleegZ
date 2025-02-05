@@ -609,21 +609,41 @@ export default function FormEntries({isSharedAccess = false}) {
     }
   };
 
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [canEdit, setCanEdit] = useState(false);
+  const [canMerge, setCanMerge] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const [canShare, setCanShare] = useState(false);
+  const [canViewEntries, setCanViewEntries] = useState(false);
+  
+  const { data: users } = useQuery({
+    queryKey: ["/api/users"],
+  });
+
   const shareFormMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("GET", `/api/forms/${id}/share`);
+      const res = await apiRequest("POST", `/api/forms/${id}/share`, {
+        userId: parseInt(selectedUserId),
+        permissions: {
+          canEdit,
+          canMerge,
+          canDelete,
+          canShare,
+          canViewEntries,
+        }
+      });
       if (!res.ok) {
         const error = await res.text();
         throw new Error(error || "Error al compartir el formulario");
       }
       return res.json();
     },
-    onSuccess: (data) => {
-      const path = `/forms/${id}/entries`.replace(/\/+/g, '/');
-      const url = new URL(path, window.location.origin);
-      url.searchParams.set('share', data.token);
-      setShareLink(url.toString().replace(/([^:]\/)\/+/g, '$1'));
-      setShowShareDialog(true);
+    onSuccess: () => {
+      toast({
+        title: "Éxito",
+        description: "Formulario compartido correctamente"
+      });
+      setShowShareDialog(false);
     },
     onError: (error: Error) => {
       toast({
@@ -633,6 +653,10 @@ export default function FormEntries({isSharedAccess = false}) {
       });
     }
   });
+
+  const handleShare = () => {
+    shareFormMutation.mutate();
+  };
 
 
   return (
@@ -1056,18 +1080,62 @@ export default function FormEntries({isSharedAccess = false}) {
         </DialogContent>
       </Dialog>
       <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Compartir Formulario</DialogTitle>
             <DialogDescription>
-              Comparta este enlace para dar acceso al formulario:
+              Seleccione un usuario y sus permisos
             </DialogDescription>
           </DialogHeader>
-          <div className="flex gap-2">
-            <Input value={shareLink} readOnly />
-            <Button
-              onClick={() => {
-                navigator.clipboard.writeText(shareLink);
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="user">Usuario</Label>
+              <Select onValueChange={setSelectedUserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione un usuario" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map(user => (
+                    <SelectItem key={user.id} value={user.id.toString()}>
+                      {user.username}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Permisos</Label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="edit" onCheckedChange={setCanEdit} />
+                  <Label htmlFor="edit">Puede editar</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="merge" onCheckedChange={setCanMerge} />
+                  <Label htmlFor="merge">Puede hacer merge</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="delete" onCheckedChange={setCanDelete} />
+                  <Label htmlFor="delete">Puede eliminar</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="share" onCheckedChange={setCanShare} />
+                  <Label htmlFor="share">Puede compartir</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="viewEntries" onCheckedChange={setCanViewEntries} />
+                  <Label htmlFor="viewEntries">Puede ver entradas</Label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleShare} disabled={!selectedUserId}>
+              Compartir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>teText(shareLink);
                 toast({
                   title: "Copiado",
                   description: "Enlace copiado al portapapeles"

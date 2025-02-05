@@ -95,7 +95,12 @@ export type SelectDocument = typeof documents.$inferSelect;
 export const formShares = pgTable("form_shares", {
   id: serial("id").primaryKey(),
   formId: integer("form_id").notNull().references(() => forms.id, { onDelete: "cascade" }),
-  token: text("token").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  canEdit: boolean("can_edit").default(false).notNull(),
+  canMerge: boolean("can_merge").default(false).notNull(),
+  canDelete: boolean("can_delete").default(false).notNull(),
+  canShare: boolean("can_share").default(false).notNull(),
+  canViewEntries: boolean("can_view_entries").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
