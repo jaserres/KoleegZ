@@ -8,10 +8,6 @@ export const users = pgTable("users", {
   username: text("username").unique().notNull(),
   password: text("password").notNull(),
   isPremium: boolean("is_premium").default(false).notNull(),
-  firstName: text("first_name"),
-  lastName: text("last_name"),
-  email: text("email"),
-  role: text("role").default("user").notNull(),
 });
 
 export const forms = pgTable("forms", {
