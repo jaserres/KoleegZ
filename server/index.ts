@@ -71,7 +71,23 @@ app.use((req, res, next) => {
       serveStatic(app);
     }
 
-    const PORT = 5000;
+    const tryPort = async (port: number): Promise<number> => {
+      try {
+        await new Promise((resolve, reject) => {
+          server.listen(port, "0.0.0.0")
+            .once('listening', () => {
+              server.close();
+              resolve(port);
+            })
+            .once('error', reject);
+        });
+        return port;
+      } catch {
+        return port < 5010 ? tryPort(port + 1) : Promise.reject('No ports available');
+      }
+    };
+
+    const PORT = await tryPort(5000);
     server.listen(PORT, "0.0.0.0", () => {
       log(`serving on port ${PORT}`);
     });
