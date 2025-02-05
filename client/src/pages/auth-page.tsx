@@ -20,6 +20,7 @@ export default function AuthPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [strengthLevel, setStrengthLevel] = React.useState(0);
+  const { trigger: triggerConfetti } = useConfetti();
 
   if (user) {
     setLocation("/");
@@ -146,7 +147,8 @@ export default function AuthPage() {
                           lastName: formData.get("lastName") as string,
                           email: formData.get("email") as string,
                         });
-                        setLocation("/");
+                        triggerConfetti();
+                        setTimeout(() => setLocation("/"), 1000);
                       } catch {}
                     }}
                   >
