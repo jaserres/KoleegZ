@@ -14,7 +14,9 @@ export function Navbar() {
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-6">
             <Link href="/">
-              <span className="text-xl font-bold cursor-pointer">FormBuilder Pro</span>
+              <span className="text-xl cursor-pointer">
+                <i>K</i><strong>oleeg</strong><i>Z</i>
+              </span>
             </Link>
             <div className="space-x-4">
               <Link href="/">
