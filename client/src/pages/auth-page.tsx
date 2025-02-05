@@ -127,6 +127,9 @@ export default function AuthPage() {
                         await registerMutation.mutateAsync({
                           username: formData.get("username") as string,
                           password: formData.get("password") as string,
+                          firstName: formData.get("firstName") as string,
+                          lastName: formData.get("lastName") as string,
+                          email: formData.get("email") as string,
                         });
                         setLocation("/");
                       } catch {}
@@ -149,6 +152,32 @@ export default function AuthPage() {
                         type="password"
                         required
                         autoComplete="new-password"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName">First Name</Label>
+                      <Input
+                        id="firstName"
+                        name="firstName"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Last Name</Label>
+                      <Input
+                        id="lastName"
+                        name="lastName"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        required
+                        autoComplete="email"
                       />
                     </div>
                     <Button
