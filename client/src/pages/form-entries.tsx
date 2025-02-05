@@ -1270,8 +1270,8 @@ export default function FormEntries({isSharedAccess = false}) {
         isOpen={showShareDialog}
         onOpenChange={setShowShareDialog}
         formId={id || ''}
-        users={users}
-        isLoadingUsers={isLoadingUsers}
+        users={usersQuery}
+        isLoadingUsers={isLoadingUsersQuery}
         onSuccess={() => {
           // Acciones adicionales después de compartir si son necesarias
           queryClient.invalidateQueries({ queryKey: ["/api/users"] });
