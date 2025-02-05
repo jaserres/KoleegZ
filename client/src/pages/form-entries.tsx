@@ -7,10 +7,10 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -626,6 +626,15 @@ export default function FormEntries({isSharedAccess = false}) {
 
   const { data: users = [] } = useQuery({
     queryKey: ["/api/users"],
+    retry: false,
+    onError: (error) => {
+      console.error('Error fetching users:', error);
+      toast({
+        title: "Error",
+        description: "Error al cargar usuarios",
+        variant: "destructive"
+      });
+    }
   });
 
   const shareFormMutation = useMutation({
