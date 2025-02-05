@@ -54,20 +54,16 @@ interface User {
   username: string;
 }
 
-// ShareDialog component
+// ShareDialog component update
 const ShareDialog = ({
   isOpen,
   onOpenChange,
   formId,
-  users,
-  isLoadingUsers,
   onSuccess
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   formId: string;
-  users: User[];
-  isLoadingUsers: boolean;
   onSuccess?: () => void;
 }) => {
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -77,6 +73,19 @@ const ShareDialog = ({
   const [canShare, setCanShare] = useState(false);
   const [canViewEntries, setCanViewEntries] = useState(false);
   const { toast } = useToast();
+
+  const { data: users = [], isLoading: isLoadingUsers, error: usersError } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    retry: 3,
+    onError: (error) => {
+      console.error('Error loading users:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los usuarios",
+        variant: "destructive",
+      });
+    }
+  });
 
   const shareFormMutation = useMutation({
     mutationFn: async () => {
@@ -119,8 +128,6 @@ const ShareDialog = ({
     }
   });
 
-  console.log('ShareDialog users:', users); // Debug log
-
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
@@ -138,6 +145,10 @@ const ShareDialog = ({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>Cargando usuarios...</span>
               </div>
+            ) : usersError ? (
+              <div className="text-sm text-destructive">
+                Error al cargar usuarios
+              </div>
             ) : !users || users.length === 0 ? (
               <div className="text-sm text-muted-foreground">
                 No hay usuarios disponibles
@@ -150,7 +161,7 @@ const ShareDialog = ({
                 <SelectContent>
                   {users.map((user) => (
                     <SelectItem key={user.id} value={String(user.id)}>
-                      {user.email || user.username}
+                      {user.username}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -230,8 +241,8 @@ export default function FormEntries({ isSharedAccess = false }) {
   const [mergedResult, setMergedResult] = useState("");
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
-  const [detectedVariables, setDetectedVariables] = useState<Array<{ name: string, label: string, type: string }>>([]);
-  const [allVariables, setAllVariables] = useState<Array<{ name: string, label: string, type: string }>>([]);
+  const [detectedVariables, setDetectedVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
+  const [allVariables, setAllVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -516,7 +527,7 @@ export default function FormEntries({ isSharedAccess = false }) {
     return variables;
   };
 
-  const unifyVariables = (initial: Array<{ name: string, label: string, type: string }>, ocr: Array<{ name: string, label: string, type: string }> = []) => {
+  const unifyVariables = (initial: Array<{ name: string; label: string; type: string }>, ocr: Array<{ name: string; label: string; type: string }> = []) => {
     const combined = [...initial, ...ocr];
     return Array.from(new Map(combined.map(v => [v.name, v])).values());
   };
@@ -786,10 +797,6 @@ export default function FormEntries({ isSharedAccess = false }) {
     }
   };
 
-  const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
-  const [selectedUserIdShare, setSelectedUserIdShare] = useState(''); // Added state for selected user in share dialog
-
-
   const { data: usersQuery = [], isLoading: isLoadingUsersQuery } = useQuery({
     queryKey: ["/api/users"],
     enabled: true,
@@ -806,36 +813,19 @@ export default function FormEntries({ isSharedAccess = false }) {
     }
   });
 
-  useEffect(() => {
-    console.log("Users Query State:", {
-      data: usersQuery,
-      isLoading: isLoadingUsersQuery,
-      length: usersQuery?.length || 0
-    });
-  }, [usersQuery, isLoadingUsersQuery]);
-
-  useEffect(() => {
-    //setIsLoadingUsers(isLoadingUsersQuery);  Removed as it's handled by the conditional rendering
-  }, [isLoadingUsersQuery]);
-
-  useEffect(() => {
-    if (showShareDialog) {
-      setFilteredUsers(usersQuery);
-    }
-  }, [showShareDialog, usersQuery]);
 
   const shareFormMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/forms/${id}/share`, {
-        userId: parseInt(selectedUserIdShare),
-        permissions: {
-          canEdit,
-          canMerge,
-          canDelete,
-          canShare,
-          canViewEntries,
-        }
-      });
+          userId: parseInt(selectedUserId), 
+          permissions: {
+            canEdit,
+            canMerge,
+            canDelete,
+            canShare,
+            canViewEntries,
+          }
+        });
       if (!res.ok) {
         const error = await res.text();
         throw new Error(error || "Error al compartir el formulario");
@@ -848,7 +838,7 @@ export default function FormEntries({ isSharedAccess = false }) {
         description: "Formulario compartido correctamente"
       });
       setShowShareDialog(false);
-      setSelectedUserIdShare(''); // Clear selected user after successful share
+      setSelectedUserId('');
     },
     onError: (error: Error) => {
       toast({
@@ -1002,8 +992,7 @@ export default function FormEntries({ isSharedAccess = false }) {
                       <div className="space-y-2">
                         <Label>Campos a exportar</Label>
                         <div className="grid grid-cols-2 gap2">
-                          {form?.variables?.map((variable: any) => (
-                            <div key={variable.id} className="flex items-center space-x-2">
+                          {form?.variables?.map((variable: any) => (                            <div key={variable.id} className="flex items-center space-x-2">
                               <Checkbox
                                 id={`export-${variable.id}`}
                                 defaultChecked
@@ -1283,12 +1272,9 @@ export default function FormEntries({ isSharedAccess = false }) {
       <ShareDialog
         isOpen={showShareDialog}
         onOpenChange={setShowShareDialog}
-        formId={id || ''}
-        users={usersQuery}
-        isLoadingUsers={isLoadingUsersQuery}
+        formId={id}
         onSuccess={() => {
-          // Acciones adicionales después de compartir si son necesarias
-          queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+          queryClient.invalidateQueries({ queryKey: [`/api/forms/${id}`] });
         }}
       />
     </div>
