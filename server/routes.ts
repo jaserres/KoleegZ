@@ -416,25 +416,35 @@ export function registerRoutes(app: Express): Server {
     const user = ensureAuth(req);
 
     app.get("/api/users", async (req, res) => {
-      try {
-        const user = ensureAuth(req);
-        console.log('Current user:', user);
+        try {
+          const user = ensureAuth(req);
+          console.log('Current user in /api/users:', user);
 
-        const allUsers = await db.select({
-          id: users.id,
-          username: users.username,
-          email: users.email
-        })
-        .from(users)
-        .where(ne(users.id, user.id)); // Usar operador 'ne' de drizzle para "not equals"
+          // Consulta más simple para depuración
+          const allUsers = await db.select({
+            id: users.id,
+            username: users.username,
+            email: users.email
+          })
+          .from(users);
 
-        console.log('Users fetched:', allUsers);
-        res.json(allUsers);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-        res.status(500).json({ error: "Error fetching users" });
-      }
-    });
+          console.log('Raw SQL query:', allUsers.toSQL()); // Imprimir la consulta SQL
+          console.log('Users fetched raw:', allUsers);
+
+          // Filtrar el usuario actual después para verificar que hay datos
+          const filteredUsers = allUsers.filter(u => u.id !== user.id);
+          console.log('Filtered users:', filteredUsers);
+
+          res.json(filteredUsers);
+        } catch (error) {
+          console.error('Error detallado al obtener usuarios:', {
+            error,
+            message: error.message,
+            stack: error.stack
+          });
+          res.status(500).json({ error: "Error obteniendo usuarios", details: error.message });
+        }
+      });
 
     const form = await db.query.forms.findFirst({
       where: and(eq(forms.id, formId), eq(forms.userId, user.id)),

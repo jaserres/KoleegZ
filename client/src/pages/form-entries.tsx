@@ -794,13 +794,25 @@ export default function FormEntries({ isSharedAccess = false }) {
     queryKey: ["/api/users"],
     enabled: true,
     retry: 1,
-    refetchOnMount: true
+    refetchOnMount: true,
+    onSuccess: (data) => {
+      console.log('Users query successful:', {
+        data,
+        length: data?.length || 0
+      });
+    },
+    onError: (error) => {
+      console.error('Users query error:', error);
+    }
   });
 
   useEffect(() => {
-    console.log("Users Query Data:", usersQuery); //Added log for debugging
-  }, [usersQuery]);
-
+    console.log("Users Query State:", {
+      data: usersQuery,
+      isLoading: isLoadingUsersQuery,
+      length: usersQuery?.length || 0
+    });
+  }, [usersQuery, isLoadingUsersQuery]);
 
   useEffect(() => {
     //setIsLoadingUsers(isLoadingUsersQuery);  Removed as it's handled by the conditional rendering
