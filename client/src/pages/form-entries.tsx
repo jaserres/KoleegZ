@@ -1105,12 +1105,12 @@ export default function FormEntries({isSharedAccess = false}) {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="user">Usuario</Label>
-              <Select onValueChange={setSelectedUserId}>
-                <SelectTrigger>
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Seleccione un usuario" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map(user => (
+                  {users?.map((user: any) => (
                     <SelectItem key={user.id} value={user.id.toString()}>
                       {user.username}
                     </SelectItem>
