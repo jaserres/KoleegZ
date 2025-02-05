@@ -141,11 +141,11 @@ export function setupAuth(app: Express) {
       const [user] = await db
         .insert(users)
         .values({
-          username: result.data.username,
-          password: await hashPassword(result.data.password),
-          firstName: result.data.firstName,
-          lastName: result.data.lastName,
-          email: result.data.email,
+          username: userData.username,
+          password: await hashPassword(userData.password),
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          email: userData.email,
           isPremium: false
         })
         .returning();
