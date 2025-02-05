@@ -198,19 +198,35 @@ export default function AuthPage() {
                         placeholder="Choose a strong password"
                         autoComplete="new-password"
                         onChange={(e) => {
-                          const strength = usePasswordStrength(e.target.value);
+                          let score = 0;
+                          const password = e.target.value;
+                          
+                          if (password.length >= 8) score++;
+                          if (/[A-Z]/.test(password)) score++;
+                          if (/[a-z]/.test(password)) score++;
+                          if (/[0-9]/.test(password)) score++;
+                          if (/[^A-Za-z0-9]/.test(password)) score++;
+
+                          const messages = [
+                            'Muy débil',
+                            'Débil',
+                            'Medio',
+                            'Fuerte',
+                            'Muy fuerte'
+                          ];
+
                           const meter = document.getElementById('password-strength');
                           if (meter) {
-                            meter.style.width = `${(strength.score / 5) * 100}%`;
+                            meter.style.width = `${(score / 5) * 100}%`;
                             meter.className = `h-1 transition-all duration-300 ${
-                              strength.score < 2 ? 'bg-red-500' : 
-                              strength.score < 4 ? 'bg-yellow-500' : 
+                              score < 2 ? 'bg-red-500' : 
+                              score < 4 ? 'bg-yellow-500' : 
                               'bg-green-500'
                             }`;
                           }
                           const label = document.getElementById('strength-label');
                           if (label) {
-                            label.textContent = strength.message;
+                            label.textContent = messages[score - 1] || 'Muy débil';
                           }
                         }}
                       />
