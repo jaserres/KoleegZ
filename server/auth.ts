@@ -82,8 +82,20 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
+      console.log('Registration attempt:', {
+        ...req.body,
+        password: '[REDACTED]'
+      });
+      
       // Validar todos los campos requeridos
       if (!req.body.username || !req.body.password || !req.body.firstName || !req.body.lastName || !req.body.email) {
+        console.error('Missing required fields:', {
+          hasUsername: !!req.body.username,
+          hasPassword: !!req.body.password,
+          hasFirstName: !!req.body.firstName,
+          hasLastName: !!req.body.lastName,
+          hasEmail: !!req.body.email
+        });
         return res.status(400).json({ error: "Todos los campos son requeridos" });
       }
 
@@ -138,9 +150,19 @@ export function setupAuth(app: Express) {
         }
         res.status(201).json(user);
       });
-    } catch (error) {
-      console.error('Registration error:', error);
-      res.status(500).json({ error: "Error during registration" });
+    } catch (error: any) {
+      console.error('Registration error:', {
+        error: error.message,
+        stack: error.stack,
+        body: {
+          ...req.body,
+          password: '[REDACTED]'
+        }
+      });
+      res.status(500).json({ 
+        error: "Error during registration",
+        details: error.message 
+      });
     }
   });
 
