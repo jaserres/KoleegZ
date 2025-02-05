@@ -360,6 +360,33 @@ async function generateThumbnail(buffer: Buffer): Promise<{thumbnailPath: string
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
+  // Users endpoint
+  app.get("/api/users", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      console.log('Usuario actual:', user);
+
+      const allUsers = await db.select({
+        id: users.id,
+        username: users.username,
+        isPremium: users.is_premium,
+      })
+      .from(users)
+      .where(ne(users.id, user.id));
+
+      console.log('Usuarios encontrados:', allUsers);
+
+      if (!allUsers.length) {
+        console.log('No se encontraron usuarios');
+      }
+
+      res.json(allUsers);
+    } catch (error) {
+      console.error('Error al obtener usuarios:', error);
+      res.status(500).json({ error: "Error obteniendo usuarios" });
+    }
+  });
+
   // Add new toggle premium route
   app.post("/api/toggle-premium", async (req, res) => {
     const user = ensureAuth(req);
@@ -414,35 +441,6 @@ export function registerRoutes(app: Express): Server {
 
     // Regular auth check
     const user = ensureAuth(req);
-
-    app.get("/api/users", async (req, res) => {
-        try {
-          const user = ensureAuth(req);
-
-          // Log del usuario actual para debugging
-          console.log('Usuario actual:', user);
-
-          // Consulta básica de usuarios
-          const allUsers = await db.select({
-            id: users.id,
-            username: users.username,
-            isPremium: users.is_premium,
-          })
-          .from(users)
-          .where(ne(users.id, user.id));
-
-          console.log('Usuarios encontrados:', allUsers);
-
-          if (!allUsers.length) {
-            console.log('No se encontraron usuarios');
-          }
-
-          res.json(allUsers);
-        } catch (error) {
-          console.error('Error al obtener usuarios:', error);
-          res.status(500).json({ error: "Error obteniendo usuarios" });
-        }
-    });
 
     const form = await db.query.forms.findFirst({
       where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
