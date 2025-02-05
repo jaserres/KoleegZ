@@ -618,6 +618,7 @@ export default function FormEntries({isSharedAccess = false}) {
   };
 
   const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
   const [canEdit, setCanEdit] = useState(false);
   const [canMerge, setCanMerge] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
@@ -629,6 +630,9 @@ export default function FormEntries({isSharedAccess = false}) {
     enabled: showShareDialog,
     retry: 1,
     refetchOnMount: true,
+    onSuccess: (data) => {
+      setFilteredUsers(data);
+    },
     onError: (error) => {
       console.error('Error fetching users:', error);
       toast({
@@ -1107,16 +1111,32 @@ export default function FormEntries({isSharedAccess = false}) {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="user">Usuario</Label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Seleccione un usuario" />
-                </SelectTrigger>
-                <SelectContent>
-                  {users?.map((user: any) => (
-                    <SelectItem key={user.id} value={user.id.toString()}>
-                      {user.username}
-                    </SelectItem>
-                  ))}
+              <div className="space-y-2">
+                <Input
+                  type="search"
+                  placeholder="Buscar usuario..."
+                  onChange={(e) => {
+                    const search = e.target.value.toLowerCase();
+                    const filtered = users.filter((user: any) => 
+                      user.username.toLowerCase().includes(search)
+                    );
+                    setFilteredUsers(filtered);
+                  }}
+                  className="mb-2"
+                />
+                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Seleccione un usuario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredUsers?.map((user: any) => (
+                      <SelectItem key={user.id} value={user.id.toString()}>
+                        {user.username}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
                 </SelectContent>
               </Select>
             </div>
