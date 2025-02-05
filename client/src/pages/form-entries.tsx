@@ -1137,8 +1137,6 @@ export default function FormEntries({isSharedAccess = false}) {
                   </SelectContent>
                 </Select>
               </div>
-                </SelectContent>
-              </Select>
             </div>
             <div className="grid gap-2">
               <Label>Permisos</Label>
