@@ -143,10 +143,10 @@ export function setupAuth(app: Express) {
         .values({
           username: userData.username,
           password: await hashPassword(userData.password),
-          firstName: userData.firstName,
-          lastName: userData.lastName,
+          first_name: userData.firstName,
+          last_name: userData.lastName,
           email: userData.email,
-          isPremium: false
+          is_premium: false
         })
         .returning();
 
