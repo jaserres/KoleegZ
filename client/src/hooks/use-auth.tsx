@@ -51,14 +51,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const registerMutation = useMutation({
     mutationFn: async (newUser: InsertUser) => {
       const res = await apiRequest("POST", "/api/register", newUser);
-      return await res.json();
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Error durante el registro");
+      }
+      return data;
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
     },
     onError: (error: Error) => {
       toast({
-        title: "Registration failed",
+        title: "Error en el registro",
         description: error.message,
         variant: "destructive",
       });
