@@ -623,7 +623,7 @@ export default function FormEntries({isSharedAccess = false}) {
   const [canShare, setCanShare] = useState(false);
   const [canViewEntries, setCanViewEntries] = useState(false);
 
-  const { data: users } = useQuery({
+  const { data: users = [] } = useQuery({
     queryKey: ["/api/users"],
   });
 
