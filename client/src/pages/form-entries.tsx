@@ -626,12 +626,14 @@ export default function FormEntries({isSharedAccess = false}) {
 
   const { data: users = [] } = useQuery({
     queryKey: ["/api/users"],
-    retry: false,
+    enabled: showShareDialog,
+    retry: 1,
+    refetchOnMount: true,
     onError: (error) => {
       console.error('Error fetching users:', error);
       toast({
         title: "Error",
-        description: "Error al cargar usuarios",
+        description: "Error al cargar usuarios. Por favor intente nuevamente.",
         variant: "destructive"
       });
     }

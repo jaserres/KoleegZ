@@ -416,11 +416,17 @@ export function registerRoutes(app: Express): Server {
     const user = ensureAuth(req);
 
 app.get("/api/users", async (req, res) => {
-  const user = ensureAuth(req);
-  const allUsers = await db.select({ id: users.id, username: users.username })
-    .from(users)
-    .where(sql`${users.id} != ${user.id}`);
-  res.json(allUsers);
+  try {
+    const user = ensureAuth(req);
+    const allUsers = await db.select({ id: users.id, username: users.username })
+      .from(users)
+      .where(eq(users.id, user.id, true)); // Exclude current user
+    console.log('Users fetched:', allUsers);
+    res.json(allUsers);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: "Error fetching users" });
+  }
 });
 
 app.post("/api/forms/:formId/share", async (req, res) => {
