@@ -602,7 +602,7 @@ export function registerRoutes(app: Express): Server {
       .from(entries)
       .where(
         selectedEntries?.length 
-          ? and(eq(entries.formId, formId), inArray(entries.id, selectedEntries))
+          ? and(eq(entries.formId, formId), sql`${entries.id} IN (${selectedEntries.join(',')})`)
           : eq(entries.formId, formId)
       )
       .orderBy(desc(entries.createdAt));
@@ -872,12 +872,12 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
-    const formId = parseInt(req.paramsformId);
+    const formId = parseInt(req.params.formId);
 
     console.log('Consultando documentos para formulario:', {
       formId,
       userId: user.id
-        });
+    });
 
     // Verify ownership
     const [form] = await db.select()
