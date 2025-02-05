@@ -7,11 +7,11 @@ import * as z from 'zod';
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").unique().notNull(),
-  firstName: text("first_name").notNull(),
-  lastName: text("last_name").notNull(),
+  first_name: text("first_name").notNull(),
+  last_name: text("last_name").notNull(),
   email: text("email").unique().notNull(),
   password: text("password").notNull(),
-  isPremium: boolean("is_premium").default(false).notNull(),
+  is_premium: boolean("is_premium").default(false).notNull(),
 });
 
 export const forms = pgTable("forms", {
