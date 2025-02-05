@@ -54,8 +54,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const formattedUser = {
         username: newUser.username,
         password: newUser.password,
-        first_name: newUser.firstName,
-        last_name: newUser.lastName,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
         email: newUser.email
       };
       const res = await apiRequest("POST", "/api/register", formattedUser);
