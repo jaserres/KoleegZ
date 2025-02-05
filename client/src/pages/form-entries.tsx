@@ -3,6 +3,13 @@ import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { useConfetti } from "@/hooks/use-confetti";
 import { Button } from "@/components/ui/button";
