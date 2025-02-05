@@ -47,6 +47,169 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+// Componente ShareDialog separado
+const ShareDialog = ({ 
+  isOpen, 
+  onOpenChange, 
+  formId, 
+  onSuccess 
+}: { 
+  isOpen: boolean; 
+  onOpenChange: (open: boolean) => void;
+  formId: string;
+  onSuccess?: () => void;
+}) => {
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [canEdit, setCanEdit] = useState(false);
+  const [canMerge, setCanMerge] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const [canShare, setCanShare] = useState(false);
+  const [canViewEntries, setCanViewEntries] = useState(false);
+  const { toast } = useToast();
+
+  const { data: users = [], isLoading: isLoadingUsers } = useQuery({
+    queryKey: ["/api/users"],
+    enabled: true,
+  });
+
+  const shareFormMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/forms/${formId}/share`, {
+        userId: parseInt(selectedUserId),
+        permissions: {
+          canEdit,
+          canMerge,
+          canDelete,
+          canShare,
+          canViewEntries,
+        }
+      });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Error al compartir el formulario");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Éxito",
+        description: "Formulario compartido correctamente"
+      });
+      onOpenChange(false);
+      onSuccess?.();
+      setSelectedUserId("");
+      setCanEdit(false);
+      setCanMerge(false);
+      setCanDelete(false);
+      setCanShare(false);
+      setCanViewEntries(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo compartir el formulario",
+        variant: "destructive",
+      });
+    }
+  });
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Compartir Formulario</DialogTitle>
+          <DialogDescription>
+            Selecciona un usuario y los permisos que deseas otorgar
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="space-y-2">
+            <Label>Usuario</Label>
+            {isLoadingUsers ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Cargando usuarios...</span>
+              </div>
+            ) : users.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                No hay usuarios disponibles
+              </div>
+            ) : (
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un usuario" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((user: any) => (
+                    <SelectItem key={user.id} value={String(user.id)}>
+                      {user.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Permisos</Label>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="edit" 
+                  checked={canEdit} 
+                  onCheckedChange={(checked) => setCanEdit(!!checked)} 
+                />
+                <Label htmlFor="edit">Puede editar</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="merge" 
+                  checked={canMerge} 
+                  onCheckedChange={(checked) => setCanMerge(!!checked)} 
+                />
+                <Label htmlFor="merge">Puede generar documentos</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="delete" 
+                  checked={canDelete} 
+                  onCheckedChange={(checked) => setCanDelete(!!checked)} 
+                />
+                <Label htmlFor="delete">Puede eliminar</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="share" 
+                  checked={canShare} 
+                  onCheckedChange={(checked) => setCanShare(!!checked)} 
+                />
+                <Label htmlFor="share">Puede compartir</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="viewEntries" 
+                  checked={canViewEntries} 
+                  onCheckedChange={(checked) => setCanViewEntries(!!checked)} 
+                />
+                <Label htmlFor="viewEntries">Puede ver entradas</Label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button 
+            onClick={() => shareFormMutation.mutate()}
+            disabled={!selectedUserId || shareFormMutation.isPending}
+          >
+            {shareFormMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Compartir
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Componente principal FormEntries
 export default function FormEntries({isSharedAccess = false}) {
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -615,7 +778,6 @@ export default function FormEntries({isSharedAccess = false}) {
     }
   };
 
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
   const [canEdit, setCanEdit] = useState(false);
   const [canMerge, setCanMerge] = useState(false);
@@ -626,12 +788,11 @@ export default function FormEntries({isSharedAccess = false}) {
 
   const { data: users = [], isLoading: isLoadingUsersQuery } = useQuery({
     queryKey: ["/api/users"],
-    enabled: showShareDialog,
+    enabled: true, 
     retry: 1,
     refetchOnMount: true
   });
 
-  // Sincronizar el estado de carga con el query
   useEffect(() => {
     setIsLoadingUsers(isLoadingUsersQuery);
   }, [isLoadingUsersQuery]);
@@ -680,107 +841,6 @@ export default function FormEntries({isSharedAccess = false}) {
     shareFormMutation.mutate();
   };
 
-  const ShareDialog = () => {
-    return (
-      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Compartir Formulario</DialogTitle>
-            <DialogDescription>
-              Selecciona un usuario y los permisos que deseas otorgar
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label>Usuario</Label>
-              {users.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  {isLoadingUsers ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Cargando usuarios...</span>
-                    </div>
-                  ) : (
-                    "No hay usuarios disponibles"
-                  )}
-                </div>
-              ) : (
-                <Select
-                  value={selectedUserId}
-                  onValueChange={setSelectedUserId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona un usuario" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.map((user: any) => (
-                      <SelectItem key={user.id} value={String(user.id)}>
-                        {user.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label>Permisos</Label>
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="edit" 
-                    checked={canEdit} 
-                    onCheckedChange={(checked) => setCanEdit(!!checked)} 
-                  />
-                  <Label htmlFor="edit">Puede editar</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="merge" 
-                    checked={canMerge} 
-                    onCheckedChange={(checked) => setCanMerge(!!checked)} 
-                  />
-                  <Label htmlFor="merge">Puede generar documentos</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="delete" 
-                    checked={canDelete} 
-                    onCheckedChange={(checked) => setCanDelete(!!checked)} 
-                  />
-                  <Label htmlFor="delete">Puede eliminar</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="share" 
-                    checked={canShare} 
-                    onCheckedChange={(checked) => setCanShare(!!checked)} 
-                  />
-                  <Label htmlFor="share">Puede compartir</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="viewEntries" 
-                    checked={canViewEntries} 
-                    onCheckedChange={(checked) => setCanViewEntries(!!checked)} 
-                  />
-                  <Label htmlFor="viewEntries">Puede ver entradas</Label>
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              onClick={handleShare}
-              disabled={!selectedUserId || shareFormMutation.isPending}
-            >
-              {shareFormMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Compartir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  };
 
   return (
     <div className="container mx-auto py-8" style={form?.theme ? {
@@ -922,7 +982,7 @@ export default function FormEntries({isSharedAccess = false}) {
                       <div className="space-y-2">
                         <Label>Campos a exportar</Label>
                         <div className="grid grid-cols-2 gap-2">
-                          {form?.variables?.map((variable: any) => (
+                          {form?.variables?.map((variable:any) => (
                             <div key={variable.id} className="flex items-center space-x-2">
                               <Checkbox
                                 id={`export-${variable.id}`}
@@ -1199,7 +1259,14 @@ export default function FormEntries({isSharedAccess = false}) {
           </div>
         </DialogContent>
       </Dialog>
-      <ShareDialog />
+      <ShareDialog 
+        isOpen={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        formId={id || ''}
+        onSuccess={() => {
+          // Acciones adicionales después de compartir si son necesarias
+        }}
+      />
     </div>
   );
 }
