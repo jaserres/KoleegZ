@@ -418,9 +418,13 @@ export function registerRoutes(app: Express): Server {
 app.get("/api/users", async (req, res) => {
   try {
     const user = ensureAuth(req);
-    const allUsers = await db.select({ id: users.id, username: users.username })
-      .from(users)
-      .where(sql`${users.id} != ${user.id}`); // Excluir solo el usuario actual
+    const allUsers = await db.select({ 
+      id: users.id, 
+      username: users.username 
+    })
+    .from(users)
+    .where(sql`${users.id} != ${user.id}`);
+    
     console.log('Users fetched:', allUsers);
     res.json(allUsers);
   } catch (error) {
