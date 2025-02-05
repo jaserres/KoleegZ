@@ -130,7 +130,7 @@ export default function AuthPage() {
                       const formData = new FormData(e.currentTarget);
                       const password = formData.get("password") as string;
                       const confirmPassword = formData.get("confirmPassword") as string;
-                      
+
                       if (password !== confirmPassword) {
                         toast({
                           variant: "destructive",
@@ -214,9 +214,15 @@ export default function AuthPage() {
                         autoComplete="new-password"
                         onChange={(e) => {
                           const password = (document.getElementById('password') as HTMLInputElement).value;
+                          const messageElement = document.getElementById('passwordMatchMessage');
+                          if (messageElement) {
+                            messageElement.textContent = e.target.value !== password ? "Las contraseñas no coinciden" : "";
+                            messageElement.style.display = e.target.value !== password ? 'block' : 'none';
+                          }
                           e.target.setCustomValidity(e.target.value !== password ? "Las contraseñas no coinciden" : "");
                         }}
                       />
+                      <div id="passwordMatchMessage" className="text-sm text-red-500 mt-1"></div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="firstName">First Name</Label>
