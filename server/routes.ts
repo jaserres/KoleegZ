@@ -1260,7 +1260,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
               processTextNodes(doc.documentElement);
 
               // Convertir DOM de vuelta a string
-              const processedHtml = serializer.serializeToString(doc);
+              let processedHtml = serializer.serializeToString(doc);
 
               // Procesar variables en texto normal
               processedHtml = processedHtml.replace(/([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?{{([^}]+)}}([a-zñáéíóúA-ZÑÁÉÍÓÚ,.:;!?])?/g, (match, prefix, variable, suffix) => {
