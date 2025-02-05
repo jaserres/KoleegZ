@@ -756,25 +756,84 @@ export default function FormEntries({isSharedAccess = false}) {
                   <Share className="mr-2 h-4 w-4" />
                   Compartir Formulario
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                <Dialog>
+                  <DialogTrigger asChild>
                     <Button variant="outline">
                       <Download className="mr-2 h-4 w-4" />
                       Exportar Datos
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => window.location.href = `/api/forms/${id}/entries/export?format=csv`}>
-                      Exportar como CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => window.location.href = `/api/forms/${id}/entries/export?format=excel`}>
-                      Exportar como Excel
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => window.location.href = `/api/forms/${id}/entries/export?format=json`}>
-                      Exportar como JSON
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Exportar Datos</DialogTitle>
+                      <DialogDescription>
+                        Selecciona los campos y el formato para exportar
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Campos a exportar</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {form?.variables?.map((variable: any) => (
+                            <div key={variable.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`export-${variable.id}`}
+                                defaultChecked
+                                onCheckedChange={(checked) => {
+                                  const fields = new URLSearchParams(window.location.search).get('fields')?.split(',') || [];
+                                  if (checked) {
+                                    fields.push(variable.name);
+                                  } else {
+                                    const index = fields.indexOf(variable.name);
+                                    if (index > -1) fields.splice(index, 1);
+                                  }
+                                  const searchParams = new URLSearchParams(window.location.search);
+                                  searchParams.set('fields', fields.join(','));
+                                }}
+                              />
+                              <Label htmlFor={`export-${variable.id}`}>{variable.label}</Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            const fields = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+                              .map((cb: any) => cb.id.replace('export-', ''))
+                              .join(',');
+                            window.location.href = `/api/forms/${id}/entries/export?format=csv&fields=${fields}`;
+                          }}
+                        >
+                          CSV
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            const fields = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+                              .map((cb: any) => cb.id.replace('export-', ''))
+                              .join(',');
+                            window.location.href = `/api/forms/${id}/entries/export?format=excel&fields=${fields}`;
+                          }}
+                        >
+                          Excel
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            const fields = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+                              .map((cb: any) => cb.id.replace('export-', ''))
+                              .join(',');
+                            window.location.href = `/api/forms/${id}/entries/export?format=json&fields=${fields}`;
+                          }}
+                        >
+                          JSON
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
           </CardHeader>

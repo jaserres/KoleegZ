@@ -1449,14 +1449,19 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
     switch (format) {
       case 'csv': {
-        const fields = variables.map(v => ({
-          label: v.label,
-          value: (row: any) => row.values[v.name]
-        }));
-        fields.push({
-          label: 'Fecha de Creación',
-        value: 'createdAt'
-        });
+        const selectedFields = req.query.fields?.toString().split(',') || variables.map(v => v.name);
+        const fields = variables
+          .filter(v => selectedFields.includes(v.name))
+          .map(v => ({
+            label: v.label,
+            value: (row: any) => row.values[v.name]
+          }));
+        if (selectedFields.includes('createdAt')) {
+          fields.push({
+            label: 'Fecha de Creación',
+            value: 'createdAt'
+          });
+        }
 
         const parser = new Parser({ fields });
         const csv = parser.parse(entries);
