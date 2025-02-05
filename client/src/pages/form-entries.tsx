@@ -27,15 +27,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ArrowLeft, Plus, FileText, Wand2, Save, FileDown, Upload, Download, Trash2, Share } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
   Table,
   TableBody,
   TableCell,
