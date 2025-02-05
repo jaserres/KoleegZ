@@ -18,6 +18,8 @@ import express from 'express';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 const execAsync = promisify(exec);
+import crypto from 'crypto';
+
 
 // Función para extraer texto de imagen usando Tesseract OCR
 async function extractTextFromImage(imagePath: string): Promise<string> {
@@ -1170,7 +1172,6 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
                 return match;
               });
             },
-            processLineBreaks: true,
             processImages: true,
             processHeadersAndFooters: true,
             processHyperlinks: true,
