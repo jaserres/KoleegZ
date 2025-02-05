@@ -364,23 +364,26 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/users", async (req, res) => {
     try {
       const user = ensureAuth(req);
-      console.log('Usuario actual:', user);
 
-      const allUsers = await db.select({
-        id: users.id,
-        username: users.username,
-        isPremium: users.is_premium,
-      })
-      .from(users)
-      .where(ne(users.id, user.id));
+      const allUsers = await db.query.users.findMany({
+        where: ne(users.id, user.id),
+        columns: {
+          id: true,
+          username: true,
+          is_premium: true
+        }
+      });
 
-      console.log('Usuarios encontrados:', allUsers);
+      // Transform the results to match the expected interface
+      const transformedUsers = allUsers.map(user => ({
+        id: user.id,
+        username: user.username,
+        isPremium: user.is_premium
+      }));
 
-      if (!allUsers.length) {
-        console.log('No se encontraron usuarios');
-      }
+      console.log('Usuarios encontrados:', transformedUsers);
 
-      res.json(allUsers);
+      res.json(transformedUsers);
     } catch (error) {
       console.error('Error al obtener usuarios:', error);
       res.status(500).json({ error: "Error obteniendo usuarios" });
@@ -869,7 +872,7 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
-    const formId = parseInt(req.params.formId);
+    const formId = parseInt(req.paramsformId);
 
     console.log('Consultando documentos para formulario:', {
       formId,
