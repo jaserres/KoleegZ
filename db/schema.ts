@@ -2,6 +2,7 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizz
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import * as z from 'zod';
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -70,7 +71,13 @@ export const documentsRelations = relations(documents, ({ one }) => ({
   form: one(forms, { fields: [documents.formId], references: [forms.id] }),
 }));
 
-export const insertUserSchema = createInsertSchema(users);
+export const insertUserSchema = createInsertSchema(users, {
+  username: z.string().min(1).regex(/^[a-zA-Z0-9]+$/, "Solo letras y números permitidos"),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+  firstName: z.string().min(1, "El nombre es requerido"),
+  lastName: z.string().min(1, "El apellido es requerido"),
+  email: z.string().email("Email inválido"),
+});
 export const selectUserSchema = createSelectSchema(users);
 export type InsertUser = typeof users.$inferInsert;
 export type SelectUser = typeof users.$inferSelect;

@@ -96,8 +96,11 @@ export function setupAuth(app: Express) {
       const [user] = await db
         .insert(users)
         .values({
-          ...result.data,
+          username: result.data.username,
           password: await hashPassword(result.data.password),
+          firstName: result.data.firstName,
+          lastName: result.data.lastName,
+          email: result.data.email,
           isPremium: false
         })
         .returning();
