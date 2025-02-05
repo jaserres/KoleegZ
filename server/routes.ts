@@ -2,7 +2,7 @@ import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
-import { forms, variables, entries, documents } from "@db/schema";
+import { forms, variables, entries, documents, users } from "@db/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
