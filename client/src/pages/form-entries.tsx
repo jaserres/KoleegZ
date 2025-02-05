@@ -615,7 +615,7 @@ export default function FormEntries({isSharedAccess = false}) {
   const [canDelete, setCanDelete] = useState(false);
   const [canShare, setCanShare] = useState(false);
   const [canViewEntries, setCanViewEntries] = useState(false);
-  
+
   const { data: users } = useQuery({
     queryKey: ["/api/users"],
   });
@@ -969,8 +969,7 @@ export default function FormEntries({isSharedAccess = false}) {
                                           </CardTitle>
                                         </CardHeader>
                                         <CardContent>
-                                          {doc.thumbnailPath && (
-                                            <div className="relative aspect-[3/4] w-full max-h-32 mb-4">
+                                          {doc.thumbnailPath && (<div className="relative aspect-[3/4] w-full max-h-32 mb-4">
                                               <img
                                                 src={`/thumbnails/${doc.thumbnailPath}`}
                                                 alt={`Vista previa de ${doc.name}`}
@@ -1134,12 +1133,6 @@ export default function FormEntries({isSharedAccess = false}) {
               Compartir
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-            >
-              Copiar
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
     </div>
