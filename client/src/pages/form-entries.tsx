@@ -560,7 +560,6 @@ export default function FormEntries({isSharedAccess = false}) {
     setLocation("/forms/new");
   };  
 
-
   const variableLimit = user?.isPremium ? 50 : 10;  
 
   const removeExcessVariables = () => {
@@ -629,19 +628,14 @@ export default function FormEntries({isSharedAccess = false}) {
     queryKey: ["/api/users"],
     enabled: showShareDialog,
     retry: 1,
-    refetchOnMount: true,
-    onSuccess: (data) => {
-      setFilteredUsers(data);
-    },
-    onError: (error) => {
-      console.error('Error fetching users:', error);
-      toast({
-        title: "Error",
-        description: "Error al cargar usuarios. Por favor intente nuevamente.",
-        variant: "destructive"
-      });
-    }
+    refetchOnMount: true
   });
+
+  useEffect(() => {
+    if (showShareDialog) {
+      setFilteredUsers(users);
+    }
+  }, [showShareDialog, users]);
 
   const shareFormMutation = useMutation({
     mutationFn: async () => {
@@ -1148,30 +1142,36 @@ export default function FormEntries({isSharedAccess = false}) {
               <Label>Permisos</Label>
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="edit" onCheckedChange={setCanEdit} />
+                  <Checkbox id="edit" checked={canEdit} onCheckedChange={(checked) => setCanEdit(!!checked)} />
                   <Label htmlFor="edit">Puede editar</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="merge" onCheckedChange={setCanMerge} />
-                  <Label htmlFor="merge">Puede hacer merge</Label>
+                  <Checkbox id="merge" checked={canMerge} onCheckedChange={(checked) => setCanMerge(!!checked)} />
+                  <Label htmlFor="merge">Puede generar documentos</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="delete" onCheckedChange={setCanDelete} />
+                  <Checkbox id="delete" checked={canDelete} onCheckedChange={(checked) => setCanDelete(!!checked)} />
                   <Label htmlFor="delete">Puede eliminar</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="share" onCheckedChange={setCanShare} />
+                  <Checkbox id="share" checked={canShare} onCheckedChange={(checked) => setCanShare(!!checked)} />
                   <Label htmlFor="share">Puede compartir</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="viewEntries" onCheckedChange={setCanViewEntries} />
+                  <Checkbox id="viewEntries" checked={canViewEntries} onCheckedChange={(checked) => setCanViewEntries(!!checked)} />
                   <Label htmlFor="viewEntries">Puede ver entradas</Label>
                 </div>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={handleShare} disabled={!selectedUserId}>
+            <Button 
+              onClick={handleShare}
+              disabled={!selectedUserId || shareFormMutation.isPending}
+            >
+              {shareFormMutation.isPending ? (
+                <Spinner className="mr-2" />
+              ) : null}
               Compartir
             </Button>
           </DialogFooter>
