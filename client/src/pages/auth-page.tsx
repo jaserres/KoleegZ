@@ -81,11 +81,12 @@ export default function AuthPage() {
                     }}
                   >
                     <div className="space-y-2">
-                      <Label htmlFor="username">Username</Label>
+                      <Label htmlFor="username">Username or Email</Label>
                       <Input
                         id="username"
                         name="username"
                         required
+                        placeholder="Enter username or email"
                         autoComplete="username"
                       />
                     </div>
@@ -138,7 +139,40 @@ export default function AuthPage() {
                         id="username"
                         name="username"
                         required
+                        pattern="^[a-zA-Z0-9]+$"
+                        placeholder="Username (letters and numbers only)"
                         autoComplete="username"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName">First Name</Label>
+                      <Input
+                        id="firstName"
+                        name="firstName"
+                        required
+                        placeholder="Enter your first name"
+                        autoComplete="given-name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Last Name</Label>
+                      <Input
+                        id="lastName"
+                        name="lastName"
+                        required
+                        placeholder="Enter your last name"
+                        autoComplete="family-name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        required
+                        placeholder="Enter your email"
+                        autoComplete="email"
                       />
                     </div>
                     <div className="space-y-2">
@@ -148,6 +182,7 @@ export default function AuthPage() {
                         name="password"
                         type="password"
                         required
+                        placeholder="Choose a strong password"
                         autoComplete="new-password"
                       />
                     </div>
