@@ -27,6 +27,7 @@ export default function FormBuilder() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { trigger: triggerConfetti } = useConfetti();
   const [showEditor, setShowEditor] = useState(false);
   const [showTemplateProcessingDialog, setShowTemplateProcessingDialog] = useState(false);
   const [previewContent, setPreviewContent] = useState<{
