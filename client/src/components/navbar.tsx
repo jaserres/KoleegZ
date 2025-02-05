@@ -15,7 +15,7 @@ export function Navbar() {
           <div className="flex items-center space-x-6">
             <Link href="/">
               <span className="text-xl cursor-pointer">
-                <i>K</i><strong>oleeg</strong><i>Z</i>
+                <strong><i>K</i></strong><strong>oleeg</strong><strong><i>Z</i></strong>
               </span>
             </Link>
             <div className="space-x-4">
