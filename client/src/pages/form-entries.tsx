@@ -48,6 +48,7 @@ export default function FormEntries({isSharedAccess = false}) {
   const [selectedEntry, setSelectedEntry] = useState<number | null>(null);
   const [documentName, setDocumentName] = useState("");
   const [documentTemplate, setDocumentTemplate] = useState("");
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [mergedResult, setMergedResult] = useState("");
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
@@ -801,10 +802,11 @@ export default function FormEntries({isSharedAccess = false}) {
                         <Button
                           variant="outline"
                           onClick={() => {
-                            const fields = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+                            const fields = Array.from(document.querySelectorAll('input[id^="export-"]:checked'))
                               .map((cb: any) => cb.id.replace('export-', ''))
                               .join(',');
-                            window.location.href = `/api/forms/${id}/entries/export?format=csv&fields=${fields}`;
+                            const entries = Array.from(selectedRows).join(',');
+                            window.location.href = `/api/forms/${id}/entries/export?format=csv&fields=${fields}&entries=${entries}`;
                           }}
                         >
                           CSV
@@ -843,6 +845,18 @@ export default function FormEntries({isSharedAccess = false}) {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={entries.length > 0 && selectedRows.size === entries.length}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedRows(new Set(entries.map(e => e.id)));
+                          } else {
+                            setSelectedRows(new Set());
+                          }
+                        }}
+                      />
+                    </TableHead>
                     {form?.variables?.map((variable: any) => (
                       <TableHead key={variable.id} className="whitespace-nowrap">{variable.label}</TableHead>
                     ))}
@@ -855,11 +869,24 @@ export default function FormEntries({isSharedAccess = false}) {
                     <TableRow 
                       key={entry.id}
                       className={cn(
-                        "cursor-pointer hover:bg-muted/50",
+                        "hover:bg-muted/50",
                         selectedRowId === entry.id && "bg-muted"
                       )}
-                      onClick={() => handleRowClick(entry)}
                     >
+                      <TableCell className="w-[50px]">
+                        <Checkbox
+                          checked={selectedRows.has(entry.id)}
+                          onCheckedChange={(checked) => {
+                            const newSelected = new Set(selectedRows);
+                            if (checked) {
+                              newSelected.add(entry.id);
+                            } else {
+                              newSelected.delete(entry.id);
+                            }
+                            setSelectedRows(newSelected);
+                          }}
+                        />
+                      </TableCell>
                       {form?.variables?.map((variable: any) => (
                         <TableCell key={variable.id} className="whitespace-nowrap">
                           {entry.values[variable.name]}

@@ -599,9 +599,14 @@ app.get("/api/forms/:formId/share", async (req, res) => {
       return res.status(404).send("Form not found");
     }
 
+    const selectedEntries = req.query.entries?.toString().split(',').map(Number);
     const formEntries = await db.select()
       .from(entries)
-      .where(eq(entries.formId, formId))
+      .where(
+        selectedEntries?.length 
+          ? and(eq(entries.formId, formId), inArray(entries.id, selectedEntries))
+          : eq(entries.formId, formId)
+      )
       .orderBy(desc(entries.createdAt));
 
     res.json(formEntries);
