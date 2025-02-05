@@ -50,7 +50,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const registerMutation = useMutation({
     mutationFn: async (newUser: InsertUser) => {
-      const res = await apiRequest("POST", "/api/register", newUser);
+      // Convertir camelCase a snake_case
+      const formattedUser = {
+        username: newUser.username,
+        password: newUser.password,
+        first_name: newUser.firstName,
+        last_name: newUser.lastName,
+        email: newUser.email
+      };
+      const res = await apiRequest("POST", "/api/register", formattedUser);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Error durante el registro");
