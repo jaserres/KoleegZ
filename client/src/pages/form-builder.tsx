@@ -468,10 +468,10 @@ export default function FormBuilder() {
                             </div>
                           ) : (
                             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                              <p className="text-yellow-800 font-medium">No se detectaron variables</p>
-                              <p className="text-sm text-yellow-600 mt-1">
+                              <div className="text-yellow-800 font-medium">No se detectaron variables</div>
+                              <div className="text-sm text-yellow-600 mt-1">
                                 Por favor, agregue las variables manualmente basándose en el documento original.
-                              </p>
+                              </div>
                             </div>
                           )}
                         </div>
