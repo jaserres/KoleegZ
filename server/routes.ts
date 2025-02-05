@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
 import { forms, variables, entries, documents, users } from "@db/schema";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, ne, sql } from "drizzle-orm";
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
 import multer from 'multer';
@@ -136,9 +136,9 @@ const wordStyleMap = [
   "p[style-name='Caption'] => p.caption:fresh",
   "r[style-name='Subtle Emphasis'] => em.subtle",
   "p[style-name='Intense Quote'] => blockquote.intense:fresh",
-    "p[style-name='Subtitle'] => p.subtitle:fresh",
-    "r[style-name='Subtle Reference'] => span.subtle-reference",
-    "p[style-name='Bibliography'] => p.bibliography:fresh"
+  "p[style-name='Subtitle'] => p.subtitle:fresh",
+  "r[style-name='Subtle Reference'] => span.subtle-reference",
+  "p[style-name='Bibliography'] => p.bibliography:fresh"
 ];
 
 // Mejorar la función de transformación de documento
@@ -415,64 +415,26 @@ export function registerRoutes(app: Express): Server {
     // Regular auth check
     const user = ensureAuth(req);
 
-app.get("/api/users", async (req, res) => {
-  try {
-    const user = ensureAuth(req);
-    const allUsers = await db.select({ 
-      id: users.id, 
-      username: users.username 
-    })
-    .from(users)
-    .where(sql`${users.id} != ${user.id}`); // Excluir solo el usuario actual
-    
-    console.log('Users fetched:', allUsers);
-    res.json(allUsers);
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ error: "Error fetching users" });
-  }
-});
+    app.get("/api/users", async (req, res) => {
+      try {
+        const user = ensureAuth(req);
+        console.log('Current user:', user);
 
-app.post("/api/forms/:formId/share", async (req, res) => {
-  const user = ensureAuth(req);
-  const formId = parseInt(req.params.formId);
-  const { userId, permissions } = req.body;
+        const allUsers = await db.select({
+          id: users.id,
+          username: users.username,
+          email: users.email
+        })
+        .from(users)
+        .where(ne(users.id, user.id)); // Usar operador 'ne' de drizzle para "not equals"
 
-  try {
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-    if (!form) {
-      return res.status(404).send("Form not found");
-    }
-
-    // Check if share already exists
-    const [existingShare] = await db.select()
-      .from(formShares)
-      .where(and(eq(formShares.formId, formId), eq(formShares.userId, userId)));
-
-    if (existingShare) {
-      await db.update(formShares)
-        .set(permissions)
-        .where(and(eq(formShares.formId, formId), eq(formShares.userId, userId)));
-    } else {
-      await db.insert(formShares)
-        .values({
-          formId,
-          userId,
-          ...permissions
-        });
-    }
-
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Error sharing form:', error);
-    res.status(500).send("Error sharing form");
-  }
-});
-
+        console.log('Users fetched:', allUsers);
+        res.json(allUsers);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ error: "Error fetching users" });
+      }
+    });
 
     const form = await db.query.forms.findFirst({
       where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
@@ -742,7 +704,7 @@ app.post("/api/forms/:formId/share", async (req, res) => {
     }
   });
 
-app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
+  app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
         const user = ensureAuth(req);
         const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
@@ -865,39 +827,39 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
             details: error.stack
         });
     }
-});
+  });
 
-// Añadir el nuevo endpoint para extracción OCR después del endpoint upload
-app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
-  try {
-    const thumbnailPath = req.body.thumbnailPath;
-    if (!thumbnailPath) {
-      return res.status(400).json({
-        error: "Se requiere la ruta del thumbnail"
+  // Añadir el nuevo endpoint para extracción OCR después del endpoint upload
+  app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
+    try {
+      const thumbnailPath = req.body.thumbnailPath;
+      if (!thumbnailPath) {
+        return res.status(400).json({
+          error: "Se requiere la ruta del thumbnail"
+        });
+      }
+
+      const fullPath = path.join(THUMBNAIL_DIR, thumbnailPath);
+      console.log('Iniciando proceso OCR adicional...');
+      const extractedText = await extractTextFromImage(fullPath);
+      console.log('OCR Text extracted:', extractedText);
+
+      // Detectar variables en el texto extraído
+      const extractedVariables = detectVariables(extractedText).valid;
+      console.log('Variables detected from OCR:', extractedVariables);
+
+      res.json({
+        extractedVariables,
+        message: "OCR completado exitosamente"
+      });
+    } catch (error: any) {
+      console.error('Error en proceso OCR:', error);
+      res.status(500).json({
+        error: `Error en proceso OCR: ${error.message}`,
+        details: error.stack
       });
     }
-
-    const fullPath = path.join(THUMBNAIL_DIR, thumbnailPath);
-    console.log('Iniciando proceso OCR adicional...');
-    const extractedText = await extractTextFromImage(fullPath);
-    console.log('OCR Text extracted:', extractedText);
-
-    // Detectar variables en el texto extraído
-    const extractedVariables = detectVariables(extractedText).valid;
-    console.log('Variables detected from OCR:', extractedVariables);
-
-    res.json({
-      extractedVariables,
-      message: "OCR completado exitosamente"
-    });
-  } catch (error: any) {
-    console.error('Error en proceso OCR:', error);
-    res.status(500).json({
-      error: `Error en proceso OCR: ${error.message}`,
-      details: error.stack
-    });
-  }
-});
+  });
 
   app.get("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
@@ -1097,7 +1059,7 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
         });
 
         //        // Verificar que el buffer es un archivo DOCX válido (comienza con PK)
-if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
+        if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
           throw new Error('El archivo template no es un DOCX válido');
         }
 

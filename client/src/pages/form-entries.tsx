@@ -55,15 +55,15 @@ interface User {
 }
 
 // ShareDialog component
-const ShareDialog = ({ 
-  isOpen, 
-  onOpenChange, 
+const ShareDialog = ({
+  isOpen,
+  onOpenChange,
   formId,
   users,
   isLoadingUsers,
-  onSuccess 
-}: { 
-  isOpen: boolean; 
+  onSuccess
+}: {
+  isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   formId: string;
   users: User[];
@@ -119,6 +119,8 @@ const ShareDialog = ({
     }
   });
 
+  console.log('ShareDialog users:', users); // Debug log
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
@@ -159,42 +161,42 @@ const ShareDialog = ({
             <Label>Permisos</Label>
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="edit" 
-                  checked={canEdit} 
-                  onCheckedChange={(checked) => setCanEdit(!!checked)} 
+                <Checkbox
+                  id="edit"
+                  checked={canEdit}
+                  onCheckedChange={(checked) => setCanEdit(!!checked)}
                 />
                 <Label htmlFor="edit">Puede editar</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="merge" 
-                  checked={canMerge} 
-                  onCheckedChange={(checked) => setCanMerge(!!checked)} 
+                <Checkbox
+                  id="merge"
+                  checked={canMerge}
+                  onCheckedChange={(checked) => setCanMerge(!!checked)}
                 />
                 <Label htmlFor="merge">Puede generar documentos</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="delete" 
-                  checked={canDelete} 
-                  onCheckedChange={(checked) => setCanDelete(!!checked)} 
+                <Checkbox
+                  id="delete"
+                  checked={canDelete}
+                  onCheckedChange={(checked) => setCanDelete(!!checked)}
                 />
                 <Label htmlFor="delete">Puede eliminar</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="share" 
-                  checked={canShare} 
-                  onCheckedChange={(checked) => setCanShare(!!checked)} 
+                <Checkbox
+                  id="share"
+                  checked={canShare}
+                  onCheckedChange={(checked) => setCanShare(!!checked)}
                 />
                 <Label htmlFor="share">Puede compartir</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="viewEntries" 
-                  checked={canViewEntries} 
-                  onCheckedChange={(checked) => setCanViewEntries(!!checked)} 
+                <Checkbox
+                  id="viewEntries"
+                  checked={canViewEntries}
+                  onCheckedChange={(checked) => setCanViewEntries(!!checked)}
                 />
                 <Label htmlFor="viewEntries">Puede ver entradas</Label>
               </div>
@@ -202,7 +204,7 @@ const ShareDialog = ({
           </div>
         </div>
         <DialogFooter>
-          <Button 
+          <Button
             onClick={() => shareFormMutation.mutate()}
             disabled={!selectedUserId || shareFormMutation.isPending}
           >
@@ -216,7 +218,7 @@ const ShareDialog = ({
 };
 
 // Componente principal FormEntries
-export default function FormEntries({isSharedAccess = false}) {
+export default function FormEntries({ isSharedAccess = false }) {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -987,7 +989,7 @@ export default function FormEntries({isSharedAccess = false}) {
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label>Campos a exportar</Label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap2">
                           {form?.variables?.map((variable: any) => (
                             <div key={variable.id} className="flex items-center space-x-2">
                               <Checkbox
