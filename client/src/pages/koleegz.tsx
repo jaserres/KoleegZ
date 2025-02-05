@@ -30,6 +30,9 @@ export default function KoleegZ() {
   const { data: users = [], isLoading, error } = useQuery<User[]>({
     queryKey: ["/api/users"],
     retry: 3,
+    onSuccess: (data) => {
+      console.log('Users data received:', data);
+    },
     onError: (err) => {
       console.error('Error fetching users:', err);
       toast({
