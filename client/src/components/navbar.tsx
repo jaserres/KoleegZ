@@ -26,6 +26,7 @@ export function Navbar() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
+            <span className="text-sm font-medium mr-2">@{user?.username}</span>
             <PremiumToggle />
             <Button 
               variant="outline" 
