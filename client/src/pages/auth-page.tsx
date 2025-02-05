@@ -138,9 +138,21 @@ export default function AuthPage() {
                       }
 
                       try {
+                        const username = formData.get("username") as string;
+                        const firstName = formData.get("firstName") as string;
+                        const lastName = formData.get("lastName") as string;
+                        const email = formData.get("email") as string;
+                        
+                        if (!username || !firstName || !lastName || !email || !password) {
+                          throw new Error("Todos los campos son requeridos");
+                        }
+                        
                         await registerMutation.mutateAsync({
-                          username: formData.get("username") as string,
-                          password: password,
+                          username,
+                          password,
+                          firstName,
+                          lastName,
+                          email
                         });
                         setLocation("/");
                       } catch {}
