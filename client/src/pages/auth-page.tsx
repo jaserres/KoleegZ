@@ -78,7 +78,13 @@ export default function AuthPage() {
                           password: formData.get("password") as string,
                         });
                         setLocation("/");
-                      } catch {}
+                      } catch (error: any) {
+                        toast({
+                          variant: "destructive",
+                          title: "Error de inicio de sesión",
+                          description: "Usuario o contraseña incorrectos"
+                        });
+                      }
                     }}
                   >
                     <div className="space-y-2">
@@ -127,7 +133,7 @@ export default function AuthPage() {
                       const formData = new FormData(e.currentTarget);
                       const password = formData.get("password") as string;
                       const confirmPassword = formData.get("confirmPassword") as string;
-                      
+
                       if (password !== confirmPassword) {
                         toast({
                           variant: "destructive",
@@ -142,7 +148,7 @@ export default function AuthPage() {
                         const firstName = formData.get("firstName") as string;
                         const lastName = formData.get("lastName") as string;
                         const email = formData.get("email") as string;
-                        
+
                         if (!username || !firstName || !lastName || !email || !password) {
                           toast({
                             variant: "destructive",
@@ -151,7 +157,7 @@ export default function AuthPage() {
                           });
                           return;
                         }
-                        
+
                         await registerMutation.mutateAsync({
                           username,
                           password,
@@ -223,7 +229,7 @@ export default function AuthPage() {
                         onChange={(e) => {
                           let score = 0;
                           const password = e.target.value;
-                          
+
                           if (password.length >= 8) score++;
                           if (/[A-Z]/.test(password)) score++;
                           if (/[a-z]/.test(password)) score++;
