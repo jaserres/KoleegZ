@@ -124,10 +124,22 @@ export default function AuthPage() {
                     onSubmit={async (e) => {
                       e.preventDefault();
                       const formData = new FormData(e.currentTarget);
+                      const password = formData.get("password") as string;
+                      const confirmPassword = formData.get("confirmPassword") as string;
+                      
+                      if (password !== confirmPassword) {
+                        toast({
+                          variant: "destructive",
+                          title: "Error",
+                          description: "Las contraseñas no coinciden"
+                        });
+                        return;
+                      }
+
                       try {
                         await registerMutation.mutateAsync({
                           username: formData.get("username") as string,
-                          password: formData.get("password") as string,
+                          password: password,
                         });
                         setLocation("/");
                       } catch {}
@@ -184,7 +196,52 @@ export default function AuthPage() {
                         required
                         placeholder="Choose a strong password"
                         autoComplete="new-password"
+                        onChange={(e) => {
+                          const strength = usePasswordStrength(e.target.value);
+                          const meter = document.getElementById('password-strength');
+                          if (meter) {
+                            meter.style.width = `${(strength.score / 5) * 100}%`;
+                            meter.className = `h-1 transition-all duration-300 ${
+                              strength.score < 2 ? 'bg-red-500' : 
+                              strength.score < 4 ? 'bg-yellow-500' : 
+                              'bg-green-500'
+                            }`;
+                          }
+                          const label = document.getElementById('strength-label');
+                          if (label) {
+                            label.textContent = strength.message;
+                          }
+                        }}
                       />
+                      <div className="h-1 w-full bg-gray-200 rounded-full mt-1">
+                        <div id="password-strength" className="h-1 bg-red-500" style={{width: '0%'}}></div>
+                      </div>
+                      <span id="strength-label" className="text-xs text-gray-500">Fortaleza de la contraseña</span>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirm Password</Label>
+                      <Input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type="password"
+                        required
+                        placeholder="Confirm your password"
+                        autoComplete="new-password"
+                        onChange={(e) => {
+                          const password = (document.getElementById('password') as HTMLInputElement)?.value;
+                          const confirmLabel = document.getElementById('confirm-label');
+                          if (confirmLabel) {
+                            if (e.target.value === password) {
+                              confirmLabel.textContent = 'Las contraseñas coinciden';
+                              confirmLabel.className = 'text-xs text-green-500';
+                            } else {
+                              confirmLabel.textContent = 'Las contraseñas no coinciden';
+                              confirmLabel.className = 'text-xs text-red-500';
+                            }
+                          }
+                        }}
+                      />
+                      <span id="confirm-label" className="text-xs text-gray-500"></span>
                     </div>
                     <Button
                       type="submit"
