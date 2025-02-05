@@ -47,16 +47,27 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Componente ShareDialog separado
+// Definición de tipos
+interface User {
+  id: number;
+  email: string;
+  username: string;
+}
+
+// ShareDialog component
 const ShareDialog = ({ 
   isOpen, 
   onOpenChange, 
-  formId, 
+  formId,
+  users,
+  isLoadingUsers,
   onSuccess 
 }: { 
   isOpen: boolean; 
   onOpenChange: (open: boolean) => void;
   formId: string;
+  users: User[];
+  isLoadingUsers: boolean;
   onSuccess?: () => void;
 }) => {
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -66,11 +77,6 @@ const ShareDialog = ({
   const [canShare, setCanShare] = useState(false);
   const [canViewEntries, setCanViewEntries] = useState(false);
   const { toast } = useToast();
-
-  const { data: users = [], isLoading: isLoadingUsers } = useQuery({
-    queryKey: ["/api/users"],
-    enabled: true,
-  });
 
   const shareFormMutation = useMutation({
     mutationFn: async () => {
@@ -130,7 +136,7 @@ const ShareDialog = ({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>Cargando usuarios...</span>
               </div>
-            ) : users.length === 0 ? (
+            ) : !users || users.length === 0 ? (
               <div className="text-sm text-muted-foreground">
                 No hay usuarios disponibles
               </div>
@@ -140,9 +146,9 @@ const ShareDialog = ({
                   <SelectValue placeholder="Selecciona un usuario" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((user: any) => (
+                  {users.map((user) => (
                     <SelectItem key={user.id} value={String(user.id)}>
-                      {user.email}
+                      {user.email || user.username}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -222,8 +228,8 @@ export default function FormEntries({isSharedAccess = false}) {
   const [mergedResult, setMergedResult] = useState("");
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
-  const [detectedVariables, setDetectedVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
-  const [allVariables, setAllVariables] = useState<Array<{name: string, label: string, type: string}>>([]);
+  const [detectedVariables, setDetectedVariables] = useState<Array<{ name: string, label: string, type: string }>>([]);
+  const [allVariables, setAllVariables] = useState<Array<{ name: string, label: string, type: string }>>([]);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [currentEntryId, setCurrentEntryId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -366,7 +372,7 @@ export default function FormEntries({isSharedAccess = false}) {
       const res = await apiRequest(
         "POST",
         `/api/forms/${id}/documents/${documentId}/merge`,
-        { 
+        {
           entryId,
           useOriginalTemplate: true,
           download: true
@@ -445,7 +451,7 @@ export default function FormEntries({isSharedAccess = false}) {
         variant: "destructive",
       });
     },
-  });  
+  });
 
   const deleteDocumentMutation = useMutation({
     mutationFn: async (documentId: number) => {
@@ -508,7 +514,7 @@ export default function FormEntries({isSharedAccess = false}) {
     return variables;
   };
 
-  const unifyVariables = (initial: Array<{name: string, label: string, type: string}>, ocr: Array<{name: string, label: string, type: string}> = []) => {
+  const unifyVariables = (initial: Array<{ name: string, label: string, type: string }>, ocr: Array<{ name: string, label: string, type: string }> = []) => {
     const combined = [...initial, ...ocr];
     return Array.from(new Map(combined.map(v => [v.name, v])).values());
   };
@@ -566,7 +572,7 @@ export default function FormEntries({isSharedAccess = false}) {
           ...doc,
           variables: uniqueVariables,
           extractedVariables: uniqueVariables.map(v => v.name),
-          originalTemplate: doc.template 
+          originalTemplate: doc.template
         });
 
         setDocumentTemplate(doc.template);
@@ -594,7 +600,7 @@ export default function FormEntries({isSharedAccess = false}) {
     }
 
     await createDocumentMutation.mutateAsync();
-  };  
+  };
 
   const handleFieldChange = (name: string, value: any) => {
     setFormValues((prev) => ({
@@ -605,7 +611,7 @@ export default function FormEntries({isSharedAccess = false}) {
 
   const handleRowClick = (entry: any) => {
     setFormValues(entry.values);
-    setCurrentEntryId(null); 
+    setCurrentEntryId(null);
     setSelectedRowId(entry.id);
   };
 
@@ -624,7 +630,7 @@ export default function FormEntries({isSharedAccess = false}) {
     });
 
     createEntryMutation.mutate(values);
-  };  
+  };
 
   const handleOCRExtraction = async () => {
     if (!previewContent?.thumbnailPath) return;
@@ -720,9 +726,9 @@ export default function FormEntries({isSharedAccess = false}) {
 
     sessionStorage.setItem("selectedTemplate", JSON.stringify(templateData));
     setLocation("/forms/new");
-  };  
+  };
 
-  const variableLimit = user?.isPremium ? 50 : 10;  
+  const variableLimit = user?.isPremium ? 50 : 10;
 
   const removeExcessVariables = () => {
     const excess = detectedVariables.length - variableLimit;
@@ -733,7 +739,7 @@ export default function FormEntries({isSharedAccess = false}) {
         description: `Se han eliminado ${excess} variables para cumplir con el límite del plan.`,
       });
     }
-  };  
+  };
 
   const handleDownloadMerge = async (templateId: number, entryId: number) => {
     try {
@@ -779,34 +785,35 @@ export default function FormEntries({isSharedAccess = false}) {
   };
 
   const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
-  const [canEdit, setCanEdit] = useState(false);
-  const [canMerge, setCanMerge] = useState(false);
-  const [canDelete, setCanDelete] = useState(false);
-  const [canShare, setCanShare] = useState(false);
-  const [canViewEntries, setCanViewEntries] = useState(false);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [selectedUserIdShare, setSelectedUserIdShare] = useState(''); // Added state for selected user in share dialog
 
-  const { data: users = [], isLoading: isLoadingUsersQuery } = useQuery({
+
+  const { data: usersQuery = [], isLoading: isLoadingUsersQuery } = useQuery({
     queryKey: ["/api/users"],
-    enabled: true, 
+    enabled: true,
     retry: 1,
     refetchOnMount: true
   });
 
   useEffect(() => {
-    setIsLoadingUsers(isLoadingUsersQuery);
+    console.log("Users Query Data:", usersQuery); //Added log for debugging
+  }, [usersQuery]);
+
+
+  useEffect(() => {
+    //setIsLoadingUsers(isLoadingUsersQuery);  Removed as it's handled by the conditional rendering
   }, [isLoadingUsersQuery]);
 
   useEffect(() => {
     if (showShareDialog) {
-      setFilteredUsers(users);
+      setFilteredUsers(usersQuery);
     }
-  }, [showShareDialog, users]);
+  }, [showShareDialog, usersQuery]);
 
   const shareFormMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/forms/${id}/share`, {
-        userId: parseInt(selectedUserId),
+        userId: parseInt(selectedUserIdShare),
         permissions: {
           canEdit,
           canMerge,
@@ -827,6 +834,7 @@ export default function FormEntries({isSharedAccess = false}) {
         description: "Formulario compartido correctamente"
       });
       setShowShareDialog(false);
+      setSelectedUserIdShare(''); // Clear selected user after successful share
     },
     onError: (error: Error) => {
       toast({
@@ -840,7 +848,6 @@ export default function FormEntries({isSharedAccess = false}) {
   const handleShare = () => {
     shareFormMutation.mutate();
   };
-
 
   return (
     <div className="container mx-auto py-8" style={form?.theme ? {
@@ -879,7 +886,7 @@ export default function FormEntries({isSharedAccess = false}) {
                       id={variable.name}
                       name={variable.name}
                       type={variable.type === "date" ? "date" :
-                            variable.type === "number" ? "number" : "text"}
+                        variable.type === "number" ? "number" : "text"}
                       value={formValues[variable.name] || ""}
                       onChange={(e) => handleFieldChange(variable.name, e.target.value)}
                       className="w-full"
@@ -892,8 +899,8 @@ export default function FormEntries({isSharedAccess = false}) {
                 </div>
               ))}
               <div className="flex flex-wrap gap-2">
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={createEntryMutation.isPending}
                   style={form?.theme ? {
                     '--primary': form.theme.primary,
@@ -957,7 +964,7 @@ export default function FormEntries({isSharedAccess = false}) {
             <div className="flex justify-between items-center">
               <CardTitle>Entradas y Documentos</CardTitle>
               <div className="flex gap-2">
-                <Button 
+                <Button
                   variant="outline"
                   onClick={() => setShowShareDialog(true)}
                 >
@@ -973,7 +980,6 @@ export default function FormEntries({isSharedAccess = false}) {
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Exportar Datos</DialogTitle>
                       <DialogDescription>
                         Selecciona los campos y el formato para exportar
                       </DialogDescription>
@@ -982,7 +988,7 @@ export default function FormEntries({isSharedAccess = false}) {
                       <div className="space-y-2">
                         <Label>Campos a exportar</Label>
                         <div className="grid grid-cols-2 gap-2">
-                          {form?.variables?.map((variable:any) => (
+                          {form?.variables?.map((variable: any) => (
                             <div key={variable.id} className="flex items-center space-x-2">
                               <Checkbox
                                 id={`export-${variable.id}`}
@@ -1028,7 +1034,7 @@ export default function FormEntries({isSharedAccess = false}) {
                         >
                           Excel
                         </Button>
-                        <Button                          variant="outline"
+                        <Button variant="outline"
                           onClick={() => {
                             const fields = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
                               .map((cb: any) => cb.id.replace('export-', ''))
@@ -1071,7 +1077,7 @@ export default function FormEntries({isSharedAccess = false}) {
                 </TableHeader>
                 <TableBody>
                   {entries?.map((entry: any) => (
-                    <TableRow 
+                    <TableRow
                       key={entry.id}
                       className={cn(
                         "hover:bg-muted/50",
@@ -1112,7 +1118,8 @@ export default function FormEntries({isSharedAccess = false}) {
                                 Merge
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-2xl"><DialogHeader>
+                            <DialogContent className="max-w-2xl">
+                              <DialogHeader>
                                 <DialogTitle>Seleccionar Plantilla</DialogTitle>
                                 <DialogDescription>
                                   Seleccione una plantilla para generar el documento
@@ -1137,7 +1144,7 @@ export default function FormEntries({isSharedAccess = false}) {
                                                   size="icon"
                                                   className="text-red-500 hover:text-red-700 hover:bg-red-100"
                                                   onClick={(e) => {
-                                                                                                         e.stopPropagation();
+                                                    e.stopPropagation();
                                                     if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
                                                       deleteDocumentMutation.mutate(doc.id);
                                                     }
@@ -1151,12 +1158,12 @@ export default function FormEntries({isSharedAccess = false}) {
                                         </CardHeader>
                                         <CardContent>
                                           {doc.thumbnailPath && (<div className="relative aspect-[3/4] w-full max-h-32 mb-4">
-                                              <img
-                                                src={`/thumbnails/${doc.thumbnailPath}`}
-                                                alt={`Vista previa de ${doc.name}`}
-                                                className="absolute inset-0 w-full h-full object-cover rounded-md"
-                                              />
-                                            </div>
+                                            <img
+                                              src={`/thumbnails/${doc.thumbnailPath}`}
+                                              alt={`Vista previa de ${doc.name}`}
+                                              className="absolute inset-0 w-full h-full object-cover rounded-md"
+                                            />
+                                          </div>
                                           )}
                                           <div className="flex justify-end mt-4">
                                             <Button
@@ -1196,10 +1203,10 @@ export default function FormEntries({isSharedAccess = false}) {
                                       </Button>
                                     )}
                                   </div>
-                                  <div 
+                                  <div
                                     className="p-4 border rounded-md bg-white"
-                                    style={{ 
-                                      minHeight:"200px",
+                                    style={{
+                                      minHeight: "200px",
                                       maxHeight: "400px",
                                       overflowY: "auto",
                                       whiteSpace: "pre-wrap"
@@ -1259,12 +1266,15 @@ export default function FormEntries({isSharedAccess = false}) {
           </div>
         </DialogContent>
       </Dialog>
-      <ShareDialog 
+      <ShareDialog
         isOpen={showShareDialog}
         onOpenChange={setShowShareDialog}
         formId={id || ''}
+        users={users}
+        isLoadingUsers={isLoadingUsers}
         onSuccess={() => {
           // Acciones adicionales después de compartir si son necesarias
+          queryClient.invalidateQueries({ queryKey: ["/api/users"] });
         }}
       />
     </div>
