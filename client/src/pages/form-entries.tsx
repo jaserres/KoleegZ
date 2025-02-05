@@ -624,22 +624,17 @@ export default function FormEntries({isSharedAccess = false}) {
   const [canViewEntries, setCanViewEntries] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
-  const { data: users = [], refetch: refetchUsers, isLoading } = useQuery({
+  const { data: users = [], isLoading: isLoadingUsersQuery } = useQuery({
     queryKey: ["/api/users"],
     enabled: showShareDialog,
     retry: 1,
-    refetchOnMount: true,
-    onQueryStart: () => {
-      setIsLoadingUsers(true);
-    },
-    onQuerySuccess: () => {
-      setIsLoadingUsers(false);
-    },
-    onQueryError: () => {
-      setIsLoadingUsers(false);
-    }
-
+    refetchOnMount: true
   });
+
+  // Sincronizar el estado de carga con el query
+  useEffect(() => {
+    setIsLoadingUsers(isLoadingUsersQuery);
+  }, [isLoadingUsersQuery]);
 
   useEffect(() => {
     if (showShareDialog) {
