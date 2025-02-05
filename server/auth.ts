@@ -92,8 +92,8 @@ export function setupAuth(app: Express) {
         console.error('Missing required fields:', {
           hasUsername: !!req.body.username,
           hasPassword: !!req.body.password,
-          hasFirstName: !!req.body.firstName,
-          hasLastName: !!req.body.lastName,
+          hasFirst_name: !!req.body.firstName,
+          hasLast_name: !!req.body.lastName,
           hasEmail: !!req.body.email
         });
         return res.status(400).json({ error: "Todos los campos son requeridos" });
@@ -128,8 +128,8 @@ export function setupAuth(app: Express) {
       const userData = {
         username: req.body.username,
         password: req.body.password,
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
+        first_name: req.body.firstName,
+        last_name: req.body.lastName,
         email: req.body.email
       };
 
