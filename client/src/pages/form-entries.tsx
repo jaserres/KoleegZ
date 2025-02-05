@@ -10,6 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { useConfetti } from "@/hooks/use-confetti";
 import { Button } from "@/components/ui/button";
