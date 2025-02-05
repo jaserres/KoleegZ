@@ -17,6 +17,7 @@ import path from 'path';
 import express from 'express';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import crypto from 'crypto';
 const execAsync = promisify(exec);
 
 // Función para extraer texto de imagen usando Tesseract OCR
@@ -134,9 +135,9 @@ const wordStyleMap = [
   "p[style-name='Caption'] => p.caption:fresh",
   "r[style-name='Subtle Emphasis'] => em.subtle",
   "p[style-name='Intense Quote'] => blockquote.intense:fresh",
-    "p[style-name='Subtitle'] => p.subtitle:fresh",
-    "r[style-name='Subtle Reference'] => span.subtle-reference",
-    "p[style-name='Bibliography'] => p.bibliography:fresh"
+  "p[style-name='Subtitle'] => p.subtitle:fresh",
+  "r[style-name='Subtle Reference'] => span.subtle-reference",
+  "p[style-name='Bibliography'] => p.bibliography:fresh"
 ];
 
 // Mejorar la función de transformación de documento
@@ -189,8 +190,8 @@ const mammothOptions = {
       };
     });
   }),
-    ignoreEmptyParagraphs: false,
-    preserveNumbering: true
+  ignoreEmptyParagraphs: false,
+  preserveNumbering: true
 };
 
 // CSS mejorado para la vista previa
@@ -413,36 +414,36 @@ export function registerRoutes(app: Express): Server {
     // Regular auth check
     const user = ensureAuth(req);
 
-app.get("/api/forms/:formId/share", async (req, res) => {
-  const user = ensureAuth(req);
-  const formId = parseInt(req.params.formId);
+    app.get("/api/forms/:formId/share", async (req, res) => {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
 
-  try {
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+      try {
+        // Verify ownership
+        const [form] = await db.select()
+          .from(forms)
+          .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-    if (!form) {
-      return res.status(404).send("Form not found");
-    }
+        if (!form) {
+          return res.status(404).send("Form not found");
+        }
 
-    // Generate shorter token
-    const token = crypto.randomBytes(16).toString('hex');
+        // Generate shorter token
+        const token = crypto.randomBytes(16).toString('hex');
 
-    // Create share record
-    await db.insert(formShares)
-      .values({
-        formId,
-        token
-      });
+        // Create share record
+        await db.insert(formShares)
+          .values({
+            formId,
+            token
+          });
 
-    res.json({ token });
-  } catch (error) {
-    console.error('Error sharing form:', error);
-    res.status(500).send("Error sharing form");
-  }
-});
+        res.json({ token });
+      } catch (error) {
+        console.error('Error sharing form:', error);
+        res.status(500).send("Error sharing form");
+      }
+    });
 
 
     const form = await db.query.forms.findFirst({
@@ -708,7 +709,7 @@ app.get("/api/forms/:formId/share", async (req, res) => {
     }
   });
 
-app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
+  app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
         const user = ensureAuth(req);
         const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
@@ -831,39 +832,39 @@ app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (re
             details: error.stack
         });
     }
-});
+  });
 
-// Añadir el nuevo endpoint para extracción OCR después del endpoint upload
-app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
-  try {
-    const thumbnailPath = req.body.thumbnailPath;
-    if (!thumbnailPath) {
-      return res.status(400).json({
-        error: "Se requiere la ruta del thumbnail"
+  // Añadir el nuevo endpoint para extracción OCR después del endpoint upload
+  app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
+    try {
+      const thumbnailPath = req.body.thumbnailPath;
+      if (!thumbnailPath) {
+        return res.status(400).json({
+          error: "Se requiere la ruta del thumbnail"
+        });
+      }
+
+      const fullPath = path.join(THUMBNAIL_DIR, thumbnailPath);
+      console.log('Iniciando proceso OCR adicional...');
+      const extractedText = await extractTextFromImage(fullPath);
+      console.log('OCR Text extracted:', extractedText);
+
+      // Detectar variables en el texto extraído
+      const extractedVariables = detectVariables(extractedText).valid;
+      console.log('Variables detected from OCR:', extractedVariables);
+
+      res.json({
+        extractedVariables,
+        message: "OCR completado exitosamente"
+      });
+    } catch (error: any) {
+      console.error('Error en proceso OCR:', error);
+      res.status(500).json({
+        error: `Error en proceso OCR: ${error.message}`,
+        details: error.stack
       });
     }
-
-    const fullPath = path.join(THUMBNAIL_DIR, thumbnailPath);
-    console.log('Iniciando proceso OCR adicional...');
-    const extractedText = await extractTextFromImage(fullPath);
-    console.log('OCR Text extracted:', extractedText);
-
-    // Detectar variables en el texto extraído
-    const extractedVariables = detectVariables(extractedText).valid;
-    console.log('Variables detected from OCR:', extractedVariables);
-
-    res.json({
-      extractedVariables,
-      message: "OCR completado exitosamente"
-    });
-  } catch (error: any) {
-    console.error('Error en proceso OCR:', error);
-    res.status(500).json({
-      error: `Error en proceso OCR: ${error.message}`,
-      details: error.stack
-    });
-  }
-});
+  });
 
   app.get("/api/forms/:formId/documents", async (req, res) => {
     const user = ensureAuth(req);
@@ -1002,6 +1003,26 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
     res.sendStatus(200);
   });
 
+  // En la sección de opciones de merge
+  const mergeOptions = {
+    rejectNullish: false,
+    processLineBreaks: true,
+    processImages: true,
+    errorHandler: (error: Error, raw_code: string) => {
+      console.error('Error en comando durante merge:', { error, raw_code });
+    },
+    additionalJsContext: {
+      formatDate: (date: string) => {
+        try {
+          return new Date(date).toLocaleDateString();
+        } catch (error) {
+          console.error('Error formatting date:', error);
+          return date;
+        }
+      }
+    }
+  };
+
   app.post("/api/forms/:formId/documents/:documentId/merge", async (req, res) => {
     try {
       const user = ensureAuth(req);
@@ -1063,7 +1084,7 @@ app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
         });
 
         //        // Verificar que el buffer es un archivo DOCX válido (comienza con PK)
-if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
+        if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
           throw new Error('El archivo template no es un DOCX válido');
         }
 
@@ -1162,13 +1183,19 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
             rejectNullish: false,
             preprocessTemplate: (template) => {
               // Limpiar variables mal formadas
-              return template.replace(/{{([^{}]+)}}/g, (match, varName) => {
-                const cleanVarName = varName.trim().split(/[\s\n]+/)[0];
-                if (cleanVarName && mergeData[cleanVarName] !== undefined) {
-                  return `{{${cleanVarName}}}`;
+              let processedTemplate = template;
+              const variableMatches = template.match(/{{[^}]+}}/g) || [];
+
+              variableMatches.forEach(match => {
+                const varName = match.slice(2, -2).trim();
+                if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(varName)) {
+                  processedTemplate = processedTemplate.replace(
+                    match,
+                    `{{${varName.replace(/[^a-zA-Z0-9_]/g, '_')}}}`
+                  );
                 }
-                return match;
               });
+              return processedTemplate;
             },
             processLineBreaks: true,
             processImages: true,
@@ -1270,7 +1297,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
 
               return processedHtml;
             },
-            processLineBreaks: true,
+            
             postprocessRun: (run: any) => {
               if (run.text) {
                 // Limpiar el texto de caracteres invisibles o especiales
@@ -1292,18 +1319,14 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
               }
               return run;
             },
-            preprocessTemplate: (template: any) => {
-              // Preserve original XML structure
-              return template;
-            },
             postprocessTemplate: (template: any) => {
               // Ensure XML structure is maintained
               return template;
             },
             errorHandler: (error: any, cmdStr: string) => {
               console.error('Error en comando durante merge:', { error, cmdStr });
-              //              return cmdStr;
-            },additionalJsContext: {
+            },
+            additionalJsContext: {
               formatDate: (date: string) => {
                 try {
                   return new Date(date).toLocaleDateString();
@@ -1443,19 +1466,20 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
     }
 
     const entries = formData.entries;
-    const variables = formData.variables;
+    const formVariables = formData.variables;
 
     switch (format) {
       case 'csv': {
-        const fields = variables.map(v => ({
-          label: v.label,
-          value: (row: any) => row.values[v.name]
-        }));
-        fields.push({
-          label: 'Fecha de Creación',
-        value: 'createdAt'
-        });
-
+        const fields = [
+          ...formVariables.map((v: any) => ({
+            label: v.label,
+            value: (row: any) => row.values?.[v.name] ?? ''
+          })),
+          {
+            label: 'Fecha de creación',
+            value: (row: any) => row.createdAt
+          }
+        ];
         const parser = new Parser({ fields });
         const csv = parser.parse(entries);
 
@@ -1465,17 +1489,17 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
       }
 
       case 'excel': {
-        const data = entries.map(entry => {
-          const row: any = {
-            'Fecha de Creación': entry.createdAt
-          };
-          variables.forEach(v => {
-            row[v.label] = entry.values[v.name];
+        const rows = entries.map(entry => {
+          const row: Record<string, any> = {};
+          formVariables.forEach((v: any) => {
+            const values = entry.values as Record<string, any>;
+            row[v.label] = values[v.name] ?? '';
           });
+          row['Fecha de creación'] = entry.createdAt;
           return row;
         });
 
-        const worksheet = XLSX.utils.json_to_sheet(data);
+        const worksheet = XLSX.utils.json_to_sheet(rows);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Entries');
 
@@ -1487,19 +1511,19 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
       }
 
       case 'json': {
-        const data = entries.map(entry => {
-          const row: any = {
-            createdAt: entry.createdAt
-          };
-          variables.forEach(v => {
-            row[v.name] = entry.values[v.name];
+        const rows = entries.map(entry => {
+          const row: Record<string, any> = {};
+          formVariables.forEach((v: any) => {
+            const values = entry.values as Record<string, any>;
+            row[v.name] = values[v.name] ?? '';
           });
+          row['createdAt'] = entry.createdAt;
           return row;
         });
 
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', `attachment; filename=${form.name}-entries.json`);
-        return res.json(data);
+        return res.json(rows);
       }
 
       default:
@@ -1538,7 +1562,7 @@ if (originalBuffer[0] !== 0x50 || originalBuffer[1] !== 0x4B) {
     res.json(entry);
   });
 
-    app.delete("/api/forms/:id", async (req, res) => {
+  app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
 
