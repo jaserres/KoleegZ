@@ -43,6 +43,7 @@ export default function FormEntries({isSharedAccess = false}) {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { trigger: triggerConfetti } = useConfetti();
   const [selectedEntry, setSelectedEntry] = useState<number | null>(null);
   const [documentName, setDocumentName] = useState("");
   const [documentTemplate, setDocumentTemplate] = useState("");
