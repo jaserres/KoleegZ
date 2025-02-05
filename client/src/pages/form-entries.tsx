@@ -104,7 +104,7 @@ export default function FormEntries({isSharedAccess = false}) {
   }, [documents, id]);
 
 
-  const { trigger: triggerConfetti } = useConfetti();
+  const { trigger } = useConfetti();
 
   const createEntryMutation = useMutation({
     mutationFn: async (values: Record<string, any>) => {
