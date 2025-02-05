@@ -17,6 +17,7 @@ export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [strengthLevel, setStrengthLevel] = React.useState(0);
 
   if (user) {
     setLocation("/");
@@ -173,12 +174,29 @@ export default function AuthPage() {
                             hasUpper: /[A-Z]/.test(password),
                             hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(password)
                           };
-                          const strengthLevel = Object.values(strength).filter(Boolean).length;
-                          e.target.setCustomValidity(strengthLevel < 3 ? "La contraseña debe contener al menos 8 caracteres, incluir mayúsculas, minúsculas, números o caracteres especiales" : "");
+                          const level = Object.values(strength).filter(Boolean).length;
+                          setStrengthLevel(level);
+                          e.target.setCustomValidity(level < 3 ? "La contraseña debe contener al menos 8 caracteres, incluir mayúsculas, minúsculas, números o caracteres especiales" : "");
                         }}
                       />
-                      <div className="text-xs text-gray-500">
-                        La contraseña debe tener al menos 8 caracteres y combinar mayúsculas, minúsculas, números o caracteres especiales
+                      <div className="space-y-2">
+                        <div className="h-2 w-full bg-gray-200 rounded-full">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all",
+                              {
+                                "w-1/5 bg-red-500": strengthLevel === 1,
+                                "w-2/5 bg-orange-500": strengthLevel === 2,
+                                "w-3/5 bg-yellow-500": strengthLevel === 3,
+                                "w-4/5 bg-lime-500": strengthLevel === 4,
+                                "w-full bg-green-500": strengthLevel === 5,
+                              }
+                            )}
+                          />
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          La contraseña debe tener al menos 8 caracteres y combinar mayúsculas, minúsculas, números o caracteres especiales
+                        </div>
                       </div>
                     </div>
                     <div className="space-y-2">
