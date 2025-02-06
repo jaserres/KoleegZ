@@ -76,15 +76,7 @@ const ShareDialog = ({
 
   const { data: users = [], isLoading: isLoadingUsers, error: usersError } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    retry: 3,
-    onError: (error) => {
-      console.error('Error loading users:', error);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los usuarios",
-        variant: "destructive",
-      });
-    }
+    retry: 3
   });
 
   const shareFormMutation = useMutation({
@@ -96,9 +88,10 @@ const ShareDialog = ({
           canMerge,
           canDelete,
           canShare,
-          canViewEntries,
+          canViewEntries
         }
       });
+
       if (!res.ok) {
         const error = await res.text();
         throw new Error(error || "Error al compartir el formulario");
@@ -813,11 +806,10 @@ export default function FormEntries({ isSharedAccess = false }) {
     }
   });
 
-
   const shareFormMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/forms/${id}/share`, {
-          userId: parseInt(selectedUserId), 
+          userId: parseInt(selectedUserId),
           permissions: {
             canEdit,
             canMerge,

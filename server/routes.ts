@@ -2,7 +2,7 @@ import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
-import { forms, variables, entries, documents, users } from "@db/schema";
+import { forms, variables, entries, documents, users, formShares } from "@db/schema";
 import { eq, and, desc, asc, ne, sql } from "drizzle-orm";
 import { Parser } from 'json2csv';
 import * as XLSX from 'xlsx';
@@ -20,6 +20,18 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 import crypto from 'crypto';
 
+
+// Add formShares type
+interface FormShare {
+  id: number;
+  formId: number;
+  userId: number;
+  canEdit: boolean;
+  canMerge: boolean;
+  canDelete: boolean;
+  canShare: boolean;
+  canViewEntries: boolean;
+}
 
 // Función para extraer texto de imagen usando Tesseract OCR
 async function extractTextFromImage(imagePath: string): Promise<string> {
@@ -864,7 +876,7 @@ export function registerRoutes(app: Express): Server {
     } catch (error: any) {
       console.error('Error en proceso OCR:', error);
       res.status(500).json({
-        error: `Error en proceso OCR: ${error.message}`,
+        error: `Error en procesoOCR: ${error.message}`,
         details: error.stack
       });
     }
@@ -1633,6 +1645,74 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('Error following user:', error);
       res.status(500).json({ error: "Error al seguir usuario" });
+    }
+  });
+
+  // Share form endpoint
+  app.post("/api/forms/:formId/share", async (req, res) => {
+    try {
+      const user = ensureAuth(req);
+      const formId = parseInt(req.params.formId);
+      const { userId, permissions } = req.body;
+
+      if (!userId || !permissions) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      // Verify form ownership
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+
+      if (!form) {
+        return res.status(404).json({ error: "Form not found" });
+      }
+
+      // Check if user exists
+      const [targetUser] = await db.select()
+        .from(users)
+        .where(eq(users.id, userId));
+
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Check if share already exists
+      const [existingShare] = await db.select()
+        .from(formShares)
+        .where(and(
+          eq(formShares.formId, formId),
+          eq(formShares.userId, userId)
+        ));
+
+      if (existingShare) {
+        // Update existing share
+        const [updatedShare] = await db.update(formShares)
+          .set({
+            ...permissions,
+            updatedAt: new Date()
+          })
+          .where(eq(formShares.id, existingShare.id))
+          .returning();
+
+        return res.json(updatedShare);
+      }
+
+      // Create new share
+      const [newShare] = await db.insert(formShares)
+        .values({
+          formId,
+          userId,
+          ...permissions,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      res.json(newShare);
+    } catch (error) {
+      console.error('Error sharing form:', error);
+      res.status(500).json({ error: "Error sharing form" });
     }
   });
 
