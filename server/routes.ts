@@ -1065,71 +1065,95 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/forms/:id", async (req, res) => {
+  // Users endpoint
+  app.get("/api/users", async (req, res) => {
     try {
-      const formId = parseInt(req.params.id);
       const user = ensureAuth(req);
 
-      // First check if user owns the form
-      const ownedForm = await db.query.forms.findFirst({
-        where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
-        with: {
-          variables: {
-            orderBy: [asc(variables.id)],
-          },
-          documents: true,
-        },
-      });
-
-      if (ownedForm) {
-        return res.json({ ...ownedForm, isShared: false });
-      }
-
-      // If not owner, check if form is shared with user
-      const [sharedForm] = await db.select()
-        .from(formShares)
-        .where(and(
-          eq(formShares.formId, formId),
-          eq(formShares.userId, user.id)
-        ));
-
-      if (!sharedForm) {
-        return res.status(404).send("Form not found");
-      }
-
-      // Get the complete form data with variables
-      // Include documents only if user has merge permissions
-      const form = await db.query.forms.findFirst({
-        where: eq(forms.id, formId),
-        with: {
-          variables: {
-            orderBy: [asc(variables.id)],
-          },
-          // Only include documents if user has merging permissions
-          documents: sharedForm.canMerge ? true : undefined,
-        },
-      });
-
-      if (!form) {
-        return res.status(404).send("Form not found");
-      }
-
-      // Return the form with shared permissions
-      res.json({
-        ...form,
-        isShared: true,
-        permissions: {
-          canEdit: sharedForm.canEdit,
-          canMerge: sharedForm.canMerge,
-          canDelete: sharedForm.canDelete,
-          canShare: sharedForm.canShare,
-          canViewEntries: sharedForm.canViewEntries
+      const allUsers = await db.query.users.findMany({
+        where: ne(users.id, user.id),
+        columns: {
+          id: true,
+          username: true,
+          isPremium: true
         }
       });
 
+      // Transform the results to match the expected interface
+      const transformedUsers = allUsers.map(user => ({
+        id: user.id,
+        username: user.username,
+        isPremium: user.isPremium
+      }));
+
+      console.log('Usuarios encontrados:', transformedUsers);
+
+      res.json(transformedUsers);
     } catch (error) {
-      console.error('Error fetching form:', error);
-      res.status(500).json({ error: "Error obteniendo el formulario" });
+      console.error('Error al obtener usuarios:', error);
+      res.status(500).json({ error: "Error obteniendo usuarios" });
+    }
+  });
+
+  // Form endpoints
+  app.get("/api/forms", async (req, res) => {
+    const user = ensureAuth(req);
+
+    try {
+      // Get user's own forms
+      const ownedForms = await db.query.forms.findMany({
+        where: eq(forms.userId, user.id),
+        with: {
+          variables: true,
+        },
+      });
+
+      // Get forms shared with the user
+      const sharedForms = await db.query.formShares.findMany({
+        where: eq(formShares.userId, user.id),
+        with: {
+          form: {
+            with: {
+              variables: true,
+              documents: {
+                // Only include documents if user has merge permissions
+                where: (formShares, { eq, and }) => 
+                  and(eq(formShares.userId, user.id), eq(formShares.canMerge, true))
+              }
+            }
+          }
+        }
+      });
+
+      // Transform shared forms to match the format of owned forms
+      const transformedSharedForms = sharedForms.map(share => ({
+        ...share.form,
+        isShared: true,
+        permissions: {
+          canEdit: share.canEdit,
+          canMerge: share.canMerge,
+          canDelete: share.canDelete,
+          canShare: share.canShare,
+          canViewEntries: share.canViewEntries
+        }
+      }));
+
+      // Combine both sets of forms
+      const allForms = [
+        ...ownedForms.map(form => ({ ...form, isShared: false })),
+        ...transformedSharedForms
+      ];
+
+      console.log('Forms encontrados:', {
+        ownedCount: ownedForms.length,
+        sharedCount: sharedForms.length,
+        total: allForms.length
+      });
+
+      res.json(allForms);
+    } catch (error) {
+      console.error('Error fetching forms:', error);
+      res.status(500).json({ error: "Error obteniendo formularios" });
     }
   });
 
