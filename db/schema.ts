@@ -46,6 +46,7 @@ export const documents = pgTable("documents", {
 
 export const usersRelations = relations(users, ({ many }) => ({
   forms: many(forms),
+  sharedForms: many(formShares),
 }));
 
 export const formsRelations = relations(forms, ({ one, many }) => ({
@@ -53,6 +54,7 @@ export const formsRelations = relations(forms, ({ one, many }) => ({
   variables: many(variables),
   entries: many(entries),
   documents: many(documents),
+  shares: many(formShares),
 }));
 
 export const variablesRelations = relations(variables, ({ one }) => ({
@@ -65,6 +67,23 @@ export const entriesRelations = relations(entries, ({ one }) => ({
 
 export const documentsRelations = relations(documents, ({ one }) => ({
   form: one(forms, { fields: [documents.formId], references: [forms.id] }),
+}));
+
+export const formShares = pgTable("form_shares", {
+  id: serial("id").primaryKey(),
+  formId: integer("form_id").notNull().references(() => forms.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  canEdit: boolean("can_edit").default(false).notNull(),
+  canMerge: boolean("can_merge").default(false).notNull(),
+  canDelete: boolean("can_delete").default(false).notNull(),
+  canShare: boolean("can_share").default(false).notNull(),
+  canViewEntries: boolean("can_view_entries").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const formSharesRelations = relations(formShares, ({ one }) => ({
+  form: one(forms, { fields: [formShares.formId], references: [forms.id] }),
+  user: one(users, { fields: [formShares.userId], references: [users.id] }),
 }));
 
 export const insertUserSchema = createInsertSchema(users);
@@ -91,18 +110,6 @@ export const insertDocumentSchema = createInsertSchema(documents);
 export const selectDocumentSchema = createSelectSchema(documents);
 export type InsertDocument = typeof documents.$inferInsert;
 export type SelectDocument = typeof documents.$inferSelect;
-
-export const formShares = pgTable("form_shares", {
-  id: serial("id").primaryKey(),
-  formId: integer("form_id").notNull().references(() => forms.id, { onDelete: "cascade" }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  canEdit: boolean("can_edit").default(false).notNull(),
-  canMerge: boolean("can_merge").default(false).notNull(),
-  canDelete: boolean("can_delete").default(false).notNull(),
-  canShare: boolean("can_share").default(false).notNull(),
-  canViewEntries: boolean("can_view_entries").default(false).notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
 
 export type SelectFormShare = typeof formShares.$inferSelect;
 export type InsertFormShare = typeof formShares.$inferInsert;
