@@ -984,7 +984,8 @@ export default function FormEntries({ isSharedAccess = false }) {
                       <div className="space-y-2">
                         <Label>Campos a exportar</Label>
                         <div className="grid grid-cols-2 gap2">
-                          {form?.variables?.map((variable: any) => (                            <div key={variable.id} className="flex items-center space-x-2">
+                          {form?.variables?.map((variable: any) => (
+                            <div key={variable.id} className="flex items-center space-x-2">
                               <Checkbox
                                 id={`export-${variable.id}`}
                                 defaultChecked
