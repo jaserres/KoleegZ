@@ -1000,7 +1000,8 @@ export default function FormEntries() {
                               <div key={variable.id} className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`export-${variable.id}`}
-                                  defaultChecked                                onCheckedChange={(checked) => {
+                                  defaultChecked
+                                  onCheckedChange={(checked) => {
                                     const fields = new URLSearchParams(window.location.search).get('fields')?.split(',') || [];
                                     if (checked) {
                                       fields.push(variable.name);
@@ -1119,7 +1120,7 @@ export default function FormEntries() {
                                 <Button
                                   variant="outline"
                                   onClick={() => setSelectedEntry(entry.id)}
-                                  disabled={isSharedAccess}
+                                  disabled={form?.isShared && !form?.permissions?.canMerge}
                                 >
                                   <FileText className="mr-2 h-4 w-4" />
                                   Merge
@@ -1145,7 +1146,7 @@ export default function FormEntries() {
                                             <CardTitle>
                                               <div className="flex items-center justify-between">
                                                 <span>{doc.name}</span>
-                                                {!isSharedAccess && (
+                                                {(!form?.isShared || form?.permissions?.canEdit) && (
                                                   <Button
                                                     variant="ghost"
                                                     size="icon"
@@ -1164,13 +1165,14 @@ export default function FormEntries() {
                                             </CardTitle>
                                           </CardHeader>
                                           <CardContent>
-                                            {doc.thumbnailPath && (<div className="relative aspect-[3/4] w-full max-h-32 mb-4">
-                                              <img
-                                                src={`/thumbnails/${doc.thumbnailPath}`}
-                                                alt={`Vista previa de ${doc.name}`}
-                                                className="absolute inset-0 w-full h-full object-cover rounded-md"
-                                              />
-                                            </div>
+                                            {doc.thumbnailPath && (
+                                              <div className="relative aspect-[3/4] w-full max-h-32 mb-4">
+                                                <img
+                                                  src={`/thumbnails/${doc.thumbnailPath}`}
+                                                  alt={`Vista previa de ${doc.name}`}
+                                                  className="absolute inset-0 w-full h-full object-cover rounded-md"
+                                                />
+                                              </div>
                                             )}
                                             <div className="flex justify-end mt-4">
                                               <Button
@@ -1181,7 +1183,6 @@ export default function FormEntries() {
                                                 }}
                                                 disabled={!selectedEntry}
                                               >
-                                                <FileDown className="mr-2 h-4 w-4" />
                                                 Generar Documento
                                               </Button>
                                             </div>
@@ -1189,42 +1190,15 @@ export default function FormEntries() {
                                         </Card>
                                       ))
                                     ) : (
-                                      <div className="text-center p-8 text-muted-foreground">
-                                        No hay plantillas disponibles
+                                      <div className="col-span-2 text-center p-8">
+                                        <p className="text-muted-foreground">No hay plantillas disponibles</p>
                                       </div>
                                     )}
                                   </div>
                                 </div>
-                                {mergedResult && (
-                                  <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                      <Label>Vista Previa</Label>
-                                      {selectedTemplate && (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => handleDownloadMerge(selectedTemplate.id, selectedEntry)}
-                                        >
-                                          <FileDown className="mr-2 h-4 w-4" />
-                                          Descargar
-                                        </Button>
-                                      )}
-                                    </div>
-                                    <div
-                                      className="p-4 border rounded-md bg-white"
-                                      style={{
-                                        minHeight: "200px",
-                                        maxHeight: "400px",
-                                        overflowY: "auto",
-                                        whiteSpace: "pre-wrap"
-                                      }}
-                                      dangerouslySetInnerHTML={{ __html: mergedResult }}
-                                    />
-                                  </div>
-                                )}
                               </DialogContent>
                             </Dialog>
-                            {!isSharedAccess && (
+                            {(!form?.isShared || form?.permissions?.canEdit) && (
                               <Button
                                 variant="ghost"
                                 size="icon"
