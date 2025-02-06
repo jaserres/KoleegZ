@@ -377,28 +377,27 @@ export function registerRoutes(app: Express): Server {
     try {
       const user = ensureAuth(req);
 
+      // Query all users except the current user
       const allUsers = await db.query.users.findMany({
         where: ne(users.id, user.id),
         columns: {
           id: true,
           username: true,
-          is_premium: true
+          isPremium: true,
         }
       });
 
-      // Transform the results to match the expected interface
-      const transformedUsers = allUsers.map(user => ({
-        id: user.id,
-        username: user.username,
-        isPremium: user.is_premium
-      }));
+      if (!allUsers) {
+        return res.status(404).json({ error: "No se encontraron usuarios" });
+      }
 
-      console.log('Usuarios encontrados:', transformedUsers);
-
-      res.json(transformedUsers);
+      res.json(allUsers);
     } catch (error) {
       console.error('Error al obtener usuarios:', error);
-      res.status(500).json({ error: "Error obteniendo usuarios" });
+      res.status(500).json({ 
+        error: "Error al obtener la lista de usuarios",
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
@@ -882,7 +881,7 @@ export function registerRoutes(app: Express): Server {
                 extractedVariables = vars;
 
                 // Extraer texto para variables
-                const textResult = awaitmammoth.extractRawText({
+                const textResult = await mammoth.extractRawText({
                     buffer: validBuffer
                 });
 
@@ -1753,14 +1752,13 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/forms/:formId/share", async (req, res) => {
     try {
       const user = ensureAuth(req);
-      const formId = parseInt(req.params.formId);
-      const { userId, permissions } = req.body;
+      const formId = parseInt(req.params.formId);const { userId, permissions } = req.body;
 
       if (!userId || !permissions) {
-        return res.status(400).json({ error: "Missing required fields" });
+        return res.status(400).json({error: "Missing required fields" });
       }
 
-      // Verify form ownership
+      //// Verify form ownership
       const [form] = await db.select()
         .from(forms)
         .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
