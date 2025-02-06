@@ -18,9 +18,9 @@ const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     // Aceptar cualquier tipo de documento de Word
-    if (file.mimetype.includes('word') || 
-        file.originalname.toLowerCase().endsWith('.doc') || 
-        file.originalname.toLowerCase().endsWith('.docx')) {
+    if (file.mimetype.includes('word') ||
+      file.originalname.toLowerCase().endsWith('.doc') ||
+      file.originalname.toLowerCase().endsWith('.docx')) {
       cb(null, true);
     } else {
       cb(new Error('Por favor sube un documento de Word (.doc o .docx)'));
@@ -873,7 +873,7 @@ export function registerRoutes(app: Express) {
       }
 
       default:
-        return res.status(400).send("Formato no soportado");
+        returnres.status(400).send("Formato no soportado");
     }
   });
 
@@ -1075,7 +1075,7 @@ export function registerRoutes(app: Express) {
         columns: {
           id: true,
           username: true,
-          isPremium: true
+          is_premium: true
         }
       });
 
@@ -1083,7 +1083,7 @@ export function registerRoutes(app: Express) {
       const transformedUsers = allUsers.map(user => ({
         id: user.id,
         username: user.username,
-        isPremium: user.isPremium
+        isPremium: user.is_premium
       }));
 
       console.log('Usuarios encontrados:', transformedUsers);
@@ -1100,6 +1100,8 @@ export function registerRoutes(app: Express) {
     const user = ensureAuth(req);
 
     try {
+      console.log('Obteniendo formularios para usuario:', user.id);
+
       // Get user's own forms
       const ownedForms = await db.query.forms.findMany({
         where: eq(forms.userId, user.id),
@@ -1108,45 +1110,58 @@ export function registerRoutes(app: Express) {
         },
       });
 
+      console.log('Formularios propios encontrados:', ownedForms.length);
+
       // Get forms shared with the user
-      const sharedForms = await db.query.formShares.findMany({
-        where: eq(formShares.userId, user.id),
-        with: {
-          form: {
+      const sharedForms = await db.select({
+        formId: formShares.formId,
+        canEdit: formShares.canEdit,
+        canMerge: formShares.canMerge,
+        canDelete: formShares.canDelete,
+        canShare: formShares.canShare,
+        canViewEntries: formShares.canViewEntries
+      })
+        .from(formShares)
+        .where(eq(formShares.userId, user.id));
+
+      console.log('Formularios compartidos encontrados:', sharedForms.length);
+
+      // Get the complete data for shared forms
+      const sharedFormsData = await Promise.all(
+        sharedForms.map(async (share) => {
+          const form = await db.query.forms.findFirst({
+            where: eq(forms.id, share.formId),
             with: {
               variables: true,
-              documents: {
-                // Only include documents if user has merge permissions
-                where: (formShares, { eq, and }) => 
-                  and(eq(formShares.userId, user.id), eq(formShares.canMerge, true))
-              }
+              documents: share.canMerge // Only include documents if user has merge permissions
             }
-          }
-        }
-      });
+          });
 
-      // Transform shared forms to match the format of owned forms
-      const transformedSharedForms = sharedForms.map(share => ({
-        ...share.form,
-        isShared: true,
-        permissions: {
-          canEdit: share.canEdit,
-          canMerge: share.canMerge,
-          canDelete: share.canDelete,
-          canShare: share.canShare,
-          canViewEntries: share.canViewEntries
-        }
-      }));
+          if (!form) return null;
 
-      // Combine both sets of forms
+          return {
+            ...form,
+            isShared: true,
+            permissions: {
+              canEdit: share.canEdit,
+              canMerge: share.canMerge,
+              canDelete: share.canDelete,
+              canShare: share.canShare,
+              canViewEntries: share.canViewEntries
+            }
+          };
+        })
+      );
+
+      // Filter out any null values and combine both sets of forms
       const allForms = [
         ...ownedForms.map(form => ({ ...form, isShared: false })),
-        ...transformedSharedForms
+        ...sharedFormsData.filter(Boolean)
       ];
 
-      console.log('Forms encontrados:', {
-        ownedCount: ownedForms.length,
-        sharedCount: sharedForms.length,
+      console.log('Total de formularios:', {
+        propios: ownedForms.length,
+        compartidos: sharedFormsData.filter(Boolean).length,
         total: allForms.length
       });
 
