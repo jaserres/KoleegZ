@@ -1,90 +1,17 @@
-import type { Express, Request } from "express";
-import { createServer, type Server } from "http";
-import { setupAuth } from "./auth";
+import { Express, Request } from "express";
+import express from "express";
+import { createServer } from "http";
+import multer from "multer";
 import { db } from "@db";
 import { forms, variables, entries, documents, users, formShares } from "@db/schema";
 import { eq, and, desc, asc, ne, sql } from "drizzle-orm";
-import { Parser } from 'json2csv';
-import * as XLSX from 'xlsx';
-import multer from 'multer';
-import { createReport } from 'docx-templates';
-import { promises as fs } from 'fs';
-import mammoth from 'mammoth';
-import { saveFile, readFile, deleteFile } from './storage';
-import { Document, Paragraph, TextRun, Packer } from 'docx';
-import { Buffer } from 'buffer';
-import path from 'path';
-import express from 'express';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-const execAsync = promisify(exec);
-import crypto from 'crypto';
-
-
-// Add formShares type
-interface FormShare {
-  id: number;
-  formId: number;
-  userId: number;
-  canEdit: boolean;
-  canMerge: boolean;
-  canDelete: boolean;
-  canShare: boolean;
-  canViewEntries: boolean;
-}
-
-// Función para extraer texto de imagen usando Tesseract OCR
-async function extractTextFromImage(imagePath: string): Promise<string> {
-  try {
-    const { stdout } = await execAsync(`tesseract "${imagePath}" stdout`);
-    return stdout;
-  } catch (error) {
-    console.error('Error running OCR:', error);
-    return '';
-  }
-}
-
-// Función para detectar variables en texto con mejor procesamiento
-function detectVariables(text: string): {valid: string[], invalid: string[]} {
-  // Detectar variables incluso con formato (cursivas, negritas)
-  const variablePattern = /{{[\s]*([^}\s]+)[\s]*}}|<[^>]+>{{[\s]*([^}\s]+)[\s]*}}/g;
-  const matches = text.match(variablePattern) || [];
-  const validVariableRegex = /^[a-zA-Z][a-zA-Z0-9_]*$/;
-  const invalidVariables: string[] = [];
-  const validVariables: string[] = [];
-
-  // Función para limpiar nombres de variables manteniendo mayúsculas/minúsculas
-  const normalizeVariableName = (name: string) => {
-    return name.trim()
-      .replace(/[^a-zA-Z0-9_]/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/^_|_$/g, '');
-  };
-
-  // Función para preservar el formato original
-  const preserveOriginalFormat = (text: string): string => {
-    return text.replace(/{{([^}]+)}}/g, (match) => {
-      return match; // Mantener el formato original
-    });
-  };
-
-  matches.forEach(match => {
-    let varName: string;
-    if (match.includes('{{')) {
-        varName = match.split('{{')[1].split('}}')[0].trim();
-    } else {
-        varName = match.split('{{')[1].split('}}')[0].trim();
-    }
-    const normalizedName = normalizeVariableName(varName);
-    if (normalizedName && validVariableRegex.test(normalizedName)) {
-      validVariables.push(normalizedName);
-    } else {
-      invalidVariables.push(varName);
-    }
-  });
-
-  return {valid: validVariables, invalid: invalidVariables};
-}
+import { Parser } from "json2csv";
+import * as XLSX from "xlsx";
+import mammoth from "mammoth";
+import { promises as fs } from "fs";
+import path from "path";
+import { setupAuth } from "./auth";
+import { saveFile, readFile, deleteFile } from "./storage";
 
 // Configurar multer para manejar archivos
 const upload = multer({
@@ -101,6 +28,7 @@ const upload = multer({
   }
 });
 
+// Función para garantizar que el usuario está autenticado
 function ensureAuth(req: Request) {
   if (!req.isAuthenticated()) {
     throw new Error("Unauthorized");
@@ -108,201 +36,6 @@ function ensureAuth(req: Request) {
   return req.user!;
 }
 
-function generatePreview(template: string, maxLength: number = 200): string {
-  // Take first few lines, up to maxLength characters
-  return template.slice(0, maxLength) + (template.length > maxLength ? '...' : '');
-}
-
-// Configuración de estilos Word a HTML mejorada
-const wordStyleMap = [
-  "p[style-name='Normal'] => p:fresh",
-  "p[style-name='Heading 1'] => h1:fresh",
-  "p[style-name='Heading 2'] => h2:fresh",
-  "p[style-name='Heading 3'] => h3:fresh",
-  "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
-  "r[style-name='Strong'] => strong",
-  "r[style-name='Emphasis'] => em",
-  "r[style-name='style1'] => strong",
-  "r[style-name='style2'] => em",
-  "b => strong",
-  "i => em",
-  "u => u",
-  "strike => s",
-  "tab => span.tab",
-  "br => br",
-  "table => table.word-table",
-  "tr => tr",
-  "td => td",
-  "p[style-name='Footer'] => div.footer > p:fresh",
-  "p[style-name='Header'] => div.header > p:fresh",
-  // Estilos adicionales para mayor fidelidad
-  "r[style-name='Hyperlink'] => a",
-  "p[style-name='Title'] => h1.title:fresh",
-  "p[style-name='Subtitle'] => h2.subtitle:fresh",
-  "p[style-name='Quote'] => blockquote:fresh",
-  "r[style-name='Intense Emphasis'] => em.intense",
-  "r[style-name='Book Title'] => span.book-title",
-  "p[style-name='TOC Heading'] => h1.toc-heading:fresh",
-  "p[style-name='TOC 1'] => p.toc-1:fresh",
-  "p[style-name='TOC 2'] => p.toc-2:fresh",
-  "p[style-name='Caption'] => p.caption:fresh",
-  "r[style-name='Subtle Emphasis'] => em.subtle",
-  "p[style-name='Intense Quote'] => blockquote.intense:fresh",
-  "p[style-name='Subtitle'] => p.subtitle:fresh",
-  "r[style-name='Subtle Reference'] => span.subtle-reference",
-  "p[style-name='Bibliography'] => p.bibliography:fresh"
-];
-
-// Mejorar la función de transformación de documento
-const transformDocument = (element: any) => {
-  if (element.type === 'paragraph') {
-    // Preservar todos los atributos de párrafo
-    const style: any = {};
-    if (element.alignment) style.textAlign = element.alignment;
-    if (element.indent) {
-      style.marginLeft = `${element.indent.left || 0}pt`;
-      style.marginRight = `${element.indent.right || 0}pt`;
-      style.textIndent = `${element.indent.firstLine || 0}pt`;
-    }
-    if (element.numbering) {
-      style.listStyleType = element.numbering.type;
-      style.listStylePosition = 'inside';
-    }
-    element.style = style;
-  }
-
-  if (element.type === 'run') {
-    // Preservar todos los atributos de texto
-    const style: any = {};
-    if (element.font) style.fontFamily = element.font;
-    if (element.size) style.fontSize = `${element.size}pt`;
-    if (element.color) style.color = element.color;
-    if (element.highlight) style.backgroundColor = element.highlight;
-    if (element.verticalAlignment) style.verticalAlign = element.verticalAlignment;
-    if (element.bold) style.fontWeight = 'bold';
-    if (element.italic) style.fontStyle = 'italic';
-    if (element.underline) style.textDecoration = 'underline';
-    element.style = style;
-  }
-
-  return element;
-};
-
-// En la función de subida de documento y merge, actualizar las opciones de mammoth
-const mammothOptions = {
-  styleMap: wordStyleMap,
-  includeDefaultStyleMap: true,
-  transformDocument,
-  convertImage: mammoth.images.imgElement((image: any) => {
-    return image.read("base64").then((imageData: string) => {
-      const contentType = image.contentType || 'image/png';
-      return {
-        src: `data:${contentType};base64,${imageData}`,
-        class: 'word-image',
-        style: `width: ${image.width || 'auto'}; height: ${image.height || 'auto'};`
-      };
-    });
-  }),
-    ignoreEmptyParagraphs: false,
-    preserveNumbering: true
-};
-
-// CSS mejorado para la vista previa
-const previewStyles = `
-<style>
-  .document-preview {
-    font-family: 'Calibri', 'Arial', sans-serif;
-    line-height: 1.15;
-    max-width: 816px; /* Ancho estándar de página Word */
-    margin: 1in auto; /* Márgenes estándar Word */
-    padding: 0;
-    background: white;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-    color: #000000;
-    font-size: 11pt;
-  }
-
-  /* Estilos base Word */
-  .document-preview p {
-    margin: 0;
-    padding: 0;
-    line-height: 1.15;
-  }
-
-  .document-preview h1 { font-size: 16pt; font-weight: bold; margin: 24pt 0 12pt; }
-  .document-preview h2 { font-size: 14pt; font-weight: bold; margin: 20pt 0 10pt; }
-  .document-preview h3 { font-size: 12pt; font-weight: bold; margin: 16pt 0 8pt; }
-
-  /* Tablas Word */
-  .document-preview .word-table {
-    border-collapse: collapse;
-    margin: 8pt 0;
-    width: 100%;
-  }
-
-  .document-preview .word-table td {
-    border: 1px solid #000;
-    padding: 5pt;
-    vertical-align: top;
-  }
-
-  /* Listas Word */
-  .document-preview .list-paragraph {
-    margin-left: 0.5in;
-    text-indent: -0.25in;
-  }
-
-  /* Imágenes Word */
-  .document-preview .word-image {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    margin: 8pt auto;
-  }
-
-  /* Encabezados y pies de página */
-  .document-preview .header,
-  .document-preview .footer {
-    position: relative;
-    margin: 12pt 0;
-    padding: 8pt 0;
-    border-top: 1pt solid #000;
-  }
-
-  /* Elementos específicos Word */
-  .document-preview .tab { display: inline-block; width: 0.5in; }
-  .document-preview .title { font-size: 26pt; text-align: center; }
-  .document-preview .subtitle { font-size: 16pt; text-align: center; color: #666; }
-  .document-preview blockquote { margin: 12pt 24pt; font-style: italic; }
-  .document-preview .caption { font-size: 9pt; color: #666; text-align: center; }
-
-  /* Preservación de estilos inline */
-    .document-preview [style] { all: revert; }
-  .document-preview [style*="text-align"] { text-align: inherit !important; }
-  .document-preview [style*="margin"] { margin: inherit !important; }
-  .document-preview [style*="text-indent"] { text-indent: inherit !important; }
-  .document-preview [style*="font-family"] { font-family: inherit !important; }
-  .document-preview [style*="font-size"] { font-size: inherit !important; }
-  .document-preview [style*="color"] { color: inherit !important; }
-  .document-preview [style*="background"] { background: inherit !important; }
-
-  /* Formato de texto */
-  .document-preview strong { font-weight: bold !important; }
-  .document-preview em { font-style: italic !important; }
-  .document-preview u { text-decoration: underline !important; }
-  .document-preview s { text-decoration: line-through !important; }
-
-  /* Ajustes de impresión */
-  @media print {
-    .document-preview {
-      box-shadow: none;
-      margin: 0;
-      max-width: none;
-    }
-  }
-</style>`;
-
-// Configuración para thumbnails
 const THUMBNAIL_DIR = path.join(process.cwd(), 'storage', 'thumbnails');
 
 // Asegurar que existe el directorio de thumbnails
@@ -315,643 +48,155 @@ async function ensureThumbnailDir() {
   }
 }
 
-// Actualizar generateThumbnail para mejorar el proceso de OCR
-async function generateThumbnail(buffer: Buffer): Promise<{thumbnailPath: string, extractedVariables: string[]}> {
+// Función para extraer texto de imagen usando Tesseract OCR
+async function extractTextFromImage(imagePath: string): Promise<string> {
   try {
-    const thumbnailFileName = `thumb_${Date.now()}.png`;
-    const thumbnailPath = path.join(THUMBNAIL_DIR, thumbnailFileName);
-
-    // Guardar el buffer temporalmente
-    const tempDocxPath = path.join(THUMBNAIL_DIR, `temp_${Date.now()}.docx`);
-    await fs.writeFile(tempDocxPath, buffer);
-
-    // Convertir a PNG usando libreoffice
-    await execAsync(`libreoffice --headless --convert-to png --outdir "${THUMBNAIL_DIR}" "${tempDocxPath}"`);
-
-    // Limpiar archivo temporal DOCX
-    await fs.unlink(tempDocxPath);
-
-    // Obtener el nombre del archivo PNG generado
-    const pngFileName = path.basename(tempDocxPath, '.docx') + '.png';
-    const pngFilePath = path.join(THUMBNAIL_DIR, pngFileName);
-
-    // Verificar si el archivo existe
-    try {
-      await fs.access(pngFilePath);
-
-      // Extraer texto usando OCR
-      console.log('Iniciando proceso OCR...');
-      const extractedText = await extractTextFromImage(pngFilePath);
-      console.log('OCR Text extracted:', extractedText);
-
-      // Detectar variables en el texto extraído
-      const extractedVariables = detectVariables(extractedText).valid;
-      console.log('Variables detected from OCR:', extractedVariables);
-
-      return {
-        thumbnailPath: pngFileName,
-        extractedVariables
-      };
-    } catch (error) {
-      console.error('Error processing thumbnail:', error);
-      return {
-        thumbnailPath: '',
-        extractedVariables: []
-      };
-    }
+    const { exec } = require('child_process');
+    return new Promise((resolve, reject) => {
+      exec(`tesseract "${imagePath}" stdout`, (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+        } else if (stderr) {
+          reject(new Error(stderr));
+        } else {
+          resolve(stdout.trim());
+        }
+      });
+    });
   } catch (error) {
-    console.error('Error generating thumbnail:', error);
-    return {
-      thumbnailPath: '',
-      extractedVariables: []
-    };
+    console.error('Error running OCR:', error);
+    return '';
   }
 }
 
-
-export function registerRoutes(app: Express): Server {
+export function registerRoutes(app: Express) {
   setupAuth(app);
 
-  // Users endpoint
-  app.get("/api/users", async (req, res) => {
+  app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
     try {
       const user = ensureAuth(req);
+      const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
+      const file = req.file;
 
-      const allUsers = await db.query.users.findMany({
-        where: ne(users.id, user.id),
-        columns: {
-          id: true,
-          username: true,
-          is_premium: true
-        }
-      });
-
-      // Transform the results to match the expected interface
-      const transformedUsers = allUsers.map(user => ({
-        id: user.id,
-        username: user.username,
-        isPremium: user.is_premium
-      }));
-
-      console.log('Usuarios encontrados:', transformedUsers);
-
-      res.json(transformedUsers);
-    } catch (error) {
-      console.error('Error al obtener usuarios:', error);
-      res.status(500).json({ error: "Error obteniendo usuarios" });
-    }
-  });
-
-  // Add new toggle premium route
-  app.post("/api/toggle-premium", async (req, res) => {
-    const user = ensureAuth(req);
-
-    const [updatedUser] = await db.update(users)
-      .set({ isPremium: !user.isPremium })
-      .where(eq(users.id, user.id))
-      .returning();
-
-    req.user = updatedUser;
-    res.json(updatedUser);
-  });
-
-  // Form endpoints
-  app.get("/api/forms", async (req, res) => {
-    const user = ensureAuth(req);
-
-    try {
-      // Get user's own forms
-      const ownedForms = await db.query.forms.findMany({
-        where: eq(forms.userId, user.id),
-        with: {
-          variables: true,
-        },
-      });
-
-      // Get forms shared with the user
-      const sharedForms = await db.query.formShares.findMany({
-        where: eq(formShares.userId, user.id),
-        with: {
-          form: {
-            with: {
-              variables: true,
-            }
-          }
-        }
-      });
-
-      // Transform shared forms to match the format of owned forms
-      const transformedSharedForms = sharedForms.map(share => ({
-        ...share.form,
-        isShared: true,
-        permissions: {
-          canEdit: share.canEdit,
-          canMerge: share.canMerge,
-          canDelete: share.canDelete,
-          canShare: share.canShare,
-          canViewEntries: share.canViewEntries
-        }
-      }));
-
-      // Combine both sets of forms
-      const allForms = [
-        ...ownedForms.map(form => ({ ...form, isShared: false })),
-        ...transformedSharedForms
-      ];
-
-      res.json(allForms);
-    } catch (error) {
-      console.error('Error fetching forms:', error);
-      res.status(500).json({ error: "Error obteniendo formularios" });
-    }
-  });
-
-  // Check if a request has share access to a form
-  async function checkShareAccess(formId: number, token?: string) {
-    if (!token) return false;
-    const [share] = await db.select()
-      .from(formShares)
-      .where(and(eq(formShares.formId, formId), eq(formShares.token, token)));
-    return !!share;
-  }
-
-  app.get("/api/forms/:id", async (req, res) => {
-    try {
-      const formId = parseInt(req.params.id);
-      const user = ensureAuth(req);
-
-      // First check if user owns the form
-      const ownedForm = await db.query.forms.findFirst({
-        where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
-        with: {
-          variables: {
-            orderBy: [asc(variables.id)],
-          },
-          documents: true,
-        },
-      });
-
-      if (ownedForm) {
-        return res.json({ ...ownedForm, isShared: false });
+      if (!file) {
+        console.error('No se proporcionó archivo');
+        return res.status(400).json({
+          error: "No se ha proporcionado ningún archivo"
+        });
       }
 
-      // If not owner, check if form is shared with user
-      const [sharedForm] = await db.select()
-        .from(formShares)
-        .where(and(
-          eq(formShares.formId, formId),
-          eq(formShares.userId, user.id)
-        ));
-
-      if (!sharedForm) {
-        return res.status(404).send("Form not found");
-      }
-
-      // Get the complete form data with variables and documents
-      const form = await db.query.forms.findFirst({
-        where: eq(forms.id, formId),
-        with: {
-          variables: {
-            orderBy: [asc(variables.id)],
-          },
-          documents: true,
-        },
+      console.log('Archivo recibido:', {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
       });
 
-      if (!form) {
-        return res.status(404).send("Form not found");
-      }
+      // Verificar propiedad del formulario si no es temporal
+      if (formId !== null) {
+        const [form] = await db.select()
+          .from(forms)
+          .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-      // Return the form with shared permissions
-      res.json({
-        ...form,
-        isShared: true,
-        permissions: {
-          canEdit: sharedForm.canEdit,
-          canMerge: sharedForm.canMerge,
-          canDelete: sharedForm.canDelete,
-          canShare: sharedForm.canShare,
-          canViewEntries: sharedForm.canViewEntries
+        if (!form) {
+          console.error('Formulario no encontrado:', { formId });
+          return res.status(404).json({
+            error: "Form not found",
+            formId
+          });
         }
-      });
+      }
 
-    } catch (error) {
-      console.error('Error fetching form:', error);
-      res.status(500).json({ error: "Error obteniendo el formulario" });
-    }
-  });
-
-  // Parte del endpoint POST /api/forms
-  app.post("/api/forms", async (req, res) => {
-    const user = ensureAuth(req);
-
-    console.log('Creando nuevo formulario:', {
-      name: req.body.name,
-      hasDocument: !!req.body.document,
-      documentInfo: req.body.document ? {
-        name: req.body.document.name,
-        hasTemplate: !!req.body.document.template,
-        hasPreview: !!req.body.document.preview,
-        filePath: req.body.document.filePath
-      } : null
-    });
-
-    // Check limits
-    const formCount = await db.select().from(forms).where(eq(forms.userId, user.id));
-    const limit = user.isPremium ? 10 : 1;
-
-    if (formCount.length >= limit) {
-      return res.status(403).send(`Free users can only create ${limit} forms`);
-    }
-
-    // Crear solo el formulario, sin crear documentos
-    const [form] = await db.insert(forms)
-      .values({
-        userId: user.id,
-        name: req.body.name,
-        theme: req.body.theme || { primary: "#64748b", variant: "default" }
-      })
-      .returning();
-
-    // Si hay un documento temporal, lo vinculamos al formulario
-    if (req.body.document) {
-      const docData = {
-        formId: form.id,
-        name: req.body.document.name,
-        template: req.body.document.template,
-        preview: req.body.document.preview,
-        filePath: req.body.document.filePath,
-        thumbnailPath: req.body.document.thumbnailPath
-      };
-
-      console.log('Vinculando documento al formulario:', {
-        formId: form.id,
-        name: docData.name,
-        filePath: docData.filePath,
-        templateLength: docData.template?.length,
-        previewLength: docData.preview?.length
-      });
+      let template = '';
+      let filePath = '';
+      let thumbnailPath = '';
+      let extractedVariables: string[] = [];
 
       try {
+        console.log('Procesando documento...');
+        await ensureThumbnailDir();
+
+        // Asegurar que tenemos un buffer válido
+        const validBuffer = Buffer.from(file.buffer);
+
+        // Guardar el archivo original
+        filePath = await saveFile(validBuffer, file.originalname);
+
+        try {
+          // Generar thumbnail para todos los documentos
+          const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
+          thumbnailPath = thumbPath;
+          extractedVariables = vars;
+
+          // Extraer texto para variables
+          const textResult = await mammoth.extractRawText({
+            buffer: validBuffer
+          });
+
+          if (textResult.value) {
+            template = textResult.value;
+          }
+
+          // Si no se pudo extraer texto, usar OCR
+          if (!template) {
+            console.log('Usando OCR para extraer texto...');
+            template = await extractTextFromImage(path.join(THUMBNAIL_DIR, thumbnailPath));
+          }
+
+          if (!template) {
+            template = "No se pudo extraer texto del documento. Por favor, agregue las variables manualmente.";
+          }
+
+        } catch (error) {
+          console.error('Error procesando documento:', error);
+          const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
+          thumbnailPath = thumbPath;
+          extractedVariables = vars;
+          template = "Error al procesar el documento. Por favor, agregue las variables manualmente.";
+        }
+
+        // Preparar respuesta
+        const response = {
+          name: file.originalname,
+          template,
+          thumbnailPath: thumbnailPath ? path.basename(thumbnailPath) : null,
+          filePath,
+          extractedVariables
+        };
+
+        // Si es temporal, devolver directamente
+        if (formId === null) {
+          return res.status(200).json(response);
+        }
+
+        // Si no es temporal, guardar en la base de datos
         const [doc] = await db.insert(documents)
-          .values(docData)
+          .values({
+            formId,
+            name: file.originalname,
+            template,
+            filePath,
+            thumbnailPath: thumbnailPath || null
+          })
           .returning();
 
-        console.log('Documento vinculado exitosamente:', {
-          id: doc.id,
-          name: doc.name,
-          formId: doc.formId,
-          filePath: doc.filePath
+        res.status(201).json(doc);
+
+      } catch (error: any) {
+        console.error('Error procesando documento:', error);
+        res.status(400).json({
+          error: `Error procesando documento: ${error.message}`,
+          details: error.stack
         });
-
-        // Devolver el formulario con el documento vinculado
-        return res.status(201).json({
-          ...form,
-          document: doc
-        });
-      } catch (dbError: any) {
-        console.error('Error al vincular documento:', {
-          error: dbError.message,
-          stack: dbError.stack,
-          docData: { 
-            ...docData,
-            template: docData.template?.slice(0, 100) + '...',
-            preview: 'truncated'
-          }
-        });
-        // Aún así devolvemos el formulario creado
-        return res.status(201).json(form);
       }
-    }
-
-    res.status(201).json(form);
-  });
-
-  // Variables endpoints
-  app.post("/api/forms/:formId/variables", async (req, res) => {
-    const user = ensureAuth(req);
-    const formId = parseInt(req.params.formId);
-
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-    if (!form) {
-      return res.status(404).send("Form not found");
-    }
-
-    // Check variable limit
-    const varCount = await db.select()
-      .from(variables)
-      .where(eq(variables.formId, formId));
-
-    const limit = user.isPremium ? 50 : 10;
-    if (varCount.length >= limit) {
-      return res.status(403).send(`You can only create ${limit} variables per form`);
-    }
-
-    const [variable] = await db.insert(variables)
-      .values({
-        formId,
-        name: req.body.name,
-        label: req.body.label,
-        type: req.body.type,
-      })
-      .returning();
-
-    res.status(201).json(variable);
-  });
-
-  // Entries endpoints
-  app.get("/api/forms/:formId/entries", async (req, res) => {
-    const user = ensureAuth(req);
-    const formId = parseInt(req.params.formId);
-
-    try {
-      // Check if user owns the form
-      const [ownedForm] = await db.select()
-        .from(forms)
-        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-      // If not owner, check if form is shared with user with view permissions
-      if (!ownedForm) {
-        const [sharedForm] = await db.select()
-          .from(formShares)
-          .where(and(
-            eq(formShares.formId, formId),
-            eq(formShares.userId, user.id),
-            eq(formShares.canViewEntries, true)
-          ));
-
-        if (!sharedForm) {
-          return res.status(404).send("Form not found or you don't have permission to view entries");
-        }
-      }
-
-      const selectedEntries = req.query.entries?.toString().split(',').map(Number);
-      const formEntries = await db.select()
-        .from(entries)
-        .where(
-          selectedEntries?.length 
-            ? and(eq(entries.formId, formId), sql`${entries.id} IN (${selectedEntries.join(',')})`)
-            : eq(entries.formId, formId)
-        )
-        .orderBy(desc(entries.createdAt));
-
-      res.json(formEntries);
-    } catch (error) {
-      console.error('Error fetching entries:', error);
-      res.status(500).json({ error: "Error obteniendo entradas" });
-    }
-  });
-
-  app.post("/api/forms/:formId/entries", async (req, res) => {
-    const user = ensureAuth(req);
-    const formId = parseInt(req.params.formId);
-
-    try {
-      // Check if user owns the form
-      const [ownedForm] = await db.select()
-        .from(forms)
-        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-      // If not owner, check if form is shared with user with edit permissions
-      if (!ownedForm) {
-        const [sharedForm] = await db.select()
-          .from(formShares)
-          .where(and(
-            eq(formShares.formId, formId),
-            eq(formShares.userId, user.id),
-            eq(formShares.canEdit, true)
-          ));
-
-        if (!sharedForm) {
-          return res.status(404).send("Form not found or you don't have permission to add entries");
-        }
-      }
-
-      // Check entry limit only for the form owner
-      if (ownedForm) {
-        const entryCount = await db.select()
-          .from(entries)
-          .where(eq(entries.formId, formId));
-
-        const limit = user.isPremium ? 100 : 5;
-        if (entryCount.length >= limit) {
-          return res.status(403).send(`You can only create ${limit} entries per form`);
-        }
-      }
-
-      const [entry] = await db.insert(entries)
-        .values({
-          formId,
-          values: req.body.values || {},
-        })
-        .returning();
-
-      res.status(201).json(entry);
-    } catch (error) {
-      console.error('Error creating entry:', error);
-      res.status(500).json({ error: "Error creando entrada" });
-    }
-  });
-
-  app.delete("/api/forms/:formId/entries/:entryId", async (req, res) => {
-    const user = ensureAuth(req);
-    const formId = parseInt(req.params.formId);
-    const entryId = parseInt(req.params.entryId);
-
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-    if (!form) {
-      return res.status(404).send("Form not found");
-    }
-
-    // Verify entry exists and belongs to the form
-    const [entry] = await db.select()
-      .from(entries)
-      .where(and(eq(entries.id, entryId), eq(entries.formId, formId)));
-
-    if (!entry) {
-      return res.status(404).send("Entry not found");
-    }
-
-    await db.delete(entries)
-      .where(and(eq(entries.id, entryId), eq(entries.formId, formId)));
-
-    res.sendStatus(200);
-  });
-
-  // Documents endpoints
-  app.post("/api/forms/:formId/documents", async (req, res) => {
-    try {
-      const user = ensureAuth(req);
-      const formId = parseInt(req.params.formId);
-
-      // Verify ownership
-      const [form] = await db.select()
-        .from(forms)
-        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-      if (!form) {
-        return res.status(404).send("Form not found");
-      }
-
-      // Si no hay archivo adjunto, simplemente retornamos OK
-      // Esto permite que el guardado del formulario continúe sin error
-      if (!req.body.filePath) {
-        return res.status(200).json({ message: "No document to create" });
-      }
-
-      // Si hay un intento de crear documento sin usar /upload, entonces sí redirigimos
-      return res.status(400).json({
-        error: "Los documentos solo pueden ser creados a través del endpoint /upload",
-        message: "Por favor usa el endpoint /api/forms/:formId/documents/upload para subir documentos"
-      });
-
     } catch (error: any) {
-      console.error('Error handling document request:', {
-        error,
-        message: error.message,
-        stack: error.stack
-      });
+      console.error('Error en el endpoint:', error);
       res.status(500).json({
-        error: `Error handling document request: ${error.message}`,
+        error: `Error del servidor: ${error.message}`,
         details: error.stack
       });
     }
   });
 
-  app.post("/api/forms/:formId/documents/upload", upload.single('file'), async (req, res) => {
-    try {
-        const user = ensureAuth(req);
-        const formId = req.params.formId === 'temp' ? null : parseInt(req.params.formId);
-        const file = req.file;
-
-        if (!file) {
-            console.error('No se proporcionó archivo');
-            return res.status(400).json({
-                error: "No se ha proporcionado ningún archivo"
-            });
-        }
-
-        console.log('Archivo recibido:', {
-            originalname: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size
-        });
-
-        // Verificar propiedad del formulario si no es temporal
-        if (formId !== null) {
-            const [form] = await db.select()
-                .from(forms)
-                .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-
-            if (!form) {
-                console.error('Formulario no encontrado:', { formId });
-                return res.status(404).json({
-                    error: "Form not found",
-                    formId
-                });
-            }
-        }
-
-        let template = '';
-        let filePath = '';
-        let thumbnailPath = '';
-        let extractedVariables: string[] = [];
-
-        try {
-            console.log('Procesando documento...');
-            await ensureThumbnailDir();
-
-            // Asegurar que tenemos un buffer válido
-            const validBuffer = Buffer.from(file.buffer);
-
-            // Guardar el archivo original
-            filePath = await saveFile(validBuffer, file.originalname);
-
-            try {
-                // Generar thumbnail para todos los documentos
-                const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
-                thumbnailPath = thumbPath;
-                extractedVariables = vars;
-
-                // Extraer texto para variables
-                const textResult = awaitmammoth.extractRawText({
-                    buffer: validBuffer
-                });
-
-                if (textResult.value) {
-                    template = textResult.value;
-                }
-
-                // Si no se pudo extraer texto, usar OCR
-                if (!template) {
-                    console.log('Usando OCR para extraer texto...');
-                    template = await extractTextFromImage(path.join(THUMBNAIL_DIR, thumbnailPath));
-                }
-
-                if (!template) {
-                    template = "No se pudo extraer texto del documento. Por favor, agregue las variables manualmente.";
-                }
-
-            } catch (error) {
-                console.error('Error procesando documento:', error);
-                const { thumbnailPath: thumbPath, extractedVariables: vars } = await generateThumbnail(validBuffer);
-                thumbnailPath = thumbPath;
-                extractedVariables = vars;
-                template = "Error al procesar el documento. Por favor, agregue las variables manualmente.";
-            }
-
-            // Preparar respuesta
-            const response = {
-                name: file.originalname,
-                template,
-                thumbnailPath: thumbnailPath ? path.basename(thumbnailPath) : null,
-                filePath,
-                extractedVariables
-            };
-
-            // Si es temporal, devolver directamente
-            if (formId === null) {
-                return res.status(200).json(response);
-            }
-
-            // Si no es temporal, guardar en la base de datos
-            const [doc] = await db.insert(documents)
-                .values({
-                    formId,
-                    name: file.originalname,
-                    template,
-                    filePath,
-                    thumbnailPath: thumbnailPath || null
-                })
-                .returning();
-
-            res.status(201).json(doc);
-
-        } catch (error: any) {
-            console.error('Error procesando documento:', error);
-            res.status(400).json({
-                error: `Error procesando documento: ${error.message}`,
-                details: error.stack
-            });
-        }
-    } catch (error: any) {
-        console.error('Error en el endpoint:', error);
-        res.status(500).json({
-            error: `Error del servidor: ${error.message}`,
-            details: error.stack
-        });
-    }
-  });
-
-  // Añadir el nuevo endpoint para extracción OCR después del endpoint upload
   app.post("/api/forms/:formId/documents/extract-ocr", async (req, res) => {
     try {
       const thumbnailPath = req.body.thumbnailPath;
@@ -1031,7 +276,7 @@ export function registerRoutes(app: Express): Server {
   app.delete("/api/forms/:formId/documents/:documentId", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
-    const documentId =parseInt(req.params.documentId);
+    const documentId = parseInt(req.params.documentId);
 
     try {
       // Verify ownership
@@ -1054,9 +299,9 @@ export function registerRoutes(app: Express): Server {
 
       // Eliminar el archivo físico primero
       await deleteFile(doc.filePath);
-        if (doc.thumbnailPath) {
-            await deleteFile(path.join(THUMBNAIL_DIR, doc.thumbnailPath));
-        }
+      if (doc.thumbnailPath) {
+        await deleteFile(path.join(THUMBNAIL_DIR, doc.thumbnailPath));
+      }
 
       // Luego eliminar el registro de la base de datos
       await db.delete(documents)
@@ -1103,7 +348,7 @@ export function registerRoutes(app: Express): Server {
     // Verify ownership
     const [form] = await db.select()
       .from(forms)
-      .where(and(eq(forms.id, formId),eq(forms.userId, user.id)));
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
     if (!form) {
       return res.status(404).send("Form not found");
@@ -1115,7 +360,7 @@ export function registerRoutes(app: Express): Server {
         label: req.body.label,
         type: req.body.type
       })
-            .where(eq(variables.id, variableId));
+      .where(eq(variables.id, variableId));
 
     res.sendStatus(200);
   });
@@ -1421,7 +666,8 @@ export function registerRoutes(app: Express): Server {
             errorHandler: (error: any, cmdStr: string) => {
               console.error('Error en comando durante merge:', { error, cmdStr });
               //              return cmdStr;
-            },additionalJsContext: {
+            },
+            additionalJsContext: {
               formatDate: (date: string) => {
                 try {
                   return new Date(date).toLocaleDateString();
@@ -1458,7 +704,7 @@ export function registerRoutes(app: Express): Server {
           const mergedText = textResult.value;
 
           // Verificar que las variables fueron reemplazadas
-          const anyVariableNotReplaced = Object.keys(mergeData).some(key => 
+          const anyVariableNotReplaced = Object.keys(mergeData).some(key =>
             mergedText.includes(`{{${key}}}`)
           );
 
@@ -1532,6 +778,7 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
+
   // Export entries endpoints
   app.get("/api/forms/:formId/entries/export", async (req, res) => {
     const user = ensureAuth(req);
@@ -1637,7 +884,8 @@ export function registerRoutes(app: Express): Server {
 
     // Verify ownership
     const [form] = await db.select()
-      .from(forms)      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+      .from(forms)
+      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
     if (!form) {
       return res.status(404).send("Form not found");
@@ -1661,44 +909,44 @@ export function registerRoutes(app: Express): Server {
     res.json(entry);
   });
 
-    app.delete("/api/forms/:id", async (req, res) => {
+  app.delete("/api/forms/:id", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.id);
 
-      try {
-        // Verify ownership
-        const [form] = await db.select()
-          .from(forms)
-          .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+    try {
+      // Verify ownership
+      const [form] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-        if (!form) {
-          return res.status(404).send("Form not found");
-        }
-
-        // Delete all related records first
-        await db.transaction(async (tx) => {
-          // Delete entries
-          await tx.delete(entries)
-            .where(eq(entries.formId, formId));
-
-          // Delete variables
-          await tx.delete(variables)
-            .where(eq(variables.formId, formId));
-
-          // Delete documents
-          await tx.delete(documents)
-            .where(eq(documents.formId, formId));
-
-          // Finally delete the form
-          await tx.delete(forms)
-            .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
-        });
-
-        res.sendStatus(200);
-      } catch (error) {
-        console.error('Error deleting form:', error);
-        res.status(500).send("Error deleting form");
+      if (!form) {
+        return res.status(404).send("Form not found");
       }
+
+      // Delete all related records first
+      await db.transaction(async (tx) => {
+        // Delete entries
+        await tx.delete(entries)
+          .where(eq(entries.formId, formId));
+
+        // Delete variables
+        await tx.delete(variables)
+          .where(eq(variables.formId, formId));
+
+        // Delete documents
+        await tx.delete(documents)
+          .where(eq(documents.formId, formId));
+
+        // Finally delete the form
+        await tx.delete(forms)
+          .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+      });
+
+      res.sendStatus(200);
+    } catch (error) {
+      console.error('Error deleting form:', error);
+      res.status(500).send("Error deleting form");
+    }
   });
 
   // Add new route for document preview download
@@ -1772,7 +1020,7 @@ export function registerRoutes(app: Express): Server {
       // Check if user exists
       const [targetUser] = await db.select()
         .from(users)
-        .where(eq(users.id,userId));
+        .where(eq(users.id, userId));
 
       if (!targetUser) {
         return res.status(404).json({ error: "User not found" });
@@ -1814,6 +1062,74 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('Error sharing form:', error);
       res.status(500).json({ error: "Error sharing form" });
+    }
+  });
+
+  app.get("/api/forms/:id", async (req, res) => {
+    try {
+      const formId = parseInt(req.params.id);
+      const user = ensureAuth(req);
+
+      // First check if user owns the form
+      const ownedForm = await db.query.forms.findFirst({
+        where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
+        with: {
+          variables: {
+            orderBy: [asc(variables.id)],
+          },
+          documents: true,
+        },
+      });
+
+      if (ownedForm) {
+        return res.json({ ...ownedForm, isShared: false });
+      }
+
+      // If not owner, check if form is shared with user
+      const [sharedForm] = await db.select()
+        .from(formShares)
+        .where(and(
+          eq(formShares.formId, formId),
+          eq(formShares.userId, user.id)
+        ));
+
+      if (!sharedForm) {
+        return res.status(404).send("Form not found");
+      }
+
+      // Get the complete form data with variables
+      // Include documents only if user has merge permissions
+      const form = await db.query.forms.findFirst({
+        where: eq(forms.id, formId),
+        with: {
+          variables: {
+            orderBy: [asc(variables.id)],
+          },
+          // Only include documents if user has merging permissions
+          documents: sharedForm.canMerge ? true : undefined,
+        },
+      });
+
+      if (!form) {
+        return res.status(404).send("Form not found");
+      }
+
+      // Return the form with shared permissions
+      res.json({
+        ...form,
+        isShared: true,
+        permissions: {
+          canEdit: sharedForm.canEdit,
+          canMerge: sharedForm.canMerge,
+          canDelete: sharedForm.canDelete,
+          canShare: sharedForm.canShare,
+          canViewEntries: sharedForm.canViewEntries
+        }
+      });
+
+    } catch (error) {
+      console.error('Error fetching form:', error);
+      res.status(500).json({ error: "Error obteniendo el formulario" });
     }
   });
 
