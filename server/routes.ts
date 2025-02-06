@@ -418,13 +418,52 @@ export function registerRoutes(app: Express): Server {
   // Form endpoints
   app.get("/api/forms", async (req, res) => {
     const user = ensureAuth(req);
-    const userForms = await db.query.forms.findMany({
-      where: eq(forms.userId, user.id),
-      with: {
-        variables: true,
-      },
-    });
-    res.json(userForms);
+
+    try {
+      // Get user's own forms
+      const ownedForms = await db.query.forms.findMany({
+        where: eq(forms.userId, user.id),
+        with: {
+          variables: true,
+        },
+      });
+
+      // Get forms shared with the user
+      const sharedForms = await db.query.formShares.findMany({
+        where: eq(formShares.userId, user.id),
+        with: {
+          form: {
+            with: {
+              variables: true,
+            }
+          }
+        }
+      });
+
+      // Transform shared forms to match the format of owned forms
+      const transformedSharedForms = sharedForms.map(share => ({
+        ...share.form,
+        isShared: true,
+        permissions: {
+          canEdit: share.canEdit,
+          canMerge: share.canMerge,
+          canDelete: share.canDelete,
+          canShare: share.canShare,
+          canViewEntries: share.canViewEntries
+        }
+      }));
+
+      // Combine both sets of forms
+      const allForms = [
+        ...ownedForms.map(form => ({ ...form, isShared: false })),
+        ...transformedSharedForms
+      ];
+
+      res.json(allForms);
+    } catch (error) {
+      console.error('Error fetching forms:', error);
+      res.status(500).json({ error: "Error obteniendo formularios" });
+    }
   });
 
   // Check if a request has share access to a form
