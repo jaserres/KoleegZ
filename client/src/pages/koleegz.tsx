@@ -11,9 +11,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, UserPlus, Check } from "lucide-react";
+import { Search, UserPlus, Check, Crown } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
+import { Badge } from "@/components/ui/badge";
 
 interface User {
   id: number;
@@ -29,22 +30,10 @@ export default function KoleegZ() {
 
   const { data: users = [], isLoading, error } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    retry: 3,
-    onSuccess: (data) => {
-      console.log('Users data received:', data);
-    },
-    onError: (err) => {
-      console.error('Error fetching users:', err);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los usuarios",
-        variant: "destructive",
-      });
-    }
+    retry: 3
   });
 
   useEffect(() => {
-    console.log('Users data received:', users);
     const filtered = users.filter(
       (user) =>
         user.username.toLowerCase().includes(searchTerm.toLowerCase())
@@ -114,7 +103,7 @@ export default function KoleegZ() {
             <p className="text-center col-span-full">No se encontraron usuarios</p>
           ) : (
             filteredUsers.map((user) => (
-              <Card key={user.id} className="flex flex-col">
+              <Card key={user.id} className={`flex flex-col ${user.isPremium ? 'border-primary/50' : ''}`}>
                 <CardHeader>
                   <div className="flex items-center space-x-4">
                     <Avatar>
@@ -123,20 +112,21 @@ export default function KoleegZ() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 space-y-1">
-                      <h4 className="text-sm font-semibold">
-                        {user.username}
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold">{user.username}</h4>
                         {user.isPremium && (
-                          <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                          <Badge variant="premium" className="gap-1">
+                            <Crown className="h-3 w-3" />
                             Premium
-                          </span>
+                          </Badge>
                         )}
-                      </h4>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="flex justify-end space-x-2 mt-auto">
                   <Button
-                    variant="outline"
+                    variant={user.isPremium ? "premium" : "outline"}
                     size="sm"
                     onClick={() => handleFollow(user.id)}
                     disabled={user.isFollowing}
