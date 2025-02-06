@@ -476,40 +476,69 @@ export function registerRoutes(app: Express): Server {
   }
 
   app.get("/api/forms/:id", async (req, res) => {
-    const shareToken = req.query.share as string;
-    const formId = parseInt(req.params.id);
+    try {
+      const formId = parseInt(req.params.id);
+      const user = ensureAuth(req);
 
-    // Check for share access first
-    if (shareToken && await checkShareAccess(formId, shareToken)) {
+      // First check if user owns the form
+      const ownedForm = await db.query.forms.findFirst({
+        where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
+        with: {
+          variables: {
+            orderBy: [asc(variables.id)],
+          },
+          documents: true,
+        },
+      });
+
+      if (ownedForm) {
+        return res.json({ ...ownedForm, isShared: false });
+      }
+
+      // If not owner, check if form is shared with user
+      const [sharedForm] = await db.select()
+        .from(formShares)
+        .where(and(
+          eq(formShares.formId, formId),
+          eq(formShares.userId, user.id)
+        ));
+
+      if (!sharedForm) {
+        return res.status(404).send("Form not found");
+      }
+
+      // Get the complete form data with variables and documents
       const form = await db.query.forms.findFirst({
         where: eq(forms.id, formId),
         with: {
           variables: {
             orderBy: [asc(variables.id)],
           },
+          documents: true,
         },
       });
-      if (!form) return res.status(404).send("Form not found");
-      return res.json({ ...form, isSharedAccess: true });
+
+      if (!form) {
+        return res.status(404).send("Form not found");
+      }
+
+      // Return the form with shared permissions
+      res.json({
+        ...form,
+        isShared: true,
+        permissions: {
+          canEdit: sharedForm.canEdit,
+          canMerge: sharedForm.canMerge,
+          canDelete: sharedForm.canDelete,
+          canShare: sharedForm.canShare,
+          canViewEntries: sharedForm.canViewEntries
+        }
+      });
+
+    } catch (error) {
+      console.error('Error fetching form:', error);
+      res.status(500).json({ error: "Error obteniendo el formulario" });
     }
-
-    // Regular auth check
-    const user = ensureAuth(req);
-
-    const form = await db.query.forms.findFirst({
-      where: and(eq(forms.id, formId), eq(forms.userId, user.id)),
-      with: {
-        variables: {
-          orderBy: [asc(variables.id)],
-        },
-      },
-    });
-
-    if (!form) {
-      return res.status(404).send("Form not found");
-    }
-
-    res.json(form);
   });
 
   // Parte del endpoint POST /api/forms
@@ -853,7 +882,7 @@ export function registerRoutes(app: Express): Server {
                 extractedVariables = vars;
 
                 // Extraer texto para variables
-                const textResult = await mammoth.extractRawText({
+                const textResult = awaitmammoth.extractRawText({
                     buffer: validBuffer
                 });
 
