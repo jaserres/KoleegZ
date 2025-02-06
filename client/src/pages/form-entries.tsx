@@ -73,6 +73,7 @@ const ShareDialog = ({
   const [canShare, setCanShare] = useState(false);
   const [canViewEntries, setCanViewEntries] = useState(false);
   const { toast } = useToast();
+  const { trigger: triggerConfetti } = useConfetti();
 
   const { data: users = [], isLoading: isLoadingUsers, error: usersError } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -99,8 +100,9 @@ const ShareDialog = ({
       return res.json();
     },
     onSuccess: () => {
+      triggerConfetti();
       toast({
-        title: "Éxito",
+        title: "¡Éxito!",
         description: "Formulario compartido correctamente"
       });
       onOpenChange(false);
@@ -988,8 +990,7 @@ export default function FormEntries({ isSharedAccess = false }) {
                             <div key={variable.id} className="flex items-center space-x-2">
                               <Checkbox
                                 id={`export-${variable.id}`}
-                                defaultChecked
-                                onCheckedChange={(checked) => {
+                                defaultChecked                                onCheckedChange={(checked) => {
                                   const fields = new URLSearchParams(window.location.search).get('fields')?.split(',') || [];
                                   if (checked) {
                                     fields.push(variable.name);
