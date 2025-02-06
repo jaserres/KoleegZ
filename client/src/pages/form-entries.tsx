@@ -224,7 +224,7 @@ const ShareDialog = ({
 };
 
 // Componente principal FormEntries
-export default function FormEntries({ isSharedAccess = false }) {
+export default function FormEntries() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -265,6 +265,11 @@ export default function FormEntries({ isSharedAccess = false }) {
     queryKey: [`/api/forms/${id}`],
     enabled: !!id,
   });
+
+  // Check if user has edit permissions (either owner or shared with edit rights)
+  const canEdit = !form?.isShared || form?.permissions?.canEdit;
+  const canViewEntries = !form?.isShared || form?.permissions?.canViewEntries;
+
 
   const { data: entries = [] } = useQuery({
     queryKey: [`/api/forms/${id}/entries`],
@@ -858,390 +863,396 @@ export default function FormEntries({ isSharedAccess = false }) {
       </Button>
 
       <div className="grid gap-8">
-        <Card className="transition-colors" style={form?.theme ? {
-          borderColor: `${form.theme.primary}20`
-        } : undefined}>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>
-                {selectedRowId ? "Editar entrada" : "Nueva entrada"} para {form?.name}
-              </CardTitle>
-              {saving && (
-                <div className="flex items-center text-muted-foreground text-sm">
-                  <Loader2 variant="dots" size="sm" className="mr-2" />
-                  Guardando...
-                </div>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {form?.variables?.map((variable: any) => (
-                <div key={variable.id} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  <div className="w-full">
-                    <Label htmlFor={variable.name}>{variable.label}</Label>
-                    <Input
-                      id={variable.name}
-                      name={variable.name}
-                      type={variable.type === "date" ? "date" :
-                        variable.type === "number" ? "number" : "text"}
-                      value={formValues[variable.name] || ""}
-                      onChange={(e) => handleFieldChange(variable.name, e.target.value)}
-                      className="w-full"
-                      style={form?.theme ? {
-                        '--primary': form.theme.primary,
-                        borderColor: `${form.theme.primary}20`
-                      } as React.CSSProperties : undefined}
-                    />
-                  </div>
-                </div>
-              ))}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="submit"
-                  disabled={createEntryMutation.isPending}
-                  style={form?.theme ? {
-                    '--primary': form.theme.primary,
-                  } as React.CSSProperties : undefined}
-                >
-                  {createEntryMutation.isPending ? (
+        {/* Only show form creation if user has edit permissions */}
+        {canEdit && (
+          <Card className="transition-colors" style={form?.theme ? {
+            borderColor: `${form.theme.primary}20`
+          } : undefined}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>
+                  {selectedRowId ? "Editar entrada" : "Nueva entrada"} para {form?.name}
+                </CardTitle>
+                {saving && (
+                  <div className="flex items-center text-muted-foreground text-sm">
                     <Loader2 variant="dots" size="sm" className="mr-2" />
-                  ) : (
-                    <Plus className="mr-2 h-4 w-4" />
-                  )}
-                  {selectedRowId ? "Guardar como nueva entrada" : "Agregar entrada"}
-                </Button>
-
-                {selectedRowId && (
-                  <>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={updateEntryMutation.isPending}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (window.confirm("¿Estás seguro de que quieres sobrescribir los datos actuales?")) {
-                          updateEntryMutation.mutate(formValues);
-                        }
-                      }}
-                      style={form?.theme ? {
-                        '--primary': form.theme.primary,
-                      } as React.CSSProperties : undefined}
-                    >
-                      {updateEntryMutation.isPending ? (
-                        <Loader2 variant="dots" size="sm" className="mr-2" />
-                      ) : (
-                        <Save className="mr-2 h-4 w-4" />
-                      )}
-                      Sobrescribir datos actuales
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedRowId(null);
-                        setCurrentEntryId(null);
-                        setFormValues({});
-                      }}
-                      style={form?.theme ? {
-                        '--primary': form.theme.primary,
-                        borderColor: `${form.theme.primary}20`
-                      } as React.CSSProperties : undefined}
-                    >
-                      Cancelar edición
-                    </Button>
-                  </>
+                    Guardando...
+                  </div>
                 )}
               </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle>Entradas y Documentos</CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowShareDialog(true)}
-                >
-                  <Share className="mr-2 h-4 w-4" />
-                  Compartir Formulario
-                </Button>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline">
-                      <Download className="mr-2 h-4 w-4" />
-                      Exportar Datos
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogDescription>
-                        Selecciona los campos y el formato para exportar
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Campos a exportar</Label>
-                        <div className="grid grid-cols-2 gap2">
-                          {form?.variables?.map((variable: any) => (
-                            <div key={variable.id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`export-${variable.id}`}
-                                defaultChecked                                onCheckedChange={(checked) => {
-                                  const fields = new URLSearchParams(window.location.search).get('fields')?.split(',') || [];
-                                  if (checked) {
-                                    fields.push(variable.name);
-                                  } else {
-                                    const index = fields.indexOf(variable.name);
-                                    if (index > -1) fields.splice(index, 1);
-                                  }
-                                  const searchParams = new URLSearchParams(window.location.search);
-                                  searchParams.set('fields', fields.join(','));
-                                }}
-                              />
-                              <Label htmlFor={`export-${variable.id}`}>{variable.label}</Label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex justify-end space-x-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            const fields = Array.from(document.querySelectorAll('input[id^="export-"]:checked'))
-                              .map((cb: any) => cb.id.replace('export-', ''))
-                              .join(',');
-                            const entries = Array.from(selectedRows).join(',');
-                            window.location.href = `/api/forms/${id}/entries/export?format=csv&fields=${fields}&entries=${entries}`;
-                          }}
-                        >
-                          CSV
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            const fields = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
-                              .map((cb: any) => cb.id.replace('export-', ''))
-                              .join(',');
-                            window.location.href = `/api/forms/${id}/entries/export?format=excel&fields=${fields}`;
-                          }}
-                        >
-                          Excel
-                        </Button>
-                        <Button variant="outline"
-                          onClick={() => {
-                            const fields = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
-                              .map((cb: any) => cb.id.replace('export-', ''))
-                              .join(',');
-                            window.location.href = `/api/forms/${id}/entries/export?format=json&fields=${fields}`;
-                          }}
-                        >
-                          JSON
-                        </Button>
-                      </div>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {form?.variables?.map((variable: any) => (
+                  <div key={variable.id} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <div className="w-full">
+                      <Label htmlFor={variable.name}>{variable.label}</Label>
+                      <Input
+                        id={variable.name}
+                        name={variable.name}
+                        type={variable.type === "date" ? "date" :
+                          variable.type === "number" ? "number" : "text"}
+                        value={formValues[variable.name] || ""}
+                        onChange={(e) => handleFieldChange(variable.name, e.target.value)}
+                        className="w-full"
+                        style={form?.theme ? {
+                          '--primary': form.theme.primary,
+                          borderColor: `${form.theme.primary}20`
+                        } as React.CSSProperties : undefined}
+                      />
                     </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="w-full overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">
-                      <Checkbox
-                        checked={entries.length > 0 && selectedRows.size === entries.length}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedRows(new Set(entries.map(e => e.id)));
-                          } else {
-                            setSelectedRows(new Set());
+                  </div>
+                ))}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="submit"
+                    disabled={createEntryMutation.isPending}
+                    style={form?.theme ? {
+                      '--primary': form.theme.primary,
+                    } as React.CSSProperties : undefined}
+                  >
+                    {createEntryMutation.isPending ? (
+                      <Loader2 variant="dots" size="sm" className="mr-2" />
+                    ) : (
+                      <Plus className="mr-2 h-4 w-4" />
+                    )}
+                    {selectedRowId ? "Guardar como nueva entrada" : "Agregar entrada"}
+                  </Button>
+
+                  {selectedRowId && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={updateEntryMutation.isPending}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (window.confirm("¿Estás seguro de que quieres sobrescribir los datos actuales?")) {
+                            updateEntryMutation.mutate(formValues);
                           }
                         }}
-                      />
-                    </TableHead>
-                    {form?.variables?.map((variable: any) => (
-                      <TableHead key={variable.id} className="whitespace-nowrap">{variable.label}</TableHead>
-                    ))}
-                    <TableHead className="whitespace-nowrap">Created</TableHead>
-                    <TableHead className="whitespace-nowrap">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {entries?.map((entry: any) => (
-                    <TableRow
-                      key={entry.id}
-                      className={cn(
-                        "hover:bg-muted/50",
-                        selectedRowId === entry.id && "bg-muted"
-                      )}
-                    >
-                      <TableCell className="w-[50px]">
+                        style={form?.theme ? {
+                          '--primary': form.theme.primary,
+                        } as React.CSSProperties : undefined}
+                      >
+                        {updateEntryMutation.isPending ? (
+                          <Loader2 variant="dots" size="sm" className="mr-2" />
+                        ) : (
+                          <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Sobrescribir datos actuales
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedRowId(null);
+                          setCurrentEntryId(null);
+                          setFormValues({});
+                        }}
+                        style={form?.theme ? {
+                          '--primary': form.theme.primary,
+                          borderColor: `${form.theme.primary}20`
+                        } as React.CSSProperties : undefined}
+                      >
+                        Cancelar edición
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Only show entries if user has view permissions */}
+        {canViewEntries && (
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Entradas y Documentos</CardTitle>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowShareDialog(true)}
+                  >
+                    <Share className="mr-2 h-4 w-4" />
+                    Compartir Formulario
+                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline">
+                        <Download className="mr-2 h-4 w-4" />
+                        Exportar Datos
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogDescription>
+                          Selecciona los campos y                          el formato para exportar
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Campos a exportar</Label>
+                          <div className="grid grid-cols-2 gap2">
+                            {form?.variables?.map((variable: any) => (
+                              <div key={variable.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`export-${variable.id}`}
+                                  defaultChecked                                onCheckedChange={(checked) => {
+                                    const fields = new URLSearchParams(window.location.search).get('fields')?.split(',') || [];
+                                    if (checked) {
+                                      fields.push(variable.name);
+                                    } else {
+                                      const index = fields.indexOf(variable.name);
+                                      if (index > -1) fields.splice(index, 1);
+                                    }
+                                    const searchParams = new URLSearchParams(window.location.search);
+                                    searchParams.set('fields', fields.join(','));
+                                  }}
+                                />
+                                <Label htmlFor={`export-${variable.id}`}>{variable.label}</Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              const fields = Array.from(document.querySelectorAll('input[id^="export-"]:checked'))
+                                .map((cb: any) => cb.id.replace('export-', ''))
+                                .join(',');
+                              const entries = Array.from(selectedRows).join(',');
+                              window.location.href = `/api/forms/${id}/entries/export?format=csv&fields=${fields}&entries=${entries}`;
+                            }}
+                          >
+                            CSV
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              const fields = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+                                .map((cb: any) => cb.id.replace('export-', ''))
+                                .join(',');
+                              window.location.href = `/api/forms/${id}/entries/export?format=excel&fields=${fields}`;
+                            }}
+                          >
+                            Excel
+                          </Button>
+                          <Button variant="outline"
+                            onClick={() => {
+                              const fields = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+                                .map((cb: any) => cb.id.replace('export-', ''))
+                                .join(',');
+                              window.location.href = `/api/forms/${id}/entries/export?format=json&fields=${fields}`;
+                            }}
+                          >
+                            JSON
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">
                         <Checkbox
-                          checked={selectedRows.has(entry.id)}
+                          checked={entries.length > 0 && selectedRows.size === entries.length}
                           onCheckedChange={(checked) => {
-                            const newSelected = new Set(selectedRows);
                             if (checked) {
-                              newSelected.add(entry.id);
+                              setSelectedRows(new Set(entries.map(e => e.id)));
                             } else {
-                              newSelected.delete(entry.id);
+                              setSelectedRows(new Set());
                             }
-                            setSelectedRows(newSelected);
                           }}
                         />
-                      </TableCell>
+                      </TableHead>
                       {form?.variables?.map((variable: any) => (
-                        <TableCell key={variable.id} className="whitespace-nowrap">
-                          {entry.values[variable.name]}
-                        </TableCell>
+                        <TableHead key={variable.id} className="whitespace-nowrap">{variable.label}</TableHead>
                       ))}
-                      <TableCell className="whitespace-nowrap">{format(new Date(entry.createdAt), "PPp")}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <div className="flex gap-2">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                onClick={() => setSelectedEntry(entry.id)}
-                                disabled={isSharedAccess}
-                              >
-                                <FileText className="mr-2 h-4 w-4" />
-                                Merge
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                              <DialogHeader>
-                                <DialogTitle>Seleccionar Plantilla</DialogTitle>
-                                <DialogDescription>
-                                  Seleccione una plantilla para generar el documento
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <div className="grid gap-4 grid-cols-2">
-                                  {isLoadingDocuments ? (
-                                    <div className="flex items-center justify-center p-8">
-                                      <Loader2 />
-                                    </div>
-                                  ) : documents && documents.length > 0 ? (
-                                    documents.map((doc) => (
-                                      <Card key={doc.id} className="overflow-hidden">
-                                        <CardHeader>
-                                          <CardTitle>
-                                            <div className="flex items-center justify-between">
-                                              <span>{doc.name}</span>
-                                              {!isSharedAccess && (
-                                                <Button
-                                                  variant="ghost"
-                                                  size="icon"
-                                                  className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
-                                                      deleteDocumentMutation.mutate(doc.id);
-                                                    }
-                                                  }}
-                                                >
-                                                  <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                              )}
-                                            </div>
-                                          </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                          {doc.thumbnailPath && (<div className="relative aspect-[3/4] w-full max-h-32 mb-4">
-                                            <img
-                                              src={`/thumbnails/${doc.thumbnailPath}`}
-                                              alt={`Vista previa de ${doc.name}`}
-                                              className="absolute inset-0 w-full h-full object-cover rounded-md"
-                                            />
-                                          </div>
-                                          )}
-                                          <div className="flex justify-end mt-4">
-                                            <Button
-                                              variant="secondary"
-                                              onClick={() => {
-                                                setSelectedTemplate(doc);
-                                                handleDownloadMerge(doc.id, selectedEntry!);
-                                              }}
-                                              disabled={!selectedEntry}
-                                            >
-                                              <FileDown className="mr-2 h-4 w-4" />
-                                              Generar Documento
-                                            </Button>
-                                          </div>
-                                        </CardContent>
-                                      </Card>
-                                    ))
-                                  ) : (
-                                    <div className="text-center p-8 text-muted-foreground">
-                                      No hay plantillas disponibles
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              {mergedResult && (
+                      <TableHead className="whitespace-nowrap">Created</TableHead>
+                      <TableHead className="whitespace-nowrap">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {entries?.map((entry: any) => (
+                      <TableRow
+                        key={entry.id}
+                        className={cn(
+                          "hover:bg-muted/50",
+                          selectedRowId === entry.id && "bg-muted"
+                        )}
+                      >
+                        <TableCell className="w-[50px]">
+                          <Checkbox
+                            checked={selectedRows.has(entry.id)}
+                            onCheckedChange={(checked) => {
+                              const newSelected = new Set(selectedRows);
+                              if (checked) {
+                                newSelected.add(entry.id);
+                              } else {
+                                newSelected.delete(entry.id);
+                              }
+                              setSelectedRows(newSelected);
+                            }}
+                          />
+                        </TableCell>
+                        {form?.variables?.map((variable: any) => (
+                          <TableCell key={variable.id} className="whitespace-nowrap">
+                            {entry.values[variable.name]}
+                          </TableCell>
+                        ))}
+                        <TableCell className="whitespace-nowrap">{format(new Date(entry.createdAt), "PPp")}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <div className="flex gap-2">
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setSelectedEntry(entry.id)}
+                                  disabled={isSharedAccess}
+                                >
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  Merge
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-2xl">
+                                <DialogHeader>
+                                  <DialogTitle>Seleccionar Plantilla</DialogTitle>
+                                  <DialogDescription>
+                                    Seleccione una plantilla para generar el documento
+                                  </DialogDescription>
+                                </DialogHeader>
                                 <div className="space-y-4">
-                                  <div className="flex justify-between items-center">
-                                    <Label>Vista Previa</Label>
-                                    {selectedTemplate && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleDownloadMerge(selectedTemplate.id, selectedEntry)}
-                                      >
-                                        <FileDown className="mr-2 h-4 w-4" />
-                                        Descargar
-                                      </Button>
+                                  <div className="grid gap-4 grid-cols-2">
+                                    {isLoadingDocuments ? (
+                                      <div className="flex items-center justify-center p-8">
+                                        <Loader2 />
+                                      </div>
+                                    ) : documents && documents.length > 0 ? (
+                                      documents.map((doc) => (
+                                        <Card key={doc.id} className="overflow-hidden">
+                                          <CardHeader>
+                                            <CardTitle>
+                                              <div className="flex items-center justify-between">
+                                                <span>{doc.name}</span>
+                                                {!isSharedAccess && (
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      if (window.confirm("¿Estás seguro de eliminar esta plantilla?")) {
+                                                        deleteDocumentMutation.mutate(doc.id);
+                                                      }
+                                                    }}
+                                                  >
+                                                    <Trash2 className="h-4 w-4" />
+                                                  </Button>
+                                                )}
+                                              </div>
+                                            </CardTitle>
+                                          </CardHeader>
+                                          <CardContent>
+                                            {doc.thumbnailPath && (<div className="relative aspect-[3/4] w-full max-h-32 mb-4">
+                                              <img
+                                                src={`/thumbnails/${doc.thumbnailPath}`}
+                                                alt={`Vista previa de ${doc.name}`}
+                                                className="absolute inset-0 w-full h-full object-cover rounded-md"
+                                              />
+                                            </div>
+                                            )}
+                                            <div className="flex justify-end mt-4">
+                                              <Button
+                                                variant="secondary"
+                                                onClick={() => {
+                                                  setSelectedTemplate(doc);
+                                                  handleDownloadMerge(doc.id, selectedEntry!);
+                                                }}
+                                                disabled={!selectedEntry}
+                                              >
+                                                <FileDown className="mr-2 h-4 w-4" />
+                                                Generar Documento
+                                              </Button>
+                                            </div>
+                                          </CardContent>
+                                        </Card>
+                                      ))
+                                    ) : (
+                                      <div className="text-center p-8 text-muted-foreground">
+                                        No hay plantillas disponibles
+                                      </div>
                                     )}
                                   </div>
-                                  <div
-                                    className="p-4 border rounded-md bg-white"
-                                    style={{
-                                      minHeight: "200px",
-                                      maxHeight: "400px",
-                                      overflowY: "auto",
-                                      whiteSpace: "pre-wrap"
-                                    }}
-                                    dangerouslySetInnerHTML={{ __html: mergedResult }}
-                                  />
                                 </div>
-                              )}
-                            </DialogContent>
-                          </Dialog>
-                          {!isSharedAccess && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                              onClick={() => {
-                                if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
-                                  deleteEntryMutation.mutate(entry.id);
-                                }
-                              }}
-                              disabled={deleteEntryMutation.isPending}
-                            >
-                              {deleteEntryMutation.isPending ? (
-                                <Loader2 variant="pulse" size="sm" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+                                {mergedResult && (
+                                  <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                      <Label>Vista Previa</Label>
+                                      {selectedTemplate && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleDownloadMerge(selectedTemplate.id, selectedEntry)}
+                                        >
+                                          <FileDown className="mr-2 h-4 w-4" />
+                                          Descargar
+                                        </Button>
+                                      )}
+                                    </div>
+                                    <div
+                                      className="p-4 border rounded-md bg-white"
+                                      style={{
+                                        minHeight: "200px",
+                                        maxHeight: "400px",
+                                        overflowY: "auto",
+                                        whiteSpace: "pre-wrap"
+                                      }}
+                                      dangerouslySetInnerHTML={{ __html: mergedResult }}
+                                    />
+                                  </div>
+                                )}
+                              </DialogContent>
+                            </Dialog>
+                            {!isSharedAccess && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                                onClick={() => {
+                                  if (window.confirm("¿Estás seguro de que quieres eliminar esta entrada?")) {
+                                    deleteEntryMutation.mutate(entry.id);
+                                  }
+                                }}
+                                disabled={deleteEntryMutation.isPending}
+                              >
+                                {deleteEntryMutation.isPending ? (
+                                  <Loader2 variant="pulse" size="sm" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
       <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
         <DialogContent className="sm:max-w-[600px]">

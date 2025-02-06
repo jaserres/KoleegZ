@@ -639,60 +639,93 @@ export function registerRoutes(app: Express): Server {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
 
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+    try {
+      // Check if user owns the form
+      const [ownedForm] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-    if (!form) {
-      return res.status(404).send("Form not found");
+      // If not owner, check if form is shared with user with view permissions
+      if (!ownedForm) {
+        const [sharedForm] = await db.select()
+          .from(formShares)
+          .where(and(
+            eq(formShares.formId, formId),
+            eq(formShares.userId, user.id),
+            eq(formShares.canViewEntries, true)
+          ));
+
+        if (!sharedForm) {
+          return res.status(404).send("Form not found or you don't have permission to view entries");
+        }
+      }
+
+      const selectedEntries = req.query.entries?.toString().split(',').map(Number);
+      const formEntries = await db.select()
+        .from(entries)
+        .where(
+          selectedEntries?.length 
+            ? and(eq(entries.formId, formId), sql`${entries.id} IN (${selectedEntries.join(',')})`)
+            : eq(entries.formId, formId)
+        )
+        .orderBy(desc(entries.createdAt));
+
+      res.json(formEntries);
+    } catch (error) {
+      console.error('Error fetching entries:', error);
+      res.status(500).json({ error: "Error obteniendo entradas" });
     }
-
-    const selectedEntries = req.query.entries?.toString().split(',').map(Number);
-    const formEntries = await db.select()
-      .from(entries)
-      .where(
-        selectedEntries?.length 
-          ? and(eq(entries.formId, formId), sql`${entries.id} IN (${selectedEntries.join(',')})`)
-          : eq(entries.formId, formId)
-      )
-      .orderBy(desc(entries.createdAt));
-
-    res.json(formEntries);
   });
 
   app.post("/api/forms/:formId/entries", async (req, res) => {
     const user = ensureAuth(req);
     const formId = parseInt(req.params.formId);
 
-    // Verify ownership
-    const [form] = await db.select()
-      .from(forms)
-      .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
+    try {
+      // Check if user owns the form
+      const [ownedForm] = await db.select()
+        .from(forms)
+        .where(and(eq(forms.id, formId), eq(forms.userId, user.id)));
 
-    if (!form) {
-      return res.status(404).send("Form not found");
+      // If not owner, check if form is shared with user with edit permissions
+      if (!ownedForm) {
+        const [sharedForm] = await db.select()
+          .from(formShares)
+          .where(and(
+            eq(formShares.formId, formId),
+            eq(formShares.userId, user.id),
+            eq(formShares.canEdit, true)
+          ));
+
+        if (!sharedForm) {
+          return res.status(404).send("Form not found or you don't have permission to add entries");
+        }
+      }
+
+      // Check entry limit only for the form owner
+      if (ownedForm) {
+        const entryCount = await db.select()
+          .from(entries)
+          .where(eq(entries.formId, formId));
+
+        const limit = user.isPremium ? 100 : 5;
+        if (entryCount.length >= limit) {
+          return res.status(403).send(`You can only create ${limit} entries per form`);
+        }
+      }
+
+      const [entry] = await db.insert(entries)
+        .values({
+          formId,
+          values: req.body.values || {},
+        })
+        .returning();
+
+      res.status(201).json(entry);
+    } catch (error) {
+      console.error('Error creating entry:', error);
+      res.status(500).json({ error: "Error creando entrada" });
     }
-
-    // Check entry limit
-    const entryCount = await db.select()
-      .from(entries)
-      .where(eq(entries.formId, formId));
-
-    const limit = user.isPremium ? 100 : 5;
-    if (entryCount.length >= limit) {
-      return res.status(403).send(`You can only create ${limit} entries per form`);
-    }
-
-    // Accept any values object, even if incomplete
-    const [entry] = await db.insert(entries)
-      .values({
-        formId,
-        values: req.body.values || {}, // Allow empty object if no values provided
-      })
-      .returning();
-
-    res.status(201).json(entry);
   });
 
   app.delete("/api/forms/:formId/entries/:entryId", async (req, res) => {
@@ -1710,7 +1743,7 @@ export function registerRoutes(app: Express): Server {
       // Check if user exists
       const [targetUser] = await db.select()
         .from(users)
-        .where(eq(users.id, userId));
+        .where(eq(users.id,userId));
 
       if (!targetUser) {
         return res.status(404).json({ error: "User not found" });
