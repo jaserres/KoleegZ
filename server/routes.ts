@@ -873,7 +873,7 @@ export function registerRoutes(app: Express) {
       }
 
       default:
-        returnres.status(400).send("Formato no soportado");
+        return res.status(400).send("Formato no soportado");
     }
   });
 
@@ -1075,7 +1075,7 @@ export function registerRoutes(app: Express) {
         columns: {
           id: true,
           username: true,
-          is_premium: true
+          isPremium: true
         }
       });
 
@@ -1083,7 +1083,7 @@ export function registerRoutes(app: Express) {
       const transformedUsers = allUsers.map(user => ({
         id: user.id,
         username: user.username,
-        isPremium: user.is_premium
+        isPremium: user.isPremium
       }));
 
       console.log('Usuarios encontrados:', transformedUsers);
